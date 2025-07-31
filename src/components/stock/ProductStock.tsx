@@ -711,83 +711,7 @@ const ProductStock = ({
               const isFinalProduct = selectedProductData?.type === "final";
 
               if (isFinalProduct && selectedProductData) {
-                // Para produtos finais, mostrar o custo específico do produto (somente leitura)
-                const specificCost = getSpecificProductCost(
-                  selectedProductData.name,
-                );
-                return (
-                  <div className="space-y-2">
-                    <Label className="text-tire-300">
-                      Custo Específico - {selectedProductData.name}
-                    </Label>
-                    <div className="relative">
-                      <Input
-                        type="text"
-                        value={`R$ ${specificCost.toFixed(2)}`}
-                        readOnly
-                        className="bg-factory-600/30 border-tire-500/30 text-neon-green font-medium cursor-not-allowed"
-                      />
-                      <div className="absolute right-3 top-2.5">
-                        <Info className="h-4 w-4 text-neon-blue" />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2 p-2 bg-neon-blue/10 rounded border border-neon-blue/30">
-                        <Info className="h-4 w-4 text-neon-blue flex-shrink-0" />
-                        <p className="text-xs text-neon-blue">
-                          Custo específico baseado na análise do produto "
-                          {selectedProductData.name}" do TireCostManager
-                        </p>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            console.log(
-                              "🧹 [ProductStock] Limpando cache manualmente...",
-                            );
-                            clearCostCache();
-                            // Forçar re-render do custo
-                            const newCost = getSpecificProductCost(
-                              selectedProductData.name,
-                            );
-                            console.log(
-                              `🔄 [ProductStock] Novo custo após limpeza: R$ ${newCost.toFixed(2)}`,
-                            );
-                          }}
-                          className="text-xs h-6 px-2 bg-factory-700/50 border-tire-600/30 text-tire-300 hover:text-white hover:bg-tire-700/50"
-                        >
-                          🔄 Atualizar Custo
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            console.log(
-                              "📊 [ProductStock] Cache atual:",
-                              productCostCache,
-                            );
-                            console.log(
-                              "🔍 [ProductStock] Testando busca no DOM...",
-                            );
-                            const testCost = getSpecificProductCost(
-                              selectedProductData.name,
-                            );
-                            alert(
-                              `Custo encontrado para "${selectedProductData.name}": R$ ${testCost.toFixed(2)}\n\nVerifique o console para mais detalhes.`,
-                            );
-                          }}
-                          className="text-xs h-6 px-2 bg-factory-700/50 border-tire-600/30 text-tire-300 hover:text-white hover:bg-tire-700/50"
-                        >
-                          🔍 Debug
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                );
+                return null;
               } else {
                 // Para produtos de revenda, não mostrar campo de preço
                 return null;
@@ -972,7 +896,7 @@ const ProductStock = ({
                         </div>
                         {product.type === "final" && (
                           <>
-                            {(() => {
+                            {(()=> {
                               // Para produtos finais, sempre mostrar o custo específico sincronizado
                               const specificCost = getSpecificProductCost(
                                 product.name,
