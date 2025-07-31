@@ -1588,7 +1588,8 @@ const TireCostManager = ({
       }),
     );
 
-    // SALVAR ANÁLISES ESPECÍFICAS POR PRODUTO PARA O PRODUCTSTOCK
+    // SALVAR ANÁLISES ESPECÍFICAS POR PRODUTO PARA O PRODUCTSTOCK E OUTROS COMPONENTES
+    const productSpecificCosts = {};
     tireAnalysis.forEach((tire) => {
       const productKey = `tireAnalysis_${tire.productName.toLowerCase().replace(/\s+/g, "_")}`;
       const productSpecificData = {
@@ -1609,6 +1610,9 @@ const TireCostManager = ({
       };
 
       localStorage.setItem(productKey, JSON.stringify(productSpecificData));
+      
+      // Adicionar ao mapa de custos específicos por produto
+      productSpecificCosts[tire.productName] = tire.costPerTire;
 
       console.log(
         `💾 [TireCostManager] Salvando análise específica para "${tire.productName}":`,
@@ -1620,7 +1624,19 @@ const TireCostManager = ({
       );
     });
 
-    // Disparar evento customizado para notificar o dashboard sobre a mudança
+    // SALVAR MAPA CONSOLIDADO DE CUSTOS POR PRODUTO
+    localStorage.setItem(
+      "tireCostManager_productSpecificCosts",
+      JSON.stringify({
+        costs: productSpecificCosts,
+        timestamp: Date.now(),
+        source: "TireCostManager",
+        lastUpdated: new Date().toISOString(),
+        totalProducts: Object.keys(productSpecificCosts).length,
+      }),
+    );
+
+    // Disparar evento customizado para notificar sobre mudanças nos custos específicos
     window.dispatchEvent(
       new CustomEvent("tireCostUpdated", {
         detail: {
@@ -1635,19 +1651,35 @@ const TireCostManager = ({
             productName: tire.productName,
             costPerTire: tire.costPerTire,
           })),
+          productSpecificCosts: productSpecificCosts,
+        },
+      }),
+    );
+
+    // NOVO EVENTO ESPECÍFICO PARA CUSTOS POR PRODUTO
+    window.dispatchEvent(
+      new CustomEvent("productSpecificCostsUpdated", {
+        detail: {
+          productCosts: productSpecificCosts,
+          timestamp: Date.now(),
+          source: "TireCostManager",
+          totalProducts: Object.keys(productSpecificCosts).length,
+          lastUpdated: new Date().toISOString(),
         },
       }),
     );
 
     console.log(
-      "🔄 [TireCostManager] SINCRONIZAÇÃO DIRETA - Dados salvos e evento disparado:",
+      "🔄 [TireCostManager] SINCRONIZAÇÃO COMPLETA - Dados salvos e eventos disparados:",
       {
         averageCostPerTire: synchronizedData.averageCostPerTire,
         lastUpdated: synchronizedData.lastUpdated,
         costOptions: synchronizedData.costOptions,
         timestamp: synchronizedData.timestamp,
         specificAnalysesCount: tireAnalysis.length,
+        productSpecificCostsCount: Object.keys(productSpecificCosts).length,
         eventDispatched: true,
+        productSpecificCosts: productSpecificCosts,
       },
     );
   }, [

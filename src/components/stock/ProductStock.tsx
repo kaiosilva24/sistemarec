@@ -284,6 +284,189 @@ const ProductStock = ({
     }
   };
 
+  // Função para obter custo por pneu para um produto específico com cache
+  const getCostPerTireForProduct = (productName: string): number => {
+    console.log(
+      `🔍 [ProductStock] Buscando custo para produto específico: "${productName}"`,
+    );
+
+    // Verificar cache primeiro
+    if (productCostCache[productName]) {
+      const cachedData = productCostCache[productName];
+      const isRecent = Date.now() - cachedData.timestamp < 3000; // 3 segundos (reduzido para maior reatividade)
+      if (isRecent) {
+        console.log(
+          `✅ [ProductStock] Usando custo do cache para "${productName}": R$ ${cachedData.cost.toFixed(2)}`,
+        );
+        return cachedData.cost;
+      }
+    }
+
+    let cost = 0;
+    const errorValue = 101.09;
+
+    try {
+      // 1. NOVA ESTRATÉGIA: Buscar no mapa consolidado de custos por produto
+      const consolidatedCosts = localStorage.getItem("tireCostManager_productSpecificCosts");
+      if (consolidatedCosts) {
+        const parsedCosts = JSON.parse(consolidatedCosts);
+        const isRecent = Date.now() - (parsedCosts.timestamp || 0) < 10000; // 10 segundos
+
+        if (isRecent && parsedCosts.costs && parsedCosts.costs[productName]) {
+          cost = parsedCosts.costs[productName];
+          console.log(
+            `✅ [ProductStock] Custo específico obtido do mapa consolidado para "${productName}": R$ ${cost.toFixed(2)}`,
+          );
+
+          // Salvar no cache
+          setProductCostCache((prev) => ({
+            ...prev,
+            [productName]: {
+              cost,
+              timestamp: Date.now(),
+              source: "ConsolidatedMap",
+            },
+          }));
+
+          return cost;
+        }
+      }
+
+      // 2. Tentar obter do TireCostManager (análise específica por produto) - método original
+      const productKey = `tireAnalysis_${productName.toLowerCase().replace(/\s+/g, "_")}`;
+      console.log(
+        `🔍 [ProductStock] Buscando no TireCostManager com chave: "${productKey}"`,
+      );
+
+      const tireAnalysisData = localStorage.getItem(productKey);
+      if (tireAnalysisData) {
+        const parsedData = JSON.parse(tireAnalysisData);
+        const isRecent = Date.now() - (parsedData.timestamp || 0) < 30000; // 30 segundos
+
+        if (parsedData.costPerTire && parsedData.costPerTire > 0 && isRecent) {
+          cost = parsedData.costPerTire;
+          console.log(
+            `✅ [ProductStock] Custo específico obtido do TireCostManager para "${productName}": R$ ${cost.toFixed(2)}`,
+          );
+
+          // Salvar no cache
+          setProductCostCache((prev) => ({
+            ...prev,
+            [productName]: {
+              cost,
+              timestamp: Date.now(),
+              source: "TireCostManager",
+            },
+          }));
+
+          return cost;
+        }
+      }
+
+      // 3. NOVA ESTRATÉGIA: Buscar no DOM pelos elementos específicos do produto
+      const domCost = syncProductCostFromDOM(productName);
+      if (domCost && domCost > 0) {
+        cost = domCost;
+        console.log(
+          `✅ [ProductStock] Custo específico obtido do DOM para "${productName}": R$ ${cost.toFixed(2)}`,
+        );
+
+        // Salvar no cache
+        setProductCostCache((prev) => ({
+          ...prev,
+          [productName]: {
+            cost,
+            timestamp: Date.now(),
+            source: "DOM_Specific",
+          },
+        }));
+
+        return cost;
+      }
+
+      // 4. Fallback: usar custo médio sincronizado
+      cost = synchronizedCostPerTire;
+      console.log(
+        `⚠️ [ProductStock] Usando custo médio sincronizado para "${productName}": R$ ${cost.toFixed(2)}`,
+      );
+
+      // Salvar no cache
+      setProductCostCache((prev) => ({
+        ...prev,
+        [productName]: {
+          cost,
+          timestamp: Date.now(),
+          source: "SynchronizedAverage",
+        },
+      }));
+
+      return cost;
+    } catch (error) {
+      console.error(
+        `❌ [ProductStock] Erro ao obter custo para "${productName}":`,
+        error,
+      );
+
+      // Salvar erro no cache
+      setProductCostCache((prev) => ({
+        ...prev,
+        [productName]: {
+          cost: errorValue,
+          timestamp: Date.now(),
+          source: "Error",
+        },
+      }));
+
+      return errorValue;
+    }
+  };
+
+  // Nova função para sincronizar custo específico do DOM
+  const syncProductCostFromDOM = (productName: string): number | null => {
+    try {
+      console.log(`🔄 [ProductStock] Sincronizando custo do DOM para produto: "${productName}"`);
+
+      // Buscar todos os elementos que contêm o nome do produto
+      const allElements = document.querySelectorAll("*");
+      for (const element of allElements) {
+        const textContent = element.textContent?.trim();
+
+        // Se o elemento contém o nome do produto
+        if (textContent && textContent.includes(productName)) {
+          // Procurar por elementos filhos ou irmãos que contenham valores de custo
+          const parentElement = element.closest('.p-4, .space-y-3, .rounded-lg');
+          if (parentElement) {
+            // Buscar por padrões de custo específicos no elemento pai
+            const costElements = parentElement.querySelectorAll('*');
+            for (const costElement of costElements) {
+              const costText = costElement.textContent?.trim();
+              if (costText && costText.includes('Custo/Pneu') && costText.includes('R$')) {
+                // Extrair o valor monetário
+                const match = costText.match(/R\$\s*([0-9.,]+)/);
+                if (match) {
+                  const valueStr = match[1].replace(',', '.');
+                  const numericValue = parseFloat(valueStr);
+                  if (!isNaN(numericValue) && numericValue > 0) {
+                    console.log(
+                      `✅ [ProductStock] Custo específico extraído do DOM para "${productName}": R$ ${numericValue.toFixed(2)}`
+                    );
+                    return numericValue;
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+
+      console.log(`⚠️ [ProductStock] Nenhum custo específico encontrado no DOM para "${productName}"`);
+      return null;
+    } catch (error) {
+      console.error(`❌ [ProductStock] Erro ao sincronizar custo do DOM para "${productName}":`, error);
+      return null;
+    }
+  };
+
   // Função para obter o custo por pneu sincronizado do financeiro (mantida para compatibilidade)
   const getTireCostFromFinancial = () => {
     const TIRE_COST_STORAGE_KEY = "dashboard_tireCostValue_unified";
@@ -432,6 +615,12 @@ const ProductStock = ({
       }
     };
 
+    // Nova função para lidar com eventos de custos específicos por produto
+    const handleProductSpecificCostsUpdate = () => {
+      console.log("🔔 [ProductStock] Evento de custos específicos recebido, limpando cache...");
+      clearCostCache();
+    };
+
     // Observer para mudanças no DOM
     const observer = new MutationObserver(() => {
       console.log(
@@ -453,6 +642,7 @@ const ProductStock = ({
       "tireCostUpdated",
       handleTireCostUpdate as EventListener,
     );
+    window.addEventListener("productSpecificCostsUpdated", handleProductSpecificCostsUpdate as EventListener);
 
     // Verificação periódica para limpar cache e recarregar custos
     const intervalId = setInterval(() => {
@@ -472,10 +662,8 @@ const ProductStock = ({
 
     return () => {
       window.removeEventListener("storage", handleStorageChange);
-      window.removeEventListener(
-        "tireCostUpdated",
-        handleTireCostUpdate as EventListener,
-      );
+      window.removeEventListener("tireCostUpdated", handleTireCostUpdate as EventListener);
+      window.removeEventListener("productSpecificCostsUpdated", handleProductSpecificCostsUpdate as EventListener);
       observer.disconnect();
       clearInterval(intervalId);
     };
@@ -517,7 +705,7 @@ const ProductStock = ({
       if (operation === "add") {
         if (isFinalProduct && selectedProductData) {
           // Para produtos finais, usar custo específico baseado no nome do produto
-          price = getSpecificProductCost(selectedProductData.name);
+          price = getCostPerTireForProduct(selectedProductData.name);
           console.log(
             `💰 [ProductStock] Usando custo específico para produto final "${selectedProductData.name}": R$ ${price.toFixed(2)}`,
           );
@@ -712,11 +900,12 @@ const ProductStock = ({
 
               if (isFinalProduct && selectedProductData) {
                 // Para produtos finais, mostrar o custo específico do produto (somente leitura)
-                const specificCost = getSpecificProductCost(
+                const specificCost = getCostPerTireForProduct(
                   selectedProductData.name,
                 );
                 return (
                   <div className="space-y-2">
+                    <replit_final_file>
                     <Label className="text-tire-300">
                       Custo Específico - {selectedProductData.name}
                     </Label>
@@ -974,7 +1163,7 @@ const ProductStock = ({
                           <>
                             {(() => {
                               // Para produtos finais, sempre mostrar o custo específico sincronizado
-                              const specificCost = getSpecificProductCost(
+                              const specificCost = getCostPerTireForProduct(
                                 product.name,
                               );
                               const totalValue = stock
