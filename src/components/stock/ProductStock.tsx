@@ -905,6 +905,7 @@ const ProductStock = ({
                 );
                 return (
                   <div className="space-y-2">
+                    <replit_final_file>
                     <Label className="text-tire-300">
                       Custo Específico - {selectedProductData.name}
                     </Label>
