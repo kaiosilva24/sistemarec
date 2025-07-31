@@ -234,22 +234,22 @@ const FinalProductsStock: React.FC<FinalProductsStockProps> = ({ isLoading = fal
                   className="p-4 rounded-lg border transition-all bg-factory-700/30 border-tire-600/20 hover:bg-factory-700/50"
                 >
                   <div className="flex items-center justify-between mb-3">
-                    <h4 className="text-white font-medium flex items-center gap-2">
+                    <h4 className="text-white font-semibold text-lg flex items-center gap-2">
                       {product.measures}
                     </h4>
                     <div className="text-right">
-                      <span className="text-neon-green font-bold text-lg">
+                      <span className="text-neon-green font-bold text-xl">
                         {formatCurrency(product.totalValue)}
                       </span>
-                      <p className="text-tire-400 text-xs">Valor Total</p>
+                      <p className="text-tire-400 text-sm">Valor Total</p>
                     </div>
                   </div>
 
                   {/* Seção de Controle de Quantidade */}
                   <div className="bg-factory-600/20 rounded-lg p-3 mb-3 border border-tire-600/30">
                     <div className="flex items-center justify-between mb-2">
-                      <Label className="text-tire-300 font-medium flex items-center gap-2">
-                        <Calculator className="h-4 w-4 text-neon-orange" />
+                      <Label className="text-tire-300 font-medium text-base flex items-center gap-2">
+                        <Calculator className="h-5 w-5 text-neon-orange" />
                         Controle de Quantidade
                       </Label>
                       <Button
@@ -265,23 +265,23 @@ const FinalProductsStock: React.FC<FinalProductsStockProps> = ({ isLoading = fal
                     
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                       <div>
-                        <Label className="text-tire-400 text-xs">Quantidade Atual</Label>
+                        <Label className="text-tire-400 text-sm">Quantidade Atual</Label>
                         {product.isEditing ? (
                           <Input
                             type="number"
                             min="0"
                             value={product.editableQuantity}
                             onChange={(e) => handleQuantityChange(product.productId, e.target.value)}
-                            className="bg-factory-700/50 border-tire-600/30 text-white h-8 text-sm"
+                            className="bg-factory-700/50 border-tire-600/30 text-white h-10 text-base"
                           />
                         ) : (
-                          <p className="text-white font-medium">{product.quantity} unidades</p>
+                          <p className="text-white font-medium text-base">{product.quantity} unidades</p>
                         )}
                       </div>
                       
                       <div>
-                        <Label className="text-tire-400 text-xs">Custo por Pneu</Label>
-                        <p className="text-neon-orange font-medium">
+                        <Label className="text-tire-400 text-sm">Custo por Pneu</Label>
+                        <p className="text-neon-orange font-medium text-base">
                           {formatCurrency(product.costPerTire)}
                         </p>
                       </div>
@@ -302,30 +302,7 @@ const FinalProductsStock: React.FC<FinalProductsStockProps> = ({ isLoading = fal
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                    <div>
-                      <p className="text-tire-400">Vendidos</p>
-                      <p className="text-white font-medium">{product.totalSold}</p>
-                    </div>
-                    <div>
-                      <p className="text-tire-400">Receita</p>
-                      <p className="text-neon-blue font-medium">
-                        {formatCurrency(product.totalRevenue)}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-tire-400">Lucro</p>
-                      <p className="font-medium text-neon-blue">
-                        {formatCurrency(product.profit)}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-tire-400">Margem</p>
-                      <p className="font-medium text-neon-purple">
-                        {product.profitMargin.toFixed(2)}%
-                      </p>
-                    </div>
-                  </div>
+                  
                 </div>
               ))
             )}
