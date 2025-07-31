@@ -69,6 +69,7 @@ const ProductStock = ({
     "final",
   );
   const [synchronizedCostPerTire, setSynchronizedCostPerTire] = useState(0);
+  const [dynamicAverageCost, setDynamicAverageCost] = useState(101.09);
 
   const activeProducts = products.filter((p) => !p.archived);
   const activeResaleProducts = resaleProducts.filter((p) => !p.archived);
@@ -172,6 +173,7 @@ const ProductStock = ({
       console.log(
         `🔄 [ProductStock] Custo médio dinâmico atualizado: R$ ${newCost.toFixed(2)}`,
       );
+      setDynamicAverageCost(newCost);
     };
 
     // Atualizar inicialmente
@@ -469,24 +471,33 @@ const ProductStock = ({
                 return (
                   <div className="space-y-2">
                     <Label className="text-tire-300">
-                      Custo Médio Dinâmico (Todos os Produtos Finais)
+                      Custo Médio Dinâmico (Sincronizado)
                     </Label>
                     <div className="relative">
                       <Input
                         type="text"
-                        value={`R$ ${dynamicCost.toFixed(2)}`}
+                        value={`R$ ${dynamicAverageCost.toFixed(2)}`}
                         readOnly
                         className="bg-factory-600/30 border-tire-500/30 text-neon-orange font-bold cursor-not-allowed"
                       />
                       <div className="absolute right-3 top-2.5">
-                        <Info className="h-4 w-4 text-neon-orange" />
+                        <div className="flex items-center gap-1">
+                          <div className="w-2 h-2 bg-neon-green rounded-full animate-pulse" />
+                          <Info className="h-4 w-4 text-neon-orange" />
+                        </div>
                       </div>
                     </div>
                     <div className="space-y-2">
                       <div className="flex items-center gap-2 p-2 bg-neon-orange/10 rounded border border-neon-orange/30">
                         <Info className="h-4 w-4 text-neon-orange flex-shrink-0" />
                         <p className="text-xs text-neon-orange">
-                          Custo médio dinâmico obtido do elemento: &lt;p class="text-xl font-bold text-neon-orange"&gt;R$ 101,09&lt;/p&gt;
+                          Valor sincronizado em tempo real do elemento "Custo Médio/Pneu". Atualiza automaticamente quando o valor fonte mudar.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 p-2 bg-neon-green/10 rounded border border-neon-green/30">
+                        <div className="w-2 h-2 bg-neon-green rounded-full animate-pulse" />
+                        <p className="text-xs text-neon-green">
+                          Sistema funcionando como fórmula Excel - todos os produtos finais usam este valor dinâmico
                         </p>
                       </div>
                     </div>
