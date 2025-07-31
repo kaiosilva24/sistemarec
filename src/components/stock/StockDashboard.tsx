@@ -1347,7 +1347,7 @@ const StockDashboard = ({
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-3 bg-factory-800/50 border border-tire-600/30">
+          <TabsList className="grid w-full grid-cols-2 bg-factory-800/50 border border-tire-600/30">
             <TabsTrigger
               value="dashboard"
               className="text-tire-300 data-[state=active]:text-white data-[state=active]:bg-neon-blue/20"
@@ -1359,12 +1359,6 @@ const StockDashboard = ({
               className="text-tire-300 data-[state=active]:text-white data-[state=active]:bg-neon-blue/20"
             >
               Matéria Prima
-            </TabsTrigger>
-            <TabsTrigger
-              value="products"
-              className="text-tire-300 data-[state=active]:text-white data-[state=active]:bg-neon-blue/20"
-            >
-              Produtos
             </TabsTrigger>
           </TabsList>
 
@@ -1389,19 +1383,6 @@ const StockDashboard = ({
               isLoading={materialsLoading || stockLoading}
               materials={materials}
               stockItems={getMaterialStockItems()}
-              onStockUpdate={handleStockUpdate}
-              onSetMinLevel={handleSetMinLevel}
-            />
-          </TabsContent>
-
-          <TabsContent value="products">
-            <ProductStock
-              isLoading={
-                productsLoading || resaleProductsLoading || stockLoading
-              }
-              products={getAllProducts()}
-              resaleProducts={getAllResaleProducts()}
-              stockItems={getAllProductStockItems()}
               onStockUpdate={handleStockUpdate}
               onSetMinLevel={handleSetMinLevel}
             />
