@@ -30,6 +30,12 @@ import {
   GripVertical,
   RotateCcw,
   Check,
+  Package,
+  TrendingUp,
+  BarChart3,
+  Plus,
+  DollarSign,
+  ShoppingCart,
 } from "lucide-react";
 import {
   DndContext,
@@ -53,6 +59,7 @@ import { CSS } from "@dnd-kit/utilities";
 import RawMaterialStock from "./RawMaterialStock";
 import ProductStock from "./ProductStock";
 import FinalProductsStock from "./FinalProductsStock";
+import ResaleProductsStock from "./ResaleProductsStock";
 import StockCharts from "./StockCharts";
 import {
   useMaterials,
@@ -806,7 +813,7 @@ const StockDashboard = ({
       })),
     );
 
-    // Calcular quantidades totais (incluindo itens com quantidade zero)
+    // Calcular quantidades totais (incluindo itens com quantidade zero para debug)
     const materialTotalQuantity = materialStockItems.reduce((sum, item) => {
       // Garantir que quantity seja um número válido
       let quantity = 0;
@@ -1367,6 +1374,12 @@ const StockDashboard = ({
             >
               Produtos Finais
             </TabsTrigger>
+            <TabsTrigger
+              value="resale-products"
+              className="text-tire-300 data-[state=active]:text-white data-[state=active]:bg-neon-blue/20"
+            >
+              Produtos Revenda
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="dashboard">
@@ -1400,6 +1413,12 @@ const StockDashboard = ({
               isLoading={
                 productsLoading || stockLoading
               }
+            />
+          </TabsContent>
+
+          <TabsContent value="resale-products">
+            <ResaleProductsStock
+              isLoading={isLoading}
             />
           </TabsContent>
         </Tabs>
