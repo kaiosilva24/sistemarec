@@ -83,7 +83,7 @@ const ProductStock = ({
     try {
       // Buscar pelo elemento que contém R$ 87,00 (fonte única)
       const allElements = document.querySelectorAll("*");
-      
+
       for (const element of allElements) {
         const textContent = element.textContent?.trim();
         if (textContent && textContent.includes("R$") && element.className.includes("text-2xl font-bold")) {
@@ -98,7 +98,7 @@ const ProductStock = ({
           }
         }
       }
-      
+
       // Fallback para valor padrão
       return 87.00;
     } catch (error) {
@@ -115,209 +115,18 @@ const ProductStock = ({
 
     // SEMPRE usar valor do elemento principal R$ 87,00
     const mainElementValue = syncWithMainElement();
-    
+
     // Atualizar cache com valor sincronizado
     setProductCostCache((prev) => ({
       ...prev,
       [productName]: mainElementValue,
     }));
-    
+
     console.log(
       `✅ [ProductStock] Usando valor sincronizado para "${productName}": R$ ${mainElementValue.toFixed(2)}`,
     );
-    
+
     return mainElementValue;
-
-    try {
-      // ESTRATÉGIA PRINCIPAL: Buscar diretamente pelos valores conhecidos no DOM
-      console.log(
-        `🎯 [ProductStock] Buscando valores específicos no DOM para "${productName}"`,
-      );
-
-      // Mapeamento de produtos para seus custos corretos
-      const productCostMap: { [key: string]: number } = {
-        "175 70 14 P6": 108.42,
-        "175 65 14 P1": 93.75,
-      };
-
-      // Se temos o custo mapeado, buscar no DOM para confirmar
-      if (productCostMap[productName]) {
-        const expectedCost = productCostMap[productName];
-        const expectedCostStr = expectedCost.toFixed(2).replace(".", ",");
-
-        console.log(
-          `🔍 [ProductStock] Procurando por "R$ ${expectedCostStr}" no DOM para produto "${productName}"`,
-        );
-
-        // Buscar por elementos que contenham o valor esperado
-        const allElements = document.querySelectorAll("*");
-        for (const element of allElements) {
-          const textContent = element.textContent?.trim();
-          if (
-            textContent &&
-            textContent.includes(`R$ ${expectedCostStr}`) &&
-            (textContent.includes(productName) ||
-              textContent.includes("Custo") ||
-              textContent.includes("Receita") ||
-              textContent.includes("📋"))
-          ) {
-            console.log(
-              `✅ [ProductStock] Valor correto encontrado no DOM para "${productName}": R$ ${expectedCost.toFixed(2)}`,
-              `Elemento: "${textContent.substring(0, 100)}..."`,
-            );
-
-            // Salvar no cache
-            setProductCostCache((prev) => ({
-              ...prev,
-              [productName]: expectedCost,
-            }));
-
-            return expectedCost;
-          }
-        }
-
-        // Se não encontrou no DOM, mas temos o valor mapeado, usar ele
-        console.log(
-          `⚠️ [ProductStock] Valor não encontrado no DOM, usando valor mapeado para "${productName}": R$ ${expectedCost.toFixed(2)}`,
-        );
-
-        // Salvar no cache
-        setProductCostCache((prev) => ({
-          ...prev,
-          [productName]: expectedCost,
-        }));
-
-        return expectedCost;
-      }
-
-      // ESTRATÉGIA ALTERNATIVA: Buscar por qualquer valor monetário associado ao produto
-      console.log(
-        `🎯 [ProductStock] ESTRATÉGIA ALTERNATIVA: Buscando qualquer valor monetário para "${productName}"`,
-      );
-
-      const allElements = document.querySelectorAll("*");
-      const productElements = [];
-
-      // Primeiro, encontrar elementos que contenham o nome do produto
-      for (const element of allElements) {
-        const textContent = element.textContent?.trim();
-        if (
-          textContent &&
-          textContent.includes(productName) &&
-          textContent.length < 200
-        ) {
-          productElements.push(element);
-        }
-      }
-
-      console.log(
-        `🔍 [ProductStock] Encontrados ${productElements.length} elementos contendo "${productName}"`,
-      );
-
-      // Para cada elemento do produto, buscar valores monetários próximos
-      for (const productElement of productElements) {
-        // Buscar em elementos irmãos e filhos
-        const elementsToCheck = [
-          productElement,
-          productElement.parentElement,
-          productElement.nextElementSibling,
-          productElement.previousElementSibling,
-          ...Array.from(productElement.querySelectorAll("*")),
-        ].filter(Boolean);
-
-        for (const elem of elementsToCheck) {
-          const text = elem?.textContent?.trim();
-          if (
-            text &&
-            text.includes("R$") &&
-            (text.includes("Custo") ||
-              text.includes("Receita") ||
-              text.includes("📋"))
-          ) {
-            const match = text.match(/R\$\s*([\d.,]+)/);
-            if (match) {
-              const valueStr = match[1].replace(",", ".");
-              const numericValue = parseFloat(valueStr);
-              if (
-                !isNaN(numericValue) &&
-                numericValue > 50 &&
-                numericValue < 200
-              ) {
-                console.log(
-                  `✅ [ProductStock] Valor encontrado para "${productName}": R$ ${numericValue.toFixed(2)}`,
-                  `Texto: "${text.substring(0, 100)}..."`,
-                );
-
-                // Salvar no cache
-                setProductCostCache((prev) => ({
-                  ...prev,
-                  [productName]: numericValue,
-                }));
-
-                return numericValue;
-              }
-            }
-          }
-        }
-      }
-
-      // FALLBACK: Usar valores padrão conhecidos
-      console.log(
-        `🎯 [ProductStock] FALLBACK: Usando valores padrão para "${productName}"`,
-      );
-
-      const fallbackValues: { [key: string]: number } = {
-        "175 70 14 P6": 108.42,
-        "175 65 14 P1": 93.75,
-        "pneu comum": 95.5,
-        "pneu premium": 125.75,
-        "pneu especial": 110.25,
-        "pneu básico": 85.9,
-      };
-
-      const fallbackValue = fallbackValues[productName];
-      if (fallbackValue) {
-        console.log(
-          `✅ [ProductStock] Usando valor padrão para "${productName}": R$ ${fallbackValue.toFixed(2)}`,
-        );
-
-        // Salvar no cache
-        setProductCostCache((prev) => ({
-          ...prev,
-          [productName]: fallbackValue,
-        }));
-
-        return fallbackValue;
-      }
-
-      // Valor padrão final
-      const defaultValue = 101.09;
-      console.log(
-        `⚠️ [ProductStock] Usando valor padrão geral para "${productName}": R$ ${defaultValue.toFixed(2)}`,
-      );
-
-      // Salvar no cache
-      setProductCostCache((prev) => ({
-        ...prev,
-        [productName]: defaultValue,
-      }));
-
-      return defaultValue;
-    } catch (error) {
-      console.error(
-        `❌ [ProductStock] Erro ao obter custo para "${productName}":`,
-        error,
-      );
-      const errorValue = 101.09;
-
-      // Salvar no cache mesmo em caso de erro
-      setProductCostCache((prev) => ({
-        ...prev,
-        [productName]: errorValue,
-      }));
-
-      return errorValue;
-    }
   };
 
   // Função para obter o custo por pneu sincronizado do financeiro (mantida para compatibilidade)
@@ -1066,7 +875,8 @@ const ProductStock = ({
                                       Fonte:
                                     </span>
                                     <span className="text-neon-cyan text-xs">
-                                      TireCostManager ({product.name})
+```text
+TireCostManager ({product.name})
                                     </span>
                                   </div>
                                 </>
