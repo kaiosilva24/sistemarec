@@ -83,20 +83,29 @@ const ProductStock = ({
 
       for (const element of allElements) {
         const textContent = element.textContent?.trim();
-        if (textContent && textContent.includes("R$") && element.className.includes("text-2xl font-bold")) {
-          const match = textContent.match(/R\$\s*([0-9.,]+)/);
-          if (match) {
-            const valueStr = match[1].replace(",", ".");
-            const numericValue = parseFloat(valueStr);
-            if (!isNaN(numericValue) && numericValue > 0) {
-              console.log(`🎯 [ProductStock] Valor sincronizado do elemento principal: R$ ${numericValue.toFixed(2)}`);
-              return numericValue;
+        if (textContent && textContent.includes("R$")) {
+          // Verificar se é um elemento <p> com estilo inline ou classe text-2xl font-bold
+          const isTargetElement = 
+            (element.tagName === 'P' && element.getAttribute('style')?.includes('color: rgb(245, 158, 11)')) ||
+            element.className.includes("text-2xl font-bold") ||
+            (element.tagName === 'P' && textContent.includes("87,00"));
+
+          if (isTargetElement) {
+            const match = textContent.match(/R\$\s*([0-9.,]+)/);
+            if (match) {
+              const valueStr = match[1].replace(",", ".");
+              const numericValue = parseFloat(valueStr);
+              if (!isNaN(numericValue) && numericValue > 0) {
+                console.log(`🎯 [ProductStock] Valor sincronizado do elemento principal: R$ ${numericValue.toFixed(2)} (elemento: ${element.tagName}, texto: "${textContent}")`);
+                return numericValue;
+              }
             }
           }
         }
       }
 
       // Fallback para valor padrão
+      console.log("⚠️ [ProductStock] Elemento principal não encontrado, usando valor padrão");
       return 87.00;
     } catch (error) {
       console.error("❌ [ProductStock] Erro ao sincronizar com elemento principal:", error);
@@ -148,11 +157,49 @@ const ProductStock = ({
     // Verificar inicialmente
     checkMainElement();
 
-    // Verificação periódica menos frequente
-    const interval = setInterval(checkMainElement, 5000);
+    // Verificação periódica mais frequente para melhor sincronização
+    const interval = setInterval(checkMainElement, 2000);
+
+    // Observer para mudanças no DOM
+    const observer = new MutationObserver((mutations) => {
+      let shouldCheck = false;
+      mutations.forEach((mutation) => {
+        if (mutation.type === 'childList' || mutation.type === 'characterData') {
+          // Verificar se algum nó alterado contém R$
+          const checkNode = (node: Node) => {
+            if (node.nodeType === Node.TEXT_NODE && node.textContent?.includes('R$')) {
+              shouldCheck = true;
+            } else if (node.nodeType === Node.ELEMENT_NODE) {
+              const element = node as Element;
+              if (element.textContent?.includes('R$')) {
+                shouldCheck = true;
+              }
+            }
+          };
+          
+          mutation.addedNodes.forEach(checkNode);
+          if (mutation.target.textContent?.includes('R$')) {
+            shouldCheck = true;
+          }
+        }
+      });
+      
+      if (shouldCheck) {
+        console.log('🔍 [ProductStock] DOM mudou, verificando sincronização...');
+        setTimeout(checkMainElement, 100); // Pequeno delay para garantir que o DOM foi atualizado
+      }
+    });
+
+    // Observar mudanças em todo o documento
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      characterData: true
+    });
 
     return () => {
       clearInterval(interval);
+      observer.disconnect();
     };
   }, [mainElementValue, syncWithMainElement, clearCostCache]);
 
