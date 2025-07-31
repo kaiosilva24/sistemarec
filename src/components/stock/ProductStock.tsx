@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -62,16 +62,13 @@ const ProductStock = ({
   const [unitPrice, setUnitPrice] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [isLevelsDialogOpen, setIsLevelsDialogOpen] = useState(false);
-  const [selectedItemForLevels, setSelectedItemForLevels] =
-    useState<string>("");
+  const [selectedItemForLevels, setSelectedItemForLevels] = useState<string>("");
   const [minLevel, setMinLevel] = useState("");
-  const [localProductType, setLocalProductType] = useState<"final" | "resale">(
-    "final",
-  );
-  const [synchronizedCostPerTire, setSynchronizedCostPerTire] = useState(0);
+  const [localProductType, setLocalProductType] = useState<"final" | "resale">("final");
+  const [mainElementValue, setMainElementValue] = useState(87.00);
 
-  const activeProducts = products.filter((p) => !p.archived);
-  const activeResaleProducts = resaleProducts.filter((p) => !p.archived);
+  const activeProducts = useMemo(() => products.filter((p) => !p.archived), [products]);
+  const activeResaleProducts = useMemo(() => resaleProducts.filter((p) => !p.archived), [resaleProducts]);
 
   // Cache para armazenar custos específicos por produto
   const [productCostCache, setProductCostCache] = useState<{
@@ -79,7 +76,7 @@ const ProductStock = ({
   }>({});
 
   // Função para sincronizar com o elemento principal R$ 87,00
-  const syncWithMainElement = (): number => {
+  const syncWithMainElement = useCallback((): number => {
     try {
       // Buscar pelo elemento que contém R$ 87,00 (fonte única)
       const allElements = document.querySelectorAll("*");
@@ -105,13 +102,17 @@ const ProductStock = ({
       console.error("❌ [ProductStock] Erro ao sincronizar com elemento principal:", error);
       return 87.00;
     }
-  };
+  }, []);
 
   // Função para obter o custo específico por produto - SINCRONIZADO COM ELEMENTO PRINCIPAL
-  const getSpecificProductCost = (productName: string) => {
-    console.log(
-      `🔍 [ProductStock] Buscando custo específico para produto: "${productName}"`,
-    );
+  const getSpecificProductCost = useCallback((productName: string) => {
+    console.log(`🔍 [ProductStock] Buscando custo específico para produto: "${productName}"`);
+
+    // Verificar cache primeiro
+    if (productCostCache[productName]) {
+      console.log(`✅ [ProductStock] Usando custo do cache para "${productName}": R$ ${productCostCache[productName].toFixed(2)}`);
+      return productCostCache[productName];
+    }
 
     // SEMPRE usar valor do elemento principal R$ 87,00
     const mainElementValue = syncWithMainElement();
@@ -122,133 +123,24 @@ const ProductStock = ({
       [productName]: mainElementValue,
     }));
 
-    console.log(
-      `✅ [ProductStock] Usando valor sincronizado para "${productName}": R$ ${mainElementValue.toFixed(2)}`,
-    );
+    console.log(`✅ [ProductStock] Usando valor sincronizado para "${productName}": R$ ${mainElementValue.toFixed(2)}`);
 
     return mainElementValue;
-  };
-
-  // Função para obter o custo por pneu sincronizado do financeiro (mantida para compatibilidade)
-  const getTireCostFromFinancial = () => {
-    const TIRE_COST_STORAGE_KEY = "dashboard_tireCostValue_unified";
-
-    try {
-      const storedData = localStorage.getItem(TIRE_COST_STORAGE_KEY);
-      if (storedData) {
-        const parsedData = JSON.parse(storedData);
-        const value = parsedData.value || 0;
-        const timestamp = parsedData.timestamp || 0;
-        const isRecent = Date.now() - timestamp < 30000; // 30 segundos
-
-        if (value > 0 && isRecent) {
-          console.log(
-            `✅ [ProductStock] Custo por pneu obtido do financeiro: R$ ${value.toFixed(2)}`,
-          );
-          return value;
-        }
-      }
-
-      // Valor padrão se não encontrar dados válidos
-      const defaultValue = 101.09;
-      console.log(
-        `⚠️ [ProductStock] Usando valor padrão: R$ ${defaultValue.toFixed(2)}`,
-      );
-      return defaultValue;
-    } catch (error) {
-      console.error("❌ [ProductStock] Erro ao obter custo por pneu:", error);
-      return 101.09; // Valor padrão
-    }
-  };
-
-  // Função para sincronizar custo diretamente do DOM
-  const syncCostFromDOM = () => {
-    try {
-      console.log("🔄 [ProductStock] Iniciando sincronização do DOM...");
-
-      // Primeira tentativa: elemento específico
-      const domElement = document.querySelector(
-        ".tempo-84fba273-da98-5b39-85a6-211bade21bcd",
-      );
-
-      console.log(
-        `🔍 [ProductStock] Elemento específico encontrado:`,
-        domElement ? "SIM" : "NÃO",
-        domElement ? `Conteúdo: "${domElement.textContent?.trim()}"` : "",
-      );
-
-      if (domElement && domElement.textContent) {
-        const textContent = domElement.textContent.trim();
-        const match = textContent.match(/R\$\s*([\d.,]+)/);
-        if (match) {
-          const valueStr = match[1].replace(",", ".");
-          const numericValue = parseFloat(valueStr);
-          if (!isNaN(numericValue) && numericValue > 0) {
-            console.log(
-              `✅ [ProductStock] Sincronizando custo do DOM: R$ ${numericValue.toFixed(2)}`,
-            );
-            setSynchronizedCostPerTire(numericValue);
-            return numericValue;
-          }
-        }
-      }
-
-      // Segunda tentativa: buscar por qualquer elemento que contenha R$ 101,09
-      const allElements = document.querySelectorAll("*");
-      for (const element of allElements) {
-        const textContent = element.textContent?.trim();
-        if (
-          textContent &&
-          textContent.includes("R$") &&
-          textContent.includes("101,09")
-        ) {
-          console.log(
-            `🎯 [ProductStock] Elemento alternativo encontrado para sincronização: "${textContent}"`,
-          );
-
-          const match = textContent.match(/R\$\s*([\d.,]+)/);
-          if (match) {
-            const valueStr = match[1].replace(",", ".");
-            const numericValue = parseFloat(valueStr);
-            if (!isNaN(numericValue) && numericValue > 0) {
-              console.log(
-                `✅ [ProductStock] Sincronizando custo alternativo do DOM: R$ ${numericValue.toFixed(2)}`,
-              );
-              setSynchronizedCostPerTire(numericValue);
-              return numericValue;
-            }
-          }
-        }
-      }
-
-      console.log(
-        "⚠️ [ProductStock] Nenhum elemento com custo encontrado no DOM",
-      );
-    } catch (error) {
-      console.error(
-        "❌ [ProductStock] Erro ao sincronizar custo do DOM:",
-        error,
-      );
-    }
-    return null;
-  };
+  }, [productCostCache, syncWithMainElement]);
 
   // Função para limpar cache e forçar nova busca
-  const clearCostCache = () => {
+  const clearCostCache = useCallback(() => {
     console.log("🧹 [ProductStock] Limpando cache de custos por produto");
     setProductCostCache({});
-  };
+  }, []);
 
-  // Estado para monitorar valor do elemento principal
-  const [mainElementValue, setMainElementValue] = useState(87.00);
-
-  // Effect para sincronizar com elemento principal R$ 87,00
+  // Effect para sincronizar com elemento principal R$ 87,00 - OTIMIZADO
   useEffect(() => {
     const checkMainElement = () => {
       const newValue = syncWithMainElement();
-      if (newValue !== mainElementValue) {
+      if (Math.abs(newValue - mainElementValue) > 0.01) { // Só atualiza se diferença for significativa
         setMainElementValue(newValue);
-        clearCostCache(); // Limpar cache quando valor mudar
+        clearCostCache();
         console.log(`🔄 [ProductStock] Valor principal atualizado: R$ ${newValue.toFixed(2)}`);
       }
     };
@@ -256,107 +148,16 @@ const ProductStock = ({
     // Verificar inicialmente
     checkMainElement();
 
-    // Observer para mudanças no DOM
-    const observer = new MutationObserver(checkMainElement);
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-      characterData: true,
-    });
-
-    // Verificação periódica
-    const interval = setInterval(checkMainElement, 2000);
+    // Verificação periódica menos frequente
+    const interval = setInterval(checkMainElement, 5000);
 
     return () => {
-      observer.disconnect();
       clearInterval(interval);
     };
-  }, [mainElementValue]);
-
-  // Effect para sincronizar o custo por pneu (mantido para compatibilidade)
-  useEffect(() => {
-    const updateCostPerTire = () => {
-      // Usar valor do elemento principal
-      const mainValue = syncWithMainElement();
-      setSynchronizedCostPerTire(mainValue);
-    };
-
-    // Atualizar inicialmente
-    updateCostPerTire();
-
-    // Listener para mudanças no localStorage
-    const handleStorageChange = (event: StorageEvent) => {
-      if (event.key === "dashboard_tireCostValue_unified") {
-        console.log("🔄 [ProductStock] Detectada mudança no custo por pneu");
-        clearCostCache(); // Limpar cache quando houver mudanças
-        updateCostPerTire();
-      }
-    };
-
-    // Listener para eventos customizados do TireCostManager
-    const handleTireCostUpdate = (event: CustomEvent) => {
-      console.log(
-        "🔔 [ProductStock] Evento recebido do TireCostManager:",
-        event.detail,
-      );
-      const { averageCostPerTire } = event.detail;
-      if (averageCostPerTire > 0) {
-        setSynchronizedCostPerTire(averageCostPerTire);
-        clearCostCache(); // Limpar cache quando houver atualizações
-      }
-    };
-
-    // Observer para mudanças no DOM
-    const observer = new MutationObserver(() => {
-      console.log(
-        "🔍 [ProductStock] Mudança detectada no DOM, limpando cache...",
-      );
-      clearCostCache(); // Limpar cache quando o DOM mudar
-      syncCostFromDOM();
-    });
-
-    // Observar mudanças no documento
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-      characterData: true,
-    });
-
-    window.addEventListener("storage", handleStorageChange);
-    window.addEventListener(
-      "tireCostUpdated",
-      handleTireCostUpdate as EventListener,
-    );
-
-    // Verificação periódica para limpar cache e recarregar custos
-    const intervalId = setInterval(() => {
-      console.log(
-        "⏰ [ProductStock] Verificação periódica - limpando cache...",
-      );
-      clearCostCache();
-      updateCostPerTire();
-    }, 5000); // Aumentei para 5 segundos para não sobrecarregar
-
-    // Verificação adicional após um delay para garantir que o DOM esteja carregado
-    setTimeout(() => {
-      console.log("⏰ [ProductStock] Verificação inicial após delay...");
-      clearCostCache();
-      updateCostPerTire();
-    }, 1000);
-
-    return () => {
-      window.removeEventListener("storage", handleStorageChange);
-      window.removeEventListener(
-        "tireCostUpdated",
-        handleTireCostUpdate as EventListener,
-      );
-      observer.disconnect();
-      clearInterval(intervalId);
-    };
-  }, []);
+  }, [mainElementValue, syncWithMainElement, clearCostCache]);
 
   // Get all available products based on local type filter
-  const getAllAvailableProducts = () => {
+  const getAllAvailableProducts = useCallback(() => {
     const finalProducts = activeProducts.map((p) => ({
       ...p,
       type: "final" as const,
@@ -374,11 +175,11 @@ const ProductStock = ({
       return resaleProductsFormatted;
     }
     return finalProducts; // Default to final products only
-  };
+  }, [activeProducts, activeResaleProducts, localProductType]);
 
-  const availableProducts = getAllAvailableProducts();
+  const availableProducts = useMemo(() => getAllAvailableProducts(), [getAllAvailableProducts]);
 
-  const handleStockOperation = (operation: "add" | "remove") => {
+  const handleStockOperation = useCallback((operation: "add" | "remove") => {
     if (selectedProduct && quantity && parseFloat(quantity) > 0) {
       // Para produtos finais, usar sempre o custo específico baseado no nome do produto
       const selectedProductData = availableProducts.find(
@@ -414,43 +215,35 @@ const ProductStock = ({
       setQuantity("");
       setUnitPrice("");
     }
-  };
+  }, [selectedProduct, quantity, unitPrice, availableProducts, getSpecificProductCost, onStockUpdate]);
 
-  const formatCurrency = (value: number) => {
+  const formatCurrency = useCallback((value: number) => {
     return new Intl.NumberFormat("pt-BR", {
       style: "currency",
       currency: "BRL",
     }).format(value);
-  };
+  }, []);
 
-  const handleSetLevels = () => {
+  const handleSetLevels = useCallback(() => {
     if (selectedItemForLevels && minLevel) {
       onSetMinLevel(selectedItemForLevels, "product", parseFloat(minLevel));
       setMinLevel("");
       setSelectedItemForLevels("");
       setIsLevelsDialogOpen(false);
     }
-  };
+  }, [selectedItemForLevels, minLevel, onSetMinLevel]);
 
-  const getStockForProduct = (productId: string) => {
+  const getStockForProduct = useCallback((productId: string) => {
     return stockItems.find((item) => item.item_id === productId);
-  };
+  }, [stockItems]);
 
-  const getResaleProductStock = (productId: string) => {
-    // For resale products, check stock_items table instead of current_stock field
-    const stockItem = stockItems.find(
-      (item) => item.item_id === productId && item.item_type === "product",
-    );
-    return stockItem?.quantity || 0;
-  };
-
-  const getStockLevel = (stock: StockItem) => {
+  const getStockLevel = useCallback((stock: StockItem) => {
     if (!stock.min_level) return "unknown";
     if (stock.quantity <= stock.min_level) return "low";
     return "normal";
-  };
+  }, []);
 
-  const getStockLevelColor = (level: string) => {
+  const getStockLevelColor = useCallback((level: string) => {
     switch (level) {
       case "low":
         return "text-red-400";
@@ -459,11 +252,12 @@ const ProductStock = ({
       default:
         return "text-tire-300";
     }
-  };
+  }, []);
 
-  const filteredProducts = availableProducts.filter((product) =>
-    product.name.toLowerCase().includes(searchTerm.toLowerCase()),
-  );
+  const filteredProducts = useMemo(() => 
+    availableProducts.filter((product) =>
+      product.name.toLowerCase().includes(searchTerm.toLowerCase()),
+    ), [availableProducts, searchTerm]);
 
   return (
     <div className="w-full max-w-6xl mx-auto p-6 bg-factory-900/90 backdrop-blur-md rounded-2xl border border-tire-700/30">
@@ -875,8 +669,7 @@ const ProductStock = ({
                                       Fonte:
                                     </span>
                                     <span className="text-neon-cyan text-xs">
-```text
-TireCostManager ({product.name})
+                                      TireCostManager ({product.name})
                                     </span>
                                   </div>
                                 </>
