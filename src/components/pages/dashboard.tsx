@@ -460,20 +460,41 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       return 101.09;
     };
 
-    // Função para ler lucro médio por pneu
+    // Função para ler lucro médio por pneu do PresumedProfitManager
     const readProfitPerTire = () => {
       try {
-        const profitElement = document.querySelector('[id="average-profit"]');
-        if (profitElement) {
-          const textContent = profitElement.textContent || "";
+        // NOVA LÓGICA: Procurar pelo elemento com texto-neon-purple (Lucro Produtos Finais)
+        const profitElements = document.querySelectorAll('.text-neon-purple');
+        for (const element of profitElements) {
+          const textContent = element.textContent || "";
+          // Procurar por valores em formato R$ XX,XX
           const match = textContent.match(/R\$\s*([\d.,]+)/);
           if (match) {
             const value = parseFloat(match[1].replace(",", "."));
-            if (!isNaN(value)) {
-              console.log(`💫 [Dashboard] FÓRMULA EXCEL: Copiando lucro R$ ${value.toFixed(3)}`);
+            if (!isNaN(value) && value > 0) {
+              console.log(`💫 [Dashboard] FÓRMULA EXCEL LUCRO: Copiando R$ ${value.toFixed(3)} do Lucro Produtos Finais`);
               setAverageProfitPerTire(value);
+              
+              // Salvar para persistência
+              localStorage.setItem("dashboard_averageProfitPerTire", JSON.stringify({
+                value: value,
+                timestamp: Date.now(),
+                source: "PresumedProfitManager_DOM"
+              }));
+              
               return value;
             }
+          }
+        }
+
+        // Alternativa: ler do localStorage se existir
+        const savedData = localStorage.getItem("dashboard_averageProfitPerTire");
+        if (savedData) {
+          const parsed = JSON.parse(savedData);
+          if (parsed.value && parsed.value > 0) {
+            console.log(`💫 [Dashboard] FÓRMULA EXCEL LUCRO: Usando valor salvo R$ ${parsed.value.toFixed(3)}`);
+            setAverageProfitPerTire(parsed.value);
+            return parsed.value;
           }
         }
       } catch (error) {
@@ -530,8 +551,27 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       }
     };
 
+    // Listener para eventos do PresumedProfitManager (Lucro Produtos Finais)
+    const handleProfitUpdate = (event: CustomEvent) => {
+      console.log("📢 [Dashboard] EVENTO DO PresumedProfitManager RECEBIDO - APLICANDO FÓRMULA EXCEL:", event.detail);
+      
+      if (event.detail.averageProfitPerTire !== undefined) {
+        const newProfit = event.detail.averageProfitPerTire;
+        console.log(`✨ [Dashboard] FÓRMULA EXCEL LUCRO PRODUTOS FINAIS: ${averageProfitPerTire.toFixed(3)} → ${newProfit.toFixed(3)}`);
+        setAverageProfitPerTire(newProfit);
+        
+        // Salvar para persistência
+        localStorage.setItem("dashboard_averageProfitPerTire", JSON.stringify({
+          value: newProfit,
+          timestamp: Date.now(),
+          source: "PresumedProfitManager_Event"
+        }));
+      }
+    };
+
     // Adicionar listener para eventos
     window.addEventListener("tireCostUpdated", handleTireCostUpdate as EventListener);
+    window.addEventListener("profitUpdated", handleProfitUpdate as EventListener);
 
     // Leitura inicial
     readTireCostManagerValue();
@@ -547,6 +587,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
 
     return () => {
       window.removeEventListener("tireCostUpdated", handleTireCostUpdate as EventListener);
+      window.removeEventListener("profitUpdated", handleProfitUpdate as EventListener);
       clearInterval(interval);
     };
   }, [averageCostPerTire, averageProfitPerTire]);

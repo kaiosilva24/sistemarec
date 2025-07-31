@@ -958,7 +958,7 @@ const PresumedProfitManager = ({
           return entryDate >= last30Days && entryDate <= today;
         });
         console.log(
-          `📅 [PresumedProfitManager] Filtro 'últimos 30 dias': ${filteredEntries.length} vendas de produtos finais com receitas`,
+          `[PresumedProfitManager] Filtro 'últimos 30 dias': ${filteredEntries.length} vendas de produtos finais com receitas`,
         );
         break;
       case "custom":
@@ -1395,6 +1395,51 @@ const PresumedProfitManager = ({
       overallProfitMargin,
     };
   }, [profitData]);
+
+  // Effect para disparar evento quando o lucro médio por pneu mudar - SINCRONIZAÇÃO COM DASHBOARD
+  useEffect(() => {
+    if (summaryMetrics.averageProfitPerTire > 0) {
+      console.log("🔄 [PresumedProfitManager] DISPARANDO EVENTO para sincronização com Dashboard:", {
+        averageProfitPerTire: summaryMetrics.averageProfitPerTire,
+        totalSales: summaryMetrics.totalSales,
+        totalProfit: summaryMetrics.totalProfit,
+        timestamp: new Date().toISOString()
+      });
+
+      // Salvar dados para sincronização
+      const synchronizedProfitData = {
+        averageProfitPerTire: summaryMetrics.averageProfitPerTire,
+        totalProfit: summaryMetrics.totalProfit,
+        totalSales: summaryMetrics.totalSales,
+        overallProfitMargin: summaryMetrics.overallProfitMargin,
+        lastUpdated: new Date().toISOString(),
+        source: "PresumedProfitManager",
+        timestamp: Date.now(),
+      };
+
+      // Salvar no localStorage para persistência
+      localStorage.setItem(
+        "presumedProfitManager_synchronizedData",
+        JSON.stringify(synchronizedProfitData),
+      );
+
+      // Disparar evento customizado para notificar o dashboard
+      window.dispatchEvent(
+        new CustomEvent("profitUpdated", {
+          detail: {
+            averageProfitPerTire: summaryMetrics.averageProfitPerTire,
+            totalProfit: summaryMetrics.totalProfit,
+            totalSales: summaryMetrics.totalSales,
+            profitMargin: summaryMetrics.overallProfitMargin,
+            timestamp: Date.now(),
+            source: "PresumedProfitManager",
+          },
+        }),
+      );
+
+      console.log("✅ [PresumedProfitManager] EVENTO DISPARADO - Sincronização com Dashboard ativada");
+    }
+  }, [summaryMetrics.averageProfitPerTire, summaryMetrics.totalProfit, summaryMetrics.totalSales]);
 
   if (isLoading) {
     return (
