@@ -81,7 +81,46 @@ const ProductStock = ({
         "🎯 [ProductStock] Buscando custo médio dinâmico do elemento HTML específico...",
       );
 
-      // ESTRATÉGIA PRINCIPAL: Buscar pelo elemento específico com as classes exatas
+      // ESTRATÉGIA 1: Buscar diretamente por texto que contém "Custo Médio/Pneu"
+      const allElements = document.querySelectorAll("*");
+      let targetValue = null;
+
+      for (const element of allElements) {
+        const textContent = element.textContent?.trim();
+        if (textContent && textContent.includes("Custo Médio/Pneu")) {
+          console.log(`🔍 [ProductStock] Elemento com "Custo Médio/Pneu" encontrado`);
+          
+          // Buscar elementos próximos que podem conter o valor
+          const parent = element.closest('div');
+          if (parent) {
+            const valueElements = parent.querySelectorAll('p.text-xl.font-bold.text-neon-orange, .text-neon-orange');
+            for (const valueEl of valueElements) {
+              const valueText = valueEl.textContent?.trim();
+              if (valueText && valueText.includes('R$')) {
+                const match = valueText.match(/R\$\s*([\d.,]+)/);
+                if (match) {
+                  const valueStr = match[1].replace(",", ".");
+                  const numericValue = parseFloat(valueStr);
+                  if (!isNaN(numericValue) && numericValue > 0) {
+                    console.log(
+                      `✅ [ProductStock] Valor encontrado próximo ao "Custo Médio/Pneu": R$ ${numericValue.toFixed(2)}`,
+                    );
+                    targetValue = numericValue;
+                    break;
+                  }
+                }
+              }
+            }
+          }
+          if (targetValue) break;
+        }
+      }
+
+      if (targetValue) {
+        return targetValue;
+      }
+
+      // ESTRATÉGIA 2: Buscar pelo elemento específico com as classes exatas
       const targetElement = document.querySelector(
         "p.text-xl.font-bold.text-neon-orange",
       );
@@ -89,7 +128,7 @@ const ProductStock = ({
       if (targetElement && targetElement.textContent) {
         const textContent = targetElement.textContent.trim();
         console.log(
-          `🔍 [ProductStock] Elemento encontrado: "${textContent}"`,
+          `🔍 [ProductStock] Elemento p.text-xl encontrado: "${textContent}"`,
         );
 
         // Extrair valor monetário do elemento
@@ -106,30 +145,18 @@ const ProductStock = ({
         }
       }
 
-      // ESTRATÉGIA ALTERNATIVA: Buscar por elementos que contenham "R$ 101,09"
-      console.log(
-        "🔄 [ProductStock] Elemento específico não encontrado, buscando por 'R$ 101,09'...",
-      );
-
-      const allElements = document.querySelectorAll("*");
+      // ESTRATÉGIA 3: Buscar por qualquer elemento que contenha valores monetários acima de R$ 50
       for (const element of allElements) {
         const textContent = element.textContent?.trim();
-        if (
-          textContent &&
-          textContent.includes("R$") &&
-          textContent.includes("101,09")
-        ) {
-          console.log(
-            `🎯 [ProductStock] Elemento alternativo encontrado: "${textContent}"`,
-          );
-
+        if (textContent && textContent.includes("R$")) {
           const match = textContent.match(/R\$\s*([\d.,]+)/);
           if (match) {
             const valueStr = match[1].replace(",", ".");
             const numericValue = parseFloat(valueStr);
-            if (!isNaN(numericValue) && numericValue > 0) {
+            // Buscar valores entre R$ 50 e R$ 200 (range provável para custo médio)
+            if (!isNaN(numericValue) && numericValue >= 50 && numericValue <= 200) {
               console.log(
-                `✅ [ProductStock] Custo médio alternativo encontrado: R$ ${numericValue.toFixed(2)}`,
+                `✅ [ProductStock] Valor provável encontrado: R$ ${numericValue.toFixed(2)}`,
               );
               return numericValue;
             }
@@ -140,7 +167,7 @@ const ProductStock = ({
       // Valor padrão se não encontrar
       const defaultValue = 101.09;
       console.log(
-        `⚠️ [ProductStock] Elemento não encontrado, usando valor padrão: R$ ${defaultValue.toFixed(2)}`,
+        `⚠️ [ProductStock] Nenhum elemento encontrado, usando valor padrão: R$ ${defaultValue.toFixed(2)}`,
       );
       return defaultValue;
     } catch (error) {
@@ -161,6 +188,9 @@ const ProductStock = ({
       `🔄 [ProductStock] Custo médio dinâmico atualizado: R$ ${dynamicCost.toFixed(2)}`,
     );
 
+    // Atualizar o estado também
+    setDynamicAverageCost(dynamicCost);
+
     return dynamicCost;
   };
 
@@ -176,8 +206,14 @@ const ProductStock = ({
       setDynamicAverageCost(newCost);
     };
 
-    // Atualizar inicialmente
-    updateDynamicCost();
+    // Múltiplas tentativas de atualização inicial
+    const initialUpdates = [100, 500, 1000, 2000, 3000];
+    initialUpdates.forEach(delay => {
+      setTimeout(() => {
+        console.log(`⏰ [ProductStock] Verificação inicial após ${delay}ms...`);
+        updateDynamicCost();
+      }, delay);
+    });
 
     // Observer para mudanças no DOM - foco no elemento específico
     const observer = new MutationObserver((mutations) => {
@@ -191,6 +227,7 @@ const ProductStock = ({
             // Verificar se é o elemento específico ou contém valores monetários
             const textContent = target.textContent || '';
             if (textContent.includes('R$') || 
+                textContent.includes('Custo Médio') ||
                 target.classList?.contains('text-neon-orange') ||
                 textContent.includes('101,09')) {
               shouldUpdate = true;
@@ -203,7 +240,7 @@ const ProductStock = ({
         console.log(
           "🔍 [ProductStock] Mudança relevante detectada no DOM, atualizando custo médio dinâmico...",
         );
-        updateDynamicCost();
+        setTimeout(updateDynamicCost, 100); // Pequeno delay para garantir que o DOM foi atualizado
       }
     });
 
@@ -216,19 +253,13 @@ const ProductStock = ({
       attributeFilter: ['class']
     });
 
-    // Verificação periódica mais eficiente
+    // Verificação periódica mais frequente
     const intervalId = setInterval(() => {
       console.log(
         "⏰ [ProductStock] Verificação periódica - atualizando custo médio dinâmico...",
       );
       updateDynamicCost();
-    }, 10000); // 10 segundos
-
-    // Verificação inicial após o DOM estar carregado
-    setTimeout(() => {
-      console.log("⏰ [ProductStock] Verificação inicial do custo médio dinâmico...");
-      updateDynamicCost();
-    }, 1000);
+    }, 5000); // 5 segundos
 
     return () => {
       observer.disconnect();
