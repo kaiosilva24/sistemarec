@@ -63,7 +63,7 @@ const AddStockDialog: React.FC<AddStockDialogProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedProductId && quantity && unitCost) {
-      onAddStock(selectedProductId, parseInt(quantity), parseFloat(unitCost));
+      onAddStock(selectedProductId, parseInt(quantity), parseInt(unitCost));
       setSelectedProductId("");
       setQuantity("");
       setUnitCost("");
@@ -107,11 +107,11 @@ const AddStockDialog: React.FC<AddStockDialogProps> = ({
                 type="text"
                 value={quantity}
                 onChange={(e) => {
-                  const formatted = e.target.value.replace(/[^\d.,]/g, '').replace(',', '.');
+                  const formatted = e.target.value.replace(/[^\d]/g, '');
                   setQuantity(formatted);
                 }}
                 className="bg-factory-700/50 border-tire-600/30 text-white"
-                placeholder="0,00"
+                placeholder="0"
                 required
               />
             </div>
@@ -126,11 +126,11 @@ const AddStockDialog: React.FC<AddStockDialogProps> = ({
                   type="text"
                   value={unitCost}
                   onChange={(e) => {
-                    const formatted = e.target.value.replace(/[^\d.,]/g, '').replace(',', '.');
+                    const formatted = e.target.value.replace(/[^\d]/g, '');
                     setUnitCost(formatted);
                   }}
                   className="bg-factory-700/50 border-tire-600/30 text-white pl-8"
-                  placeholder="0,00"
+                  placeholder="0"
                   required
                 />
               </div>
@@ -219,15 +219,12 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
   };
 
   const formatDisplayValue = (value: number): string => {
-    return value.toLocaleString('pt-BR', { 
-      minimumFractionDigits: 2, 
-      maximumFractionDigits: 2 
-    });
+    return Math.round(value).toLocaleString('pt-BR');
   };
 
   const handleQuantityChange = (productId: string, newQuantity: string) => {
-    const formattedValue = formatDecimalInput(newQuantity);
-    const numericQuantity = parseFloat(formattedValue) || 0;
+    const cleanValue = newQuantity.replace(/[^\d]/g, '');
+    const numericQuantity = parseInt(cleanValue) || 0;
     
     setProductAnalysis(prev => 
       prev.map(product => 
@@ -243,8 +240,8 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
   };
 
   const handlePurchasePriceChange = (productId: string, newPrice: string) => {
-    const formattedValue = formatCurrencyInput(newPrice);
-    const numericPrice = parseFloat(formattedValue) || 0;
+    const cleanValue = newPrice.replace(/[^\d]/g, '');
+    const numericPrice = parseInt(cleanValue) || 0;
     
     setProductAnalysis(prev => 
       prev.map(product => 
@@ -262,8 +259,8 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
   };
 
   const handleSalePriceChange = (productId: string, newPrice: string) => {
-    const formattedValue = formatCurrencyInput(newPrice);
-    const numericPrice = parseFloat(formattedValue) || 0;
+    const cleanValue = newPrice.replace(/[^\d]/g, '');
+    const numericPrice = parseInt(cleanValue) || 0;
     
     setProductAnalysis(prev => 
       prev.map(product => 
@@ -520,9 +517,9 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
                           <div className="relative">
                             <Input
                               type="text"
-                              value={formatDisplayValue(product.editableQuantity)}
+                              value={Math.round(product.editableQuantity).toString()}
                               onChange={(e) => handleQuantityChange(product.productId, e.target.value)}
-                              placeholder="0,00"
+                              placeholder="0"
                               className="bg-factory-700/50 border-tire-600/30 text-white h-9 text-sm pr-12"
                             />
                             <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-tire-400 text-xs">
@@ -531,7 +528,7 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
                           </div>
                         ) : (
                           <p className="text-white font-medium text-lg">
-                            {formatDisplayValue(product.quantity)} {product.unit}
+                            {Math.round(product.quantity)} {product.unit}
                           </p>
                         )}
                       </div>
@@ -546,15 +543,15 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
                             </span>
                             <Input
                               type="text"
-                              value={formatDisplayValue(product.editablePurchasePrice)}
+                              value={Math.round(product.editablePurchasePrice).toString()}
                               onChange={(e) => handlePurchasePriceChange(product.productId, e.target.value)}
-                              placeholder="0,00"
+                              placeholder="0"
                               className="bg-factory-700/50 border-tire-600/30 text-white h-9 text-sm pl-8"
                             />
                           </div>
                         ) : (
                           <p className="text-neon-orange font-medium text-lg">
-                            {formatCurrency(product.purchasePrice)}
+                            R$ {Math.round(product.purchasePrice)}
                           </p>
                         )}
                       </div>
@@ -569,15 +566,15 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
                             </span>
                             <Input
                               type="text"
-                              value={formatDisplayValue(product.editableSalePrice)}
+                              value={Math.round(product.editableSalePrice).toString()}
                               onChange={(e) => handleSalePriceChange(product.productId, e.target.value)}
-                              placeholder="0,00"
+                              placeholder="0"
                               className="bg-factory-700/50 border-tire-600/30 text-white h-9 text-sm pl-8"
                             />
                           </div>
                         ) : (
                           <p className="text-neon-cyan font-medium text-lg">
-                            {formatCurrency(product.salePrice)}
+                            R$ {Math.round(product.salePrice)}
                           </p>
                         )}
                       </div>
