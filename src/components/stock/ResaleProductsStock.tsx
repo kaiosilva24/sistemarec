@@ -79,7 +79,7 @@ const AddStockDialog: React.FC<AddStockDialogProps> = ({
         <DialogHeader>
           <DialogTitle className="text-white flex items-center gap-2">
             <Plus className="h-5 w-5 text-neon-green" />
-            Adicionar Estoque de Produto para Revenda
+            Definir Estoque de Produto para Revenda
           </DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -143,7 +143,7 @@ const AddStockDialog: React.FC<AddStockDialogProps> = ({
               className="flex-1 bg-neon-green hover:bg-neon-green/80 text-white"
             >
               <Plus className="h-4 w-4 mr-2" />
-              Adicionar
+              Definir
             </Button>
           </div>
         </form>
@@ -162,19 +162,16 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
   useEffect(() => {
     if (!resaleProducts.length) return;
 
-    // Incluir todos os produtos de revenda, mesmo os que não têm estoque
+    // Começar sempre com valores zerados - apenas usar o novo sistema de cálculo
     const analysis = resaleProducts
       .filter(product => !product.archived)
       .map(product => {
-        const stockItem = stockItems.find(item => 
-          item.item_id === product.id && item.item_type === "resaleProduct"
-        );
-
-        const quantity = stockItem?.quantity || 0;
-        const purchasePrice = product.purchase_price || 0;
-        const salePrice = product.sale_price || 0;
-        const totalValue = quantity * purchasePrice;
-        const profitMargin = salePrice > 0 ? ((salePrice - purchasePrice) / salePrice * 100) : 0;
+        // ZERADO: Ignorar dados antigos, começar sempre com 0
+        const quantity = 0;
+        const purchasePrice = 0;
+        const salePrice = 0;
+        const totalValue = 0;
+        const profitMargin = 0;
 
         return {
           productId: product.id,
@@ -193,7 +190,7 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
       });
 
     setProductAnalysis(analysis);
-  }, [stockItems, resaleProducts]);
+  }, [resaleProducts]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
@@ -266,21 +263,18 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
 
     setIsSaving(true);
     try {
+      // NOVO SISTEMA: Sempre criar/substituir com os novos valores
+      // Verificar se já existe estoque
       const existingStock = stockItems.find(item => 
         item.item_id === productId && item.item_type === "resaleProduct"
       );
 
       if (existingStock) {
-        // Atualizar estoque existente
-        const newQuantity = existingStock.quantity + quantity;
-        const currentTotalValue = existingStock.quantity * existingStock.unit_cost;
-        const newTotalValue = quantity * unitCost;
-        const newUnitCost = (currentTotalValue + newTotalValue) / newQuantity;
-
+        // Substituir valores existentes pelos novos (não somar)
         await updateStockItem(existingStock.id, {
-          quantity: newQuantity,
-          unit_cost: newUnitCost,
-          total_value: newQuantity * newUnitCost,
+          quantity: quantity,
+          unit_cost: unitCost,
+          total_value: quantity * unitCost,
           last_updated: new Date().toISOString(),
         });
       } else {
@@ -297,9 +291,9 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
         });
       }
 
-      console.log(`✅ Estoque adicionado: ${product.name} - ${quantity} unidades`);
+      console.log(`✅ Estoque definido: ${product.name} - ${quantity} unidades com custo ${unitCost}`);
     } catch (error) {
-      console.error("Erro ao adicionar estoque:", error);
+      console.error("Erro ao definir estoque:", error);
     } finally {
       setIsSaving(false);
     }
@@ -425,7 +419,7 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
               className="bg-neon-green hover:bg-neon-green/80 text-white"
             >
               <Plus className="h-4 w-4 mr-2" />
-              Adicionar Estoque
+              Definir Estoque
             </Button>
           </div>
         </CardHeader>
@@ -596,7 +590,7 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
         </CardContent>
       </Card>
 
-      {/* Dialog para adicionar estoque */}
+      {/* Dialog para definir estoque */}
       <AddStockDialog
         onAddStock={handleAddStock}
         resaleProducts={resaleProducts}
