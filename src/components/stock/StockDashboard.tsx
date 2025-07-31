@@ -886,4 +886,306 @@ const StockDashboard = ({
       return sum + quantity;
     }, 0);
     const finalProductTotalQuantity = finalProductStockItems.reduce(
-      (sum, item) =>
+      (sum, item) => {
+        let quantity = 0;
+        const numericQuantity = Number(item.quantity);
+        if (!isNaN(numericQuantity) && numericQuantity >= 0) {
+          quantity = numericQuantity;
+        }
+        return sum + quantity;
+      }, 0
+    );
+
+    const resaleProductTotalQuantity = resaleProductStockItems.reduce(
+      (sum, item) => {
+        let quantity = 0;
+        const numericQuantity = Number(item.quantity);
+        if (!isNaN(numericQuantity) && numericQuantity >= 0) {
+          quantity = numericQuantity;
+        }
+        return sum + quantity;
+      }, 0
+    );
+
+    // Calcular valores totais
+    const materialTotalValue = materialStockItems.reduce((sum, item) => {
+      let totalValue = 0;
+      const numericValue = Number(item.total_value);
+      if (!isNaN(numericValue) && numericValue >= 0) {
+        totalValue = numericValue;
+      }
+      return sum + totalValue;
+    }, 0);
+
+    const finalProductTotalValue = finalProductStockItems.reduce((sum, item) => {
+      let totalValue = 0;
+      const numericValue = Number(item.total_value);
+      if (!isNaN(numericValue) && numericValue >= 0) {
+        totalValue = numericValue;
+      }
+      return sum + totalValue;
+    }, 0);
+
+    const resaleProductTotalValue = resaleProductStockItems.reduce((sum, item) => {
+      let totalValue = 0;
+      const numericValue = Number(item.total_value);
+      if (!isNaN(numericValue) && numericValue >= 0) {
+        totalValue = numericValue;
+      }
+      return sum + totalValue;
+    }, 0);
+
+    console.log("📊 [StockDashboard] Métricas calculadas:", {
+      materialTypesInStock,
+      totalMaterialsRegistered,
+      materialTotalQuantity,
+      materialTotalValue,
+      finalProductTotalQuantity,
+      finalProductTotalValue,
+      resaleProductTotalQuantity,
+      resaleProductTotalValue,
+    });
+
+    return {
+      materialTypes: materialTypesInStock,
+      totalMaterialsRegistered,
+      materialValue: materialTotalValue,
+      finalProductQuantity: finalProductTotalQuantity,
+      finalProductValue: finalProductTotalValue,
+      resaleProductQuantity: resaleProductTotalQuantity,
+      resaleProductValue: resaleProductTotalValue,
+    };
+  };
+
+  // Calculate metrics whenever dependencies change
+  const metrics = React.useMemo(() => {
+    return calculateMetrics();
+  }, [materials, stockItems, products, resaleProducts]);
+
+  // Update cards with calculated values
+  const updatedCards = React.useMemo(() => {
+    return cards.map((card) => {
+      switch (card.type) {
+        case "materialTypes":
+          return {
+            ...card,
+            value: metrics.materialTypes,
+            subtitle: `de ${metrics.totalMaterialsRegistered} cadastrados`,
+          };
+        case "materialValue":
+          return {
+            ...card,
+            value: `R$ ${metrics.materialValue.toLocaleString("pt-BR", {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}`,
+          };
+        case "finalProductQuantity":
+          return {
+            ...card,
+            value: metrics.finalProductQuantity,
+          };
+        case "finalProductValue":
+          return {
+            ...card,
+            value: `R$ ${metrics.finalProductValue.toLocaleString("pt-BR", {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}`,
+          };
+        case "resaleProductQuantity":
+          return {
+            ...card,
+            value: metrics.resaleProductQuantity,
+          };
+        case "resaleProductValue":
+          return {
+            ...card,
+            value: `R$ ${metrics.resaleProductValue.toLocaleString("pt-BR", {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}`,
+          };
+        default:
+          return card;
+      }
+    });
+  }, [cards, metrics]);
+
+  const activeCard = activeId ? cards.find((card) => card.id === activeId) : null;
+
+  return (
+    <div className="w-full max-w-7xl mx-auto p-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-white">Estoque</h1>
+          <p className="text-tire-300 mt-1">
+            Gerencie e monitore seus materiais e produtos
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <Button
+            onClick={onRefresh}
+            disabled={isLoading}
+            variant="outline"
+            className="border-tire-600 text-tire-300 hover:text-white hover:border-tire-500"
+          >
+            {isLoading ? (
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-tire-300 border-t-transparent" />
+            ) : (
+              "Atualizar"
+            )}
+          </Button>
+          <Dialog open={customizationOpen} onOpenChange={setCustomizationOpen}>
+            <DialogTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-tire-600 text-tire-300 hover:text-white hover:border-tire-500"
+              >
+                <Settings className="h-4 w-4 mr-2" />
+                Personalizar
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="bg-factory-900 border-tire-700">
+              <DialogHeader>
+                <DialogTitle className="text-white">
+                  Personalizar Dashboard
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-sm font-medium text-tire-300 mb-3">
+                    Reorganizar Cards
+                  </h3>
+                  <p className="text-xs text-tire-400 mb-3">
+                    Arraste e solte os cards para reorganizá-los
+                  </p>
+                  <Button
+                    onClick={resetToDefault}
+                    variant="outline"
+                    size="sm"
+                    className="border-tire-600 text-tire-300 hover:text-white hover:border-tire-500"
+                  >
+                    <RotateCcw className="h-4 w-4 mr-2" />
+                    Resetar para Padrão
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
+      </div>
+
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="bg-factory-800 border-tire-700">
+          <TabsTrigger
+            value="dashboard"
+            className="data-[state=active]:bg-factory-700 data-[state=active]:text-white"
+          >
+            Dashboard
+          </TabsTrigger>
+          <TabsTrigger
+            value="materials"
+            className="data-[state=active]:bg-factory-700 data-[state=active]:text-white"
+          >
+            Matéria-Prima
+          </TabsTrigger>
+          <TabsTrigger
+            value="products"
+            className="data-[state=active]:bg-factory-700 data-[state=active]:text-white"
+          >
+            Produtos
+          </TabsTrigger>
+          <TabsTrigger
+            value="analysis"
+            className="data-[state=active]:bg-factory-700 data-[state=active]:text-white"
+          >
+            Análise Financeira
+          </TabsTrigger>
+          <TabsTrigger
+            value="charts"
+            className="data-[state=active]:bg-factory-700 data-[state=active]:text-white"
+          >
+            Gráficos
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="dashboard" className="space-y-6">
+          <Card className="bg-factory-800/50 border-tire-700/30">
+            <CardHeader>
+              <CardTitle className="text-white flex items-center gap-2">
+                <Package2 className="h-5 w-5 text-neon-blue" />
+                Resumo do Estoque
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragStart={handleDragStart}
+                onDragEnd={handleDragEnd}
+              >
+                <SortableContext
+                  items={updatedCards.map((card) => card.id)}
+                  strategy={rectSortingStrategy}
+                >
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {updatedCards.map((card) => (
+                      <SortableCard
+                        key={card.id}
+                        card={card}
+                        onColorChange={handleColorChange}
+                        showColorPicker={selectedCardForColor === card.id}
+                      />
+                    ))}
+                  </div>
+                </SortableContext>
+                <DragOverlay>
+                  {activeCard ? <DragOverlayCard card={activeCard} /> : null}
+                </DragOverlay>
+              </DndContext>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="materials">
+          <RawMaterialStock
+            materials={materials}
+            stockItems={getMaterialStockItems()}
+            onStockUpdate={handleStockUpdate}
+            onSetMinLevel={handleSetMinLevel}
+            isLoading={materialsLoading || stockLoading}
+          />
+        </TabsContent>
+
+        <TabsContent value="products">
+          <ProductStock
+            products={getAllProducts()}
+            resaleProducts={getAllResaleProducts()}
+            stockItems={getAllProductStockItems()}
+            onStockUpdate={handleStockUpdate}
+            onSetMinLevel={handleSetMinLevel}
+            isLoading={productsLoading || resaleProductsLoading || stockLoading}
+          />
+        </TabsContent>
+
+        <TabsContent value="analysis">
+          <ProductFinancialAnalysis />
+        </TabsContent>
+
+        <TabsContent value="charts">
+          <StockCharts
+            materials={materials}
+            products={getAllProducts()}
+            resaleProducts={getAllResaleProducts()}
+            stockItems={stockItems}
+            isLoading={materialsLoading || productsLoading || stockLoading}
+          />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+};
+
+export default StockDashboard;
