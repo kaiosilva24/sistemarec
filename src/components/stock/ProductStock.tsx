@@ -117,25 +117,13 @@ const ProductStock = ({
   const getSpecificProductCost = useCallback((productName: string) => {
     console.log(`🔍 [ProductStock] Buscando custo específico para produto: "${productName}"`);
 
-    // Verificar cache primeiro
-    if (productCostCache[productName]) {
-      console.log(`✅ [ProductStock] Usando custo do cache para "${productName}": R$ ${productCostCache[productName].toFixed(2)}`);
-      return productCostCache[productName];
-    }
-
-    // SEMPRE usar valor do elemento principal R$ 87,00
+    // SEMPRE usar valor do elemento principal R$ 87,00 - NÃO usar cache para garantir sincronização
     const mainElementValue = syncWithMainElement();
 
-    // Atualizar cache com valor sincronizado
-    setProductCostCache((prev) => ({
-      ...prev,
-      [productName]: mainElementValue,
-    }));
-
-    console.log(`✅ [ProductStock] Usando valor sincronizado para "${productName}": R$ ${mainElementValue.toFixed(2)}`);
+    console.log(`✅ [ProductStock] Usando valor SINCRONIZADO do elemento principal para "${productName}": R$ ${mainElementValue.toFixed(2)}`);
 
     return mainElementValue;
-  }, [productCostCache, syncWithMainElement]);
+  }, [syncWithMainElement]);
 
   // Função para limpar cache e forçar nova busca
   const clearCostCache = useCallback(() => {
@@ -149,8 +137,7 @@ const ProductStock = ({
       const newValue = syncWithMainElement();
       if (Math.abs(newValue - mainElementValue) > 0.01) { // Só atualiza se diferença for significativa
         setMainElementValue(newValue);
-        clearCostCache();
-        console.log(`🔄 [ProductStock] Valor principal atualizado: R$ ${newValue.toFixed(2)}`);
+        console.log(`🔄 [ProductStock] Valor principal atualizado de R$ ${mainElementValue.toFixed(2)} para R$ ${newValue.toFixed(2)}`);
       }
     };
 
@@ -201,7 +188,7 @@ const ProductStock = ({
       clearInterval(interval);
       observer.disconnect();
     };
-  }, [mainElementValue, syncWithMainElement, clearCostCache]);
+  }, [mainElementValue, syncWithMainElement]);
 
   // Get all available products based on local type filter
   const getAllAvailableProducts = useCallback(() => {
@@ -481,18 +468,25 @@ const ProductStock = ({
                           size="sm"
                           variant="outline"
                           onClick={() => {
-                            console.log(
-                              "📊 [ProductStock] Cache atual:",
-                              productCostCache,
-                            );
-                            console.log(
-                              "🔍 [ProductStock] Testando busca no DOM...",
-                            );
-                            const testCost = getSpecificProductCost(
+                            const currentMainValue = syncWithMainElement();
+                            const productCost = getSpecificProductCost(
                               selectedProductData.name,
                             );
+                            console.log(
+                              "📊 [ProductStock] Estado atual da sincronização:",
+                              {
+                                valorElementoPrincipal: currentMainValue,
+                                custoCalculadoProduto: productCost,
+                                nomeProduto: selectedProductData.name,
+                                mainElementValue,
+                              }
+                            );
                             alert(
-                              `Custo encontrado para "${selectedProductData.name}": R$ ${testCost.toFixed(2)}\n\nVerifique o console para mais detalhes.`,
+                              `🔍 DEBUG - Estado da Sincronização:\n\n` +
+                              `Valor do elemento principal: R$ ${currentMainValue.toFixed(2)}\n` +
+                              `Custo calculado para "${selectedProductData.name}": R$ ${productCost.toFixed(2)}\n` +
+                              `Estado interno mainElementValue: R$ ${mainElementValue.toFixed(2)}\n\n` +
+                              `✅ Os valores ${currentMainValue === productCost ? 'ESTÃO' : 'NÃO ESTÃO'} sincronizados!`
                             );
                           }}
                           className="text-xs h-6 px-2 bg-factory-700/50 border-tire-600/30 text-tire-300 hover:text-white hover:bg-tire-700/50"
