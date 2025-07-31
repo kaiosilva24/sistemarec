@@ -1,6 +1,10 @@
+
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Package } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Package, Calculator, Save, Edit3 } from "lucide-react";
 import { useStockItems, useProducts } from "@/hooks/useDataPersistence";
 
 interface FinalProductsStockProps {
@@ -17,12 +21,16 @@ interface ProductAnalysis {
   profit: number;
   profitMargin: number;
   quantity: number;
+  editableQuantity: number;
+  totalValue: number;
+  isEditing: boolean;
 }
 
 const FinalProductsStock: React.FC<FinalProductsStockProps> = ({ isLoading = false }) => {
-  const { stockItems, isLoading: stockLoading } = useStockItems();
+  const { stockItems, isLoading: stockLoading, updateStockItem } = useStockItems();
   const { products, isLoading: productsLoading } = useProducts();
   const [productAnalysis, setProductAnalysis] = useState<ProductAnalysis[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Função para extrair as medidas do nome do produto
   const extractMeasures = (productName: string): string => {
@@ -76,6 +84,8 @@ const FinalProductsStock: React.FC<FinalProductsStockProps> = ({ isLoading = fal
 
       const costPerTire = getSpecificCost(product.name);
       const measures = extractMeasures(product.name);
+      const quantity = stockItem.quantity || 0;
+      const totalValue = quantity * costPerTire;
 
       // Calcular valores baseados no estoque e vendas (mockado por enquanto)
       const totalSold = 0; // TODO: Integrar com dados de vendas
@@ -92,7 +102,10 @@ const FinalProductsStock: React.FC<FinalProductsStockProps> = ({ isLoading = fal
         costPerTire,
         profit,
         profitMargin,
-        quantity: stockItem.quantity
+        quantity,
+        editableQuantity: quantity,
+        totalValue,
+        isEditing: false
       };
     }).filter(Boolean) as ProductAnalysis[];
 
@@ -104,6 +117,74 @@ const FinalProductsStock: React.FC<FinalProductsStockProps> = ({ isLoading = fal
       style: "currency",
       currency: "BRL",
     }).format(value);
+  };
+
+  const handleQuantityChange = (productId: string, newQuantity: string) => {
+    const numericQuantity = parseInt(newQuantity) || 0;
+    setProductAnalysis(prev => 
+      prev.map(product => 
+        product.productId === productId 
+          ? { 
+              ...product, 
+              editableQuantity: numericQuantity,
+              totalValue: numericQuantity * product.costPerTire
+            }
+          : product
+      )
+    );
+  };
+
+  const handleEditToggle = (productId: string) => {
+    setProductAnalysis(prev => 
+      prev.map(product => 
+        product.productId === productId 
+          ? { ...product, isEditing: !product.isEditing }
+          : product
+      )
+    );
+  };
+
+  const handleSaveQuantity = async (productId: string) => {
+    const product = productAnalysis.find(p => p.productId === productId);
+    if (!product) return;
+
+    setIsSaving(true);
+    try {
+      const stockItem = stockItems.find(item => item.item_id === productId);
+      if (stockItem) {
+        // Calcular novo valor total baseado na quantidade editável
+        const newTotalValue = product.editableQuantity * product.costPerTire;
+        
+        await updateStockItem(stockItem.id, {
+          quantity: product.editableQuantity,
+          total_value: newTotalValue
+        });
+
+        // Atualizar estado local
+        setProductAnalysis(prev => 
+          prev.map(p => 
+            p.productId === productId 
+              ? { 
+                  ...p, 
+                  quantity: product.editableQuantity,
+                  totalValue: newTotalValue,
+                  isEditing: false 
+                }
+              : p
+          )
+        );
+
+        console.log(`✅ Quantidade atualizada para ${product.productName}: ${product.editableQuantity} unidades, Valor total: ${formatCurrency(newTotalValue)}`);
+      }
+    } catch (error) {
+      console.error("Erro ao salvar quantidade:", error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const calculateGrandTotal = () => {
+    return productAnalysis.reduce((total, product) => total + product.totalValue, 0);
   };
 
   if (isLoading || stockLoading || productsLoading) {
@@ -127,80 +208,165 @@ const FinalProductsStock: React.FC<FinalProductsStockProps> = ({ isLoading = fal
   }
 
   return (
-    <Card className="bg-factory-800/50 border-tire-600/30">
-      <CardHeader>
-        <CardTitle className="text-tire-200 text-lg flex items-center gap-2">
-          <Package className="h-5 w-5 text-neon-green" />
-          Produtos Finais
-          <span className="text-neon-green text-sm">({productAnalysis.length} tipos)</span>
-        </CardTitle>
-        <p className="text-tire-300 text-sm">
-          Análise de custos e performance por tipo de pneu
-        </p>
-      </CardHeader>
-      <CardContent className="p-6 pt-0">
-        <div className="space-y-3 max-h-96 overflow-y-auto">
-          {productAnalysis.length === 0 ? (
-            <div className="text-center py-8">
-              <Package className="h-12 w-12 text-tire-500 mx-auto mb-3" />
-              <p className="text-tire-400">Nenhum produto final em estoque</p>
-            </div>
-          ) : (
-            productAnalysis.map((product) => (
-              <div
-                key={product.productId}
-                className="p-4 rounded-lg border cursor-pointer transition-all bg-factory-700/30 border-tire-600/20 hover:bg-factory-700/50"
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="text-white font-medium flex items-center gap-2">
-                    {product.measures}
-                  </h4>
-                  <div className="text-right">
-                    <span className="text-neon-green font-bold text-lg">
-                      {formatCurrency(product.totalRevenue)}
-                    </span>
-                    <p className="text-tire-400 text-xs">Receita</p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                  <div>
-                    <p className="text-tire-400">Vendidos</p>
-                    <p className="text-white font-medium">{product.totalSold}</p>
-                  </div>
-                  <div>
-                    <p className="text-tire-400">Custo/Pneu (Receita)</p>
-                    <p className="text-neon-orange font-medium flex items-center gap-1">
-                      <span className="text-neon-yellow text-xs">📋</span>
-                      {formatCurrency(product.costPerTire)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-tire-400">Lucro</p>
-                    <p className="font-medium text-neon-blue">
-                      {formatCurrency(product.profit)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-tire-400">Margem</p>
-                    <p className="font-medium text-neon-purple">
-                      {product.profitMargin.toFixed(2)}%
-                    </p>
-                  </div>
-                </div>
-                <div className="mt-3 pt-3 border-t border-tire-600/20">
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="text-tire-400">Em estoque:</span>
-                    <span className="text-neon-cyan font-medium">
-                      {product.quantity} unidades
-                    </span>
-                  </div>
-                </div>
+    <div className="space-y-6">
+      <Card className="bg-factory-800/50 border-tire-600/30">
+        <CardHeader>
+          <CardTitle className="text-tire-200 text-lg flex items-center gap-2">
+            <Package className="h-5 w-5 text-neon-green" />
+            Produtos Finais
+            <span className="text-neon-green text-sm">({productAnalysis.length} tipos)</span>
+          </CardTitle>
+          <p className="text-tire-300 text-sm">
+            Análise de custos e controle de quantidade por tipo de pneu
+          </p>
+        </CardHeader>
+        <CardContent className="p-6 pt-0">
+          <div className="space-y-3 max-h-96 overflow-y-auto">
+            {productAnalysis.length === 0 ? (
+              <div className="text-center py-8">
+                <Package className="h-12 w-12 text-tire-500 mx-auto mb-3" />
+                <p className="text-tire-400">Nenhum produto final em estoque</p>
               </div>
-            ))
-          )}
-        </div>
-      </CardContent>
-    </Card>
+            ) : (
+              productAnalysis.map((product) => (
+                <div
+                  key={product.productId}
+                  className="p-4 rounded-lg border transition-all bg-factory-700/30 border-tire-600/20 hover:bg-factory-700/50"
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-white font-medium flex items-center gap-2">
+                      {product.measures}
+                    </h4>
+                    <div className="text-right">
+                      <span className="text-neon-green font-bold text-lg">
+                        {formatCurrency(product.totalValue)}
+                      </span>
+                      <p className="text-tire-400 text-xs">Valor Total</p>
+                    </div>
+                  </div>
+
+                  {/* Seção de Controle de Quantidade */}
+                  <div className="bg-factory-600/20 rounded-lg p-3 mb-3 border border-tire-600/30">
+                    <div className="flex items-center justify-between mb-2">
+                      <Label className="text-tire-300 font-medium flex items-center gap-2">
+                        <Calculator className="h-4 w-4 text-neon-orange" />
+                        Controle de Quantidade
+                      </Label>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleEditToggle(product.productId)}
+                        className="bg-factory-700/50 border-tire-600/30 text-tire-300 hover:text-white h-8 px-3"
+                      >
+                        <Edit3 className="h-3 w-3 mr-1" />
+                        {product.isEditing ? "Cancelar" : "Editar"}
+                      </Button>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <div>
+                        <Label className="text-tire-400 text-xs">Quantidade Atual</Label>
+                        {product.isEditing ? (
+                          <Input
+                            type="number"
+                            min="0"
+                            value={product.editableQuantity}
+                            onChange={(e) => handleQuantityChange(product.productId, e.target.value)}
+                            className="bg-factory-700/50 border-tire-600/30 text-white h-8 text-sm"
+                          />
+                        ) : (
+                          <p className="text-white font-medium">{product.quantity} unidades</p>
+                        )}
+                      </div>
+                      
+                      <div>
+                        <Label className="text-tire-400 text-xs">Custo por Pneu</Label>
+                        <p className="text-neon-orange font-medium">
+                          {formatCurrency(product.costPerTire)}
+                        </p>
+                      </div>
+                      
+                      <div className="flex items-end">
+                        {product.isEditing && (
+                          <Button
+                            size="sm"
+                            onClick={() => handleSaveQuantity(product.productId)}
+                            disabled={isSaving}
+                            className="bg-neon-green/20 border-neon-green/50 text-neon-green hover:bg-neon-green/30 h-8 px-3 w-full"
+                          >
+                            <Save className="h-3 w-3 mr-1" />
+                            {isSaving ? "Salvando..." : "Salvar"}
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    <div>
+                      <p className="text-tire-400">Vendidos</p>
+                      <p className="text-white font-medium">{product.totalSold}</p>
+                    </div>
+                    <div>
+                      <p className="text-tire-400">Receita</p>
+                      <p className="text-neon-blue font-medium">
+                        {formatCurrency(product.totalRevenue)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-tire-400">Lucro</p>
+                      <p className="font-medium text-neon-blue">
+                        {formatCurrency(product.profit)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-tire-400">Margem</p>
+                      <p className="font-medium text-neon-purple">
+                        {product.profitMargin.toFixed(2)}%
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Card de Resumo Total */}
+      {productAnalysis.length > 0 && (
+        <Card className="bg-factory-800/50 border-tire-600/30">
+          <CardHeader>
+            <CardTitle className="text-tire-200 text-lg flex items-center gap-2">
+              <Calculator className="h-5 w-5 text-neon-orange" />
+              Resumo Total do Estoque
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="text-center p-4 bg-factory-700/30 rounded-lg border border-tire-600/20">
+                <p className="text-tire-400 text-sm">Total de Tipos</p>
+                <p className="text-2xl font-bold text-white">{productAnalysis.length}</p>
+              </div>
+              
+              <div className="text-center p-4 bg-factory-700/30 rounded-lg border border-tire-600/20">
+                <p className="text-tire-400 text-sm">Quantidade Total</p>
+                <p className="text-2xl font-bold text-neon-cyan">
+                  {productAnalysis.reduce((total, product) => total + product.quantity, 0)} unidades
+                </p>
+              </div>
+              
+              <div className="text-center p-4 bg-neon-green/10 rounded-lg border border-neon-green/30">
+                <p className="text-tire-400 text-sm">Valor Total do Estoque</p>
+                <p className="text-2xl font-bold text-neon-green">
+                  {formatCurrency(calculateGrandTotal())}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
   );
 };
 
