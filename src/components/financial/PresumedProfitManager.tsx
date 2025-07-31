@@ -1396,34 +1396,34 @@ const PresumedProfitManager = ({
     };
   }, [profitData]);
 
-  // Effect para disparar evento quando o lucro médio por pneu mudar - SINCRONIZAÇÃO COM DASHBOARD
+  // Effect para disparar evento quando o lucro médio por pneu mudar - SINCRONIZAÇÃO COM DASHBOARD MELHORADA
   useEffect(() => {
-    if (summaryMetrics.averageProfitPerTire > 0) {
-      console.log("🔄 [PresumedProfitManager] DISPARANDO EVENTO para sincronização com Dashboard:", {
-        averageProfitPerTire: summaryMetrics.averageProfitPerTire,
-        totalSales: summaryMetrics.totalSales,
-        totalProfit: summaryMetrics.totalProfit,
-        timestamp: new Date().toISOString()
-      });
+    console.log("🔄 [PresumedProfitManager] VERIFICANDO MUDANÇAS NO LUCRO para sincronização:", {
+      averageProfitPerTire: summaryMetrics.averageProfitPerTire,
+      totalSales: summaryMetrics.totalSales,
+      totalProfit: summaryMetrics.totalProfit,
+      timestamp: new Date().toISOString()
+    });
 
-      // Salvar dados para sincronização
-      const synchronizedProfitData = {
-        averageProfitPerTire: summaryMetrics.averageProfitPerTire,
-        totalProfit: summaryMetrics.totalProfit,
-        totalSales: summaryMetrics.totalSales,
-        overallProfitMargin: summaryMetrics.overallProfitMargin,
-        lastUpdated: new Date().toISOString(),
-        source: "PresumedProfitManager",
-        timestamp: Date.now(),
-      };
+    // SEMPRE disparar evento, mesmo se o valor for 0 (para limpar o dashboard)
+    const synchronizedProfitData = {
+      averageProfitPerTire: summaryMetrics.averageProfitPerTire,
+      totalProfit: summaryMetrics.totalProfit,
+      totalSales: summaryMetrics.totalSales,
+      overallProfitMargin: summaryMetrics.overallProfitMargin,
+      lastUpdated: new Date().toISOString(),
+      source: "PresumedProfitManager",
+      timestamp: Date.now(),
+    };
 
-      // Salvar no localStorage para persistência
-      localStorage.setItem(
-        "presumedProfitManager_synchronizedData",
-        JSON.stringify(synchronizedProfitData),
-      );
+    // Salvar no localStorage para persistência SEMPRE
+    localStorage.setItem(
+      "presumedProfitManager_synchronizedData",
+      JSON.stringify(synchronizedProfitData),
+    );
 
-      // Disparar evento customizado para notificar o dashboard
+    // Disparar evento customizado para notificar o dashboard SEMPRE
+    setTimeout(() => {
       window.dispatchEvent(
         new CustomEvent("profitUpdated", {
           detail: {
@@ -1436,10 +1436,11 @@ const PresumedProfitManager = ({
           },
         }),
       );
+      
+      console.log("✅ [PresumedProfitManager] EVENTO DISPARADO - Valor sincronizado:", summaryMetrics.averageProfitPerTire);
+    }, 100); // Pequeno delay para garantir que o DOM seja atualizado primeiro
 
-      console.log("✅ [PresumedProfitManager] EVENTO DISPARADO - Sincronização com Dashboard ativada");
-    }
-  }, [summaryMetrics.averageProfitPerTire, summaryMetrics.totalProfit, summaryMetrics.totalSales]);
+  }, [summaryMetrics.averageProfitPerTire, summaryMetrics.totalProfit, summaryMetrics.totalSales, summaryMetrics.overallProfitMargin]);
 
   if (isLoading) {
     return (
