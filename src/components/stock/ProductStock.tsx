@@ -75,28 +75,27 @@ const ProductStock = ({
     [key: string]: number;
   }>({});
 
-  // Função para sincronizar com o elemento principal R$ 87,00
+  // Função para sincronizar com o elemento principal (fonte única da verdade)
   const syncWithMainElement = useCallback((): number => {
     try {
-      // Buscar pelo elemento que contém R$ 87,00 (fonte única)
-      const allElements = document.querySelectorAll("*");
+      // Buscar especificamente pelo elemento principal com as características exatas
+      const targetSelectors = [
+        'p.text-2xl.font-bold[style*="color: rgb(245, 158, 11)"]', // Seletor específico
+        'p.text-2xl.font-bold.text-neon-orange', // Classe alternativa
+        'p[style*="color: rgb(245, 158, 11)"]' // Por estilo inline
+      ];
 
-      for (const element of allElements) {
-        const textContent = element.textContent?.trim();
-        if (textContent && textContent.includes("R$")) {
-          // Verificar se é um elemento <p> com estilo inline ou classe text-2xl font-bold
-          const isTargetElement = 
-            (element.tagName === 'P' && element.getAttribute('style')?.includes('color: rgb(245, 158, 11)')) ||
-            element.className.includes("text-2xl font-bold") ||
-            (element.tagName === 'P' && textContent.includes("87,00"));
-
-          if (isTargetElement) {
+      for (const selector of targetSelectors) {
+        const element = document.querySelector(selector);
+        if (element) {
+          const textContent = element.textContent?.trim();
+          if (textContent && textContent.includes("R$")) {
             const match = textContent.match(/R\$\s*([0-9.,]+)/);
             if (match) {
               const valueStr = match[1].replace(",", ".");
               const numericValue = parseFloat(valueStr);
               if (!isNaN(numericValue) && numericValue > 0) {
-                console.log(`🎯 [ProductStock] Valor sincronizado do elemento principal: R$ ${numericValue.toFixed(2)} (elemento: ${element.tagName}, texto: "${textContent}")`);
+                console.log(`🎯 [ProductStock] Elemento principal encontrado: R$ ${numericValue.toFixed(2)}`);
                 return numericValue;
               }
             }
@@ -104,7 +103,24 @@ const ProductStock = ({
         }
       }
 
-      // Fallback para valor padrão
+      // Busca mais abrangente se não encontrou pelos seletores específicos
+      const allElements = document.querySelectorAll("p");
+      for (const element of allElements) {
+        const textContent = element.textContent?.trim();
+        if (textContent && textContent.includes("R$") && textContent.includes("87")) {
+          const match = textContent.match(/R\$\s*([0-9.,]+)/);
+          if (match) {
+            const valueStr = match[1].replace(",", ".");
+            const numericValue = parseFloat(valueStr);
+            if (!isNaN(numericValue) && numericValue >= 80 && numericValue <= 100) { // Range válido
+              console.log(`🎯 [ProductStock] Elemento principal (busca ampla): R$ ${numericValue.toFixed(2)}`);
+              return numericValue;
+            }
+          }
+        }
+      }
+
+      // Fallback: valor padrão
       console.log("⚠️ [ProductStock] Elemento principal não encontrado, usando valor padrão");
       return 87.00;
     } catch (error) {
@@ -132,19 +148,19 @@ const ProductStock = ({
   }, []);
 
   // Função para escrever valor médio de custo por pneu no elemento input
-  const writeAverageCostToInput = useCallback((averageCost: number) => {
+  const writeAverageCostToInput = useCallback((value: number) => {
     try {
-      // Buscar pelo elemento input específico que contém "R$ 5.42"
+      // Buscar pelo elemento input específico que contém "R$" e é readonly
       const inputElements = document.querySelectorAll('input[readonly]');
       
       for (const input of inputElements) {
         const inputElement = input as HTMLInputElement;
         if (inputElement.value && inputElement.value.includes('R$')) {
-          // Atualizar o valor do input com o custo médio
-          const formattedValue = `R$ ${averageCost.toFixed(2)}`;
+          // Atualizar o valor do input para ser IGUAL ao elemento principal
+          const formattedValue = `R$ ${value.toFixed(2)}`;
           inputElement.value = formattedValue;
           
-          console.log(`✅ [ProductStock] Valor médio de custo por pneu escrito no input: ${formattedValue}`);
+          console.log(`✅ [ProductStock] Input sincronizado com elemento principal: ${formattedValue}`);
           
           // Disparar evento para notificar mudança
           const event = new Event('input', { bubbles: true });
@@ -153,70 +169,85 @@ const ProductStock = ({
         }
       }
     } catch (error) {
-      console.error("❌ [ProductStock] Erro ao escrever no elemento input:", error);
+      console.error("❌ [ProductStock] Erro ao sincronizar input:", error);
     }
   }, []);
 
-  // Effect para sincronizar com elemento principal e escrever no input - OTIMIZADO
+  // Effect para sincronização automática e contínua entre elementos
   useEffect(() => {
-    const checkMainElement = () => {
+    const syncElements = () => {
       const newValue = syncWithMainElement();
-      if (Math.abs(newValue - mainElementValue) > 0.01) { // Só atualiza se diferença for significativa
+      
+      // Sempre atualizar o input para ser igual ao elemento principal
+      writeAverageCostToInput(newValue);
+      
+      // Atualizar estado apenas se houver diferença significativa
+      if (Math.abs(newValue - mainElementValue) > 0.01) {
         setMainElementValue(newValue);
-        console.log(`🔄 [ProductStock] Valor principal atualizado de R$ ${mainElementValue.toFixed(2)} para R$ ${newValue.toFixed(2)}`);
-        
-        // Escrever o valor médio no elemento input
-        writeAverageCostToInput(newValue);
+        console.log(`🔄 [ProductStock] Sincronização: Elemento principal R$ ${newValue.toFixed(2)} -> Input R$ ${newValue.toFixed(2)}`);
       }
     };
 
     // Verificar inicialmente
-    checkMainElement();
+    syncElements();
 
-    // Verificação periódica mais frequente para melhor sincronização
+    // Sincronização contínua e frequente para garantir que os valores sejam sempre iguais
     const interval = setInterval(() => {
-      checkMainElement();
-      // Também escrever periodicamente no input para garantir sincronização
-      writeAverageCostToInput(mainElementValue);
-    }, 2000);
+      syncElements();
+    }, 1000); // Verificar a cada 1 segundo
 
-    // Observer para mudanças no DOM
+    // Observer mais sensível para mudanças no DOM
     const observer = new MutationObserver((mutations) => {
-      let shouldCheck = false;
+      let shouldSync = false;
+      
       mutations.forEach((mutation) => {
+        // Verificar mudanças em elementos que contenham valores monetários
         if (mutation.type === 'childList' || mutation.type === 'characterData') {
-          // Verificar se algum nó alterado contém R$
-          const checkNode = (node: Node) => {
-            if (node.nodeType === Node.TEXT_NODE && node.textContent?.includes('R$')) {
-              shouldCheck = true;
+          const checkForMoneyValues = (node: Node) => {
+            if (node.nodeType === Node.TEXT_NODE) {
+              if (node.textContent?.includes('R$') || node.textContent?.includes('87')) {
+                shouldSync = true;
+              }
             } else if (node.nodeType === Node.ELEMENT_NODE) {
               const element = node as Element;
-              if (element.textContent?.includes('R$')) {
-                shouldCheck = true;
+              if (element.textContent?.includes('R$') || 
+                  element.className?.includes('text-neon-orange') ||
+                  element.className?.includes('text-2xl')) {
+                shouldSync = true;
               }
             }
           };
           
-          mutation.addedNodes.forEach(checkNode);
+          mutation.addedNodes.forEach(checkForMoneyValues);
           if (mutation.target.textContent?.includes('R$')) {
-            shouldCheck = true;
+            shouldSync = true;
+          }
+        }
+        
+        // Verificar mudanças de atributos em elementos relevantes
+        if (mutation.type === 'attributes') {
+          const target = mutation.target as Element;
+          if (target.textContent?.includes('R$') || 
+              target.className?.includes('text-neon-orange') ||
+              target.tagName === 'INPUT') {
+            shouldSync = true;
           }
         }
       });
       
-      if (shouldCheck) {
-        console.log('🔍 [ProductStock] DOM mudou, verificando sincronização...');
-        setTimeout(() => {
-          checkMainElement();
-        }, 100); // Pequeno delay para garantir que o DOM foi atualizado
+      if (shouldSync) {
+        console.log('🔍 [ProductStock] DOM alterado - sincronizando elementos...');
+        setTimeout(syncElements, 50); // Delay mínimo para performance
       }
     });
 
-    // Observar mudanças em todo o documento
+    // Observar todo o documento com configuração abrangente
     observer.observe(document.body, {
       childList: true,
       subtree: true,
-      characterData: true
+      characterData: true,
+      attributes: true,
+      attributeFilter: ['class', 'style', 'value']
     });
 
     return () => {
