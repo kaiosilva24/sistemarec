@@ -30,6 +30,7 @@ import {
   GripVertical,
   RotateCcw,
   Check,
+  Package2,
 } from "lucide-react";
 import {
   DndContext,
