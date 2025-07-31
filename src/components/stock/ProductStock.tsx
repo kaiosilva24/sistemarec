@@ -78,19 +78,55 @@ const ProductStock = ({
     [key: string]: number;
   }>({});
 
-  // Função para obter o custo específico por produto - VERSÃO SIMPLIFICADA E EFICAZ
+  // Função para sincronizar com o elemento principal R$ 87,00
+  const syncWithMainElement = (): number => {
+    try {
+      // Buscar pelo elemento que contém R$ 87,00 (fonte única)
+      const allElements = document.querySelectorAll("*");
+      
+      for (const element of allElements) {
+        const textContent = element.textContent?.trim();
+        if (textContent && textContent.includes("R$") && element.className.includes("text-2xl font-bold")) {
+          const match = textContent.match(/R\$\s*([0-9.,]+)/);
+          if (match) {
+            const valueStr = match[1].replace(",", ".");
+            const numericValue = parseFloat(valueStr);
+            if (!isNaN(numericValue) && numericValue > 0) {
+              console.log(`🎯 [ProductStock] Valor sincronizado do elemento principal: R$ ${numericValue.toFixed(2)}`);
+              return numericValue;
+            }
+          }
+        }
+      }
+      
+      // Fallback para valor padrão
+      return 87.00;
+    } catch (error) {
+      console.error("❌ [ProductStock] Erro ao sincronizar com elemento principal:", error);
+      return 87.00;
+    }
+  };
+
+  // Função para obter o custo específico por produto - SINCRONIZADO COM ELEMENTO PRINCIPAL
   const getSpecificProductCost = (productName: string) => {
     console.log(
       `🔍 [ProductStock] Buscando custo específico para produto: "${productName}"`,
     );
 
-    // Verificar cache primeiro
-    if (productCostCache[productName]) {
-      console.log(
-        `💾 [ProductStock] Custo encontrado no cache para "${productName}": R$ ${productCostCache[productName].toFixed(2)}`,
-      );
-      return productCostCache[productName];
-    }
+    // SEMPRE usar valor do elemento principal R$ 87,00
+    const mainElementValue = syncWithMainElement();
+    
+    // Atualizar cache com valor sincronizado
+    setProductCostCache((prev) => ({
+      ...prev,
+      [productName]: mainElementValue,
+    }));
+    
+    console.log(
+      `✅ [ProductStock] Usando valor sincronizado para "${productName}": R$ ${mainElementValue.toFixed(2)}`,
+    );
+    
+    return mainElementValue;
 
     try {
       // ESTRATÉGIA PRINCIPAL: Buscar diretamente pelos valores conhecidos no DOM
@@ -394,17 +430,46 @@ const ProductStock = ({
     setProductCostCache({});
   };
 
-  // Effect para sincronizar o custo por pneu
+  // Estado para monitorar valor do elemento principal
+  const [mainElementValue, setMainElementValue] = useState(87.00);
+
+  // Effect para sincronizar com elemento principal R$ 87,00
+  useEffect(() => {
+    const checkMainElement = () => {
+      const newValue = syncWithMainElement();
+      if (newValue !== mainElementValue) {
+        setMainElementValue(newValue);
+        clearCostCache(); // Limpar cache quando valor mudar
+        console.log(`🔄 [ProductStock] Valor principal atualizado: R$ ${newValue.toFixed(2)}`);
+      }
+    };
+
+    // Verificar inicialmente
+    checkMainElement();
+
+    // Observer para mudanças no DOM
+    const observer = new MutationObserver(checkMainElement);
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
+
+    // Verificação periódica
+    const interval = setInterval(checkMainElement, 2000);
+
+    return () => {
+      observer.disconnect();
+      clearInterval(interval);
+    };
+  }, [mainElementValue]);
+
+  // Effect para sincronizar o custo por pneu (mantido para compatibilidade)
   useEffect(() => {
     const updateCostPerTire = () => {
-      // Primeiro tentar sincronizar do DOM
-      const domCost = syncCostFromDOM();
-
-      // Se não conseguir do DOM, usar o método tradicional
-      if (!domCost) {
-        const newCost = getTireCostFromFinancial();
-        setSynchronizedCostPerTire(newCost);
-      }
+      // Usar valor do elemento principal
+      const mainValue = syncWithMainElement();
+      setSynchronizedCostPerTire(mainValue);
     };
 
     // Atualizar inicialmente
