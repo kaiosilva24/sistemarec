@@ -11,8 +11,17 @@ import {
   Edit3, 
   TrendingUp,
   Package,
-  DollarSign
+  DollarSign,
+  Plus,
+  Minus
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { useStockItems, useResaleProducts } from "@/hooks/useDataPersistence";
 
 interface ResaleProductsStockProps {
@@ -34,45 +43,154 @@ interface ResaleProductAnalysis {
   isEditing: boolean;
 }
 
+interface AddStockDialogProps {
+  onAddStock: (productId: string, quantity: number, unitCost: number) => void;
+  resaleProducts: any[];
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+const AddStockDialog: React.FC<AddStockDialogProps> = ({ 
+  onAddStock, 
+  resaleProducts, 
+  isOpen, 
+  onOpenChange 
+}) => {
+  const [selectedProductId, setSelectedProductId] = useState("");
+  const [quantity, setQuantity] = useState("");
+  const [unitCost, setUnitCost] = useState("");
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (selectedProductId && quantity && unitCost) {
+      onAddStock(selectedProductId, parseInt(quantity), parseFloat(unitCost));
+      setSelectedProductId("");
+      setQuantity("");
+      setUnitCost("");
+      onOpenChange(false);
+    }
+  };
+
+  const availableProducts = resaleProducts.filter(product => !product.archived);
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+      <DialogContent className="bg-factory-800/95 border-tire-600/30 text-white">
+        <DialogHeader>
+          <DialogTitle className="text-white flex items-center gap-2">
+            <Plus className="h-5 w-5 text-neon-green" />
+            Adicionar Estoque de Produto para Revenda
+          </DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label className="text-tire-300">Produto</Label>
+            <select
+              value={selectedProductId}
+              onChange={(e) => setSelectedProductId(e.target.value)}
+              className="w-full p-2 bg-factory-700/50 border border-tire-600/30 rounded text-white"
+              required
+            >
+              <option value="">Selecione um produto</option>
+              {availableProducts.map((product) => (
+                <option key={product.id} value={product.id}>
+                  {product.name} ({product.unit})
+                </option>
+              ))}
+            </select>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label className="text-tire-300">Quantidade</Label>
+              <Input
+                type="number"
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
+                className="bg-factory-700/50 border-tire-600/30 text-white"
+                placeholder="0"
+                min="0"
+                required
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label className="text-tire-300">Custo Unitário</Label>
+              <Input
+                type="number"
+                step="0.01"
+                value={unitCost}
+                onChange={(e) => setUnitCost(e.target.value)}
+                className="bg-factory-700/50 border-tire-600/30 text-white"
+                placeholder="0,00"
+                min="0"
+                required
+              />
+            </div>
+          </div>
+          
+          <div className="flex gap-2 pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              className="flex-1 bg-factory-700/50 border-tire-600/30 text-tire-300 hover:text-white"
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="submit"
+              className="flex-1 bg-neon-green hover:bg-neon-green/80 text-white"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Adicionar
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
 const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = false }) => {
-  const { stockItems, isLoading: stockLoading, updateStockItem } = useStockItems();
+  const { stockItems, isLoading: stockLoading, updateStockItem, addStockItem } = useStockItems();
   const { resaleProducts, updateResaleProduct, isLoading: productsLoading } = useResaleProducts();
   const [productAnalysis, setProductAnalysis] = useState<ResaleProductAnalysis[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
 
   useEffect(() => {
-    if (!stockItems.length || !resaleProducts.length) return;
+    if (!resaleProducts.length) return;
 
-    // Filtrar apenas produtos de revenda em estoque
-    const resaleProductStockItems = stockItems.filter(item => 
-      item.item_type === "resaleProduct" && item.quantity > 0
-    );
+    // Incluir todos os produtos de revenda, mesmo os que não têm estoque
+    const analysis = resaleProducts
+      .filter(product => !product.archived)
+      .map(product => {
+        const stockItem = stockItems.find(item => 
+          item.item_id === product.id && item.item_type === "resaleProduct"
+        );
 
-    const analysis = resaleProductStockItems.map(stockItem => {
-      const product = resaleProducts.find(p => p.id === stockItem.item_id);
-      if (!product) return null;
+        const quantity = stockItem?.quantity || 0;
+        const purchasePrice = product.purchase_price || 0;
+        const salePrice = product.sale_price || 0;
+        const totalValue = quantity * purchasePrice;
+        const profitMargin = salePrice > 0 ? ((salePrice - purchasePrice) / salePrice * 100) : 0;
 
-      const quantity = stockItem.quantity || 0;
-      const purchasePrice = product.purchase_price || 0;
-      const salePrice = product.sale_price || 0;
-      const totalValue = quantity * purchasePrice;
-      const profitMargin = salePrice > 0 ? ((salePrice - purchasePrice) / salePrice * 100) : 0;
-
-      return {
-        productId: stockItem.item_id,
-        productName: product.name,
-        unit: product.unit,
-        quantity,
-        editableQuantity: quantity,
-        purchasePrice,
-        editablePurchasePrice: purchasePrice,
-        salePrice,
-        editableSalePrice: salePrice,
-        totalValue,
-        profitMargin,
-        isEditing: false
-      };
-    }).filter(Boolean) as ResaleProductAnalysis[];
+        return {
+          productId: product.id,
+          productName: product.name,
+          unit: product.unit,
+          quantity,
+          editableQuantity: quantity,
+          purchasePrice,
+          editablePurchasePrice: purchasePrice,
+          salePrice,
+          editableSalePrice: salePrice,
+          totalValue,
+          profitMargin,
+          isEditing: false
+        };
+      });
 
     setProductAnalysis(analysis);
   }, [stockItems, resaleProducts]);
@@ -142,6 +260,51 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
     );
   };
 
+  const handleAddStock = async (productId: string, quantity: number, unitCost: number) => {
+    const product = resaleProducts.find(p => p.id === productId);
+    if (!product) return;
+
+    setIsSaving(true);
+    try {
+      const existingStock = stockItems.find(item => 
+        item.item_id === productId && item.item_type === "resaleProduct"
+      );
+
+      if (existingStock) {
+        // Atualizar estoque existente
+        const newQuantity = existingStock.quantity + quantity;
+        const currentTotalValue = existingStock.quantity * existingStock.unit_cost;
+        const newTotalValue = quantity * unitCost;
+        const newUnitCost = (currentTotalValue + newTotalValue) / newQuantity;
+
+        await updateStockItem(existingStock.id, {
+          quantity: newQuantity,
+          unit_cost: newUnitCost,
+          total_value: newQuantity * newUnitCost,
+          last_updated: new Date().toISOString(),
+        });
+      } else {
+        // Criar novo item de estoque
+        await addStockItem({
+          item_id: productId,
+          item_name: product.name,
+          item_type: "resaleProduct",
+          unit: product.unit,
+          quantity: quantity,
+          unit_cost: unitCost,
+          total_value: quantity * unitCost,
+          last_updated: new Date().toISOString(),
+        });
+      }
+
+      console.log(`✅ Estoque adicionado: ${product.name} - ${quantity} unidades`);
+    } catch (error) {
+      console.error("Erro ao adicionar estoque:", error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleSaveChanges = async (productId: string) => {
     const product = productAnalysis.find(p => p.productId === productId);
     if (!product) return;
@@ -149,14 +312,34 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
     setIsSaving(true);
     try {
       // Atualizar estoque
-      const stockItem = stockItems.find(item => item.item_id === productId);
+      const stockItem = stockItems.find(item => 
+        item.item_id === productId && item.item_type === "resaleProduct"
+      );
+      
       if (stockItem) {
         const newTotalValue = product.editableQuantity * product.editablePurchasePrice;
         
         await updateStockItem(stockItem.id, {
           quantity: product.editableQuantity,
-          total_value: newTotalValue
+          unit_cost: product.editablePurchasePrice,
+          total_value: newTotalValue,
+          last_updated: new Date().toISOString(),
         });
+      } else if (product.editableQuantity > 0) {
+        // Criar novo item de estoque se quantidade > 0
+        const resaleProduct = resaleProducts.find(p => p.id === productId);
+        if (resaleProduct) {
+          await addStockItem({
+            item_id: productId,
+            item_name: resaleProduct.name,
+            item_type: "resaleProduct",
+            unit: resaleProduct.unit,
+            quantity: product.editableQuantity,
+            unit_cost: product.editablePurchasePrice,
+            total_value: product.editableQuantity * product.editablePurchasePrice,
+            last_updated: new Date().toISOString(),
+          });
+        }
       }
 
       // Atualizar produto de revenda
@@ -193,13 +376,14 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
   const calculateTotals = () => {
     const totalQuantity = productAnalysis.reduce((total, product) => total + product.quantity, 0);
     const totalValue = productAnalysis.reduce((total, product) => total + product.totalValue, 0);
+    const productsInStock = productAnalysis.filter(product => product.quantity > 0).length;
     const averageMargin = productAnalysis.length > 0 ? 
       productAnalysis.reduce((total, product) => total + product.profitMargin, 0) / productAnalysis.length : 0;
 
-    return { totalQuantity, totalValue, averageMargin };
+    return { totalQuantity, totalValue, productsInStock, averageMargin };
   };
 
-  const { totalQuantity, totalValue, averageMargin } = calculateTotals();
+  const { totalQuantity, totalValue, productsInStock, averageMargin } = calculateTotals();
 
   if (isLoading || stockLoading || productsLoading) {
     return (
@@ -225,21 +409,32 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
     <div className="space-y-6">
       <Card className="bg-factory-800/50 border-tire-600/30">
         <CardHeader>
-          <CardTitle className="text-tire-200 text-lg flex items-center gap-2">
-            <ShoppingCart className="h-5 w-5 text-neon-blue" />
-            Produtos para Revenda
-            <span className="text-neon-blue text-sm">({productAnalysis.length} produtos)</span>
-          </CardTitle>
-          <p className="text-tire-300 text-sm">
-            Gerenciamento completo de produtos para revenda com controle de preços e margem
-          </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-tire-200 text-lg flex items-center gap-2">
+                <ShoppingCart className="h-5 w-5 text-neon-blue" />
+                Produtos para Revenda
+                <span className="text-neon-blue text-sm">({productAnalysis.length} produtos)</span>
+              </CardTitle>
+              <p className="text-tire-300 text-sm mt-1">
+                Gerenciamento completo de produtos para revenda com controle de preços e margem
+              </p>
+            </div>
+            <Button
+              onClick={() => setIsAddDialogOpen(true)}
+              className="bg-neon-green hover:bg-neon-green/80 text-white"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Adicionar Estoque
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="p-6 pt-0">
           <div className="space-y-4 max-h-96 overflow-y-auto">
             {productAnalysis.length === 0 ? (
               <div className="text-center py-8">
                 <Package className="h-12 w-12 text-tire-500 mx-auto mb-3" />
-                <p className="text-tire-400">Nenhum produto de revenda em estoque</p>
+                <p className="text-tire-400">Nenhum produto de revenda cadastrado</p>
               </div>
             ) : (
               productAnalysis.map((product) => (
@@ -267,21 +462,34 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
                         <Calculator className="h-5 w-5 text-neon-orange" />
                         Controles do Produto
                       </Label>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleEditToggle(product.productId)}
-                        className="bg-factory-700/50 border-tire-600/30 text-tire-300 hover:text-white h-8 px-3"
-                      >
-                        <Edit3 className="h-3 w-3 mr-1" />
-                        {product.isEditing ? "Cancelar" : "Editar"}
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleEditToggle(product.productId)}
+                          className="bg-factory-700/50 border-tire-600/30 text-tire-300 hover:text-white h-8 px-3"
+                        >
+                          <Edit3 className="h-3 w-3 mr-1" />
+                          {product.isEditing ? "Cancelar" : "Editar"}
+                        </Button>
+                        {product.isEditing && (
+                          <Button
+                            size="sm"
+                            onClick={() => handleSaveChanges(product.productId)}
+                            disabled={isSaving}
+                            className="bg-neon-green/20 border-neon-green/50 text-neon-green hover:bg-neon-green/30 h-8 px-3"
+                          >
+                            <Save className="h-3 w-3 mr-1" />
+                            {isSaving ? "Salvando..." : "Salvar"}
+                          </Button>
+                        )}
+                      </div>
                     </div>
                     
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                       {/* Quantidade */}
                       <div>
-                        <Label className="text-tire-400 text-sm">Quantidade</Label>
+                        <Label className="text-tire-400 text-sm">Quantidade em Estoque</Label>
                         {product.isEditing ? (
                           <Input
                             type="number"
@@ -291,7 +499,9 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
                             className="bg-factory-700/50 border-tire-600/30 text-white h-9 text-sm"
                           />
                         ) : (
-                          <p className="text-white font-medium text-sm">{product.quantity} {product.unit}</p>
+                          <p className="text-white font-medium text-lg">
+                            {product.quantity} {product.unit}
+                          </p>
                         )}
                       </div>
                       
@@ -308,7 +518,7 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
                             className="bg-factory-700/50 border-tire-600/30 text-white h-9 text-sm"
                           />
                         ) : (
-                          <p className="text-neon-orange font-medium text-sm">
+                          <p className="text-neon-orange font-medium text-lg">
                             {formatCurrency(product.purchasePrice)}
                           </p>
                         )}
@@ -327,29 +537,18 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
                             className="bg-factory-700/50 border-tire-600/30 text-white h-9 text-sm"
                           />
                         ) : (
-                          <p className="text-neon-cyan font-medium text-sm">
+                          <p className="text-neon-cyan font-medium text-lg">
                             {formatCurrency(product.salePrice)}
                           </p>
                         )}
                       </div>
                       
                       {/* Margem de Lucro */}
-                      <div className="flex flex-col">
+                      <div>
                         <Label className="text-tire-400 text-sm">Margem de Lucro</Label>
-                        <p className={`font-medium text-sm ${product.profitMargin > 0 ? 'text-neon-green' : 'text-red-400'}`}>
+                        <p className={`font-bold text-lg ${product.profitMargin > 0 ? 'text-neon-green' : 'text-red-400'}`}>
                           {product.profitMargin.toFixed(2)}%
                         </p>
-                        {product.isEditing && (
-                          <Button
-                            size="sm"
-                            onClick={() => handleSaveChanges(product.productId)}
-                            disabled={isSaving}
-                            className="bg-neon-green/20 border-neon-green/50 text-neon-green hover:bg-neon-green/30 h-8 px-3 mt-2"
-                          >
-                            <Save className="h-3 w-3 mr-1" />
-                            {isSaving ? "Salvando..." : "Salvar"}
-                          </Button>
-                        )}
                       </div>
                     </div>
                   </div>
@@ -361,43 +560,49 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
       </Card>
 
       {/* Card de Resumo Total */}
-      {productAnalysis.length > 0 && (
-        <Card className="bg-factory-800/50 border-tire-600/30">
-          <CardHeader>
-            <CardTitle className="text-tire-200 text-lg flex items-center gap-2">
-              <TrendingUp className="h-5 w-5 text-neon-purple" />
-              Resumo dos Produtos de Revenda
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="text-center p-4 bg-factory-700/30 rounded-lg border border-tire-600/20">
-                <p className="text-tire-400 text-sm">Total de Produtos</p>
-                <p className="text-2xl font-bold text-white">{productAnalysis.length}</p>
-              </div>
-              
-              <div className="text-center p-4 bg-factory-700/30 rounded-lg border border-tire-600/20">
-                <p className="text-tire-400 text-sm">Quantidade Total</p>
-                <p className="text-2xl font-bold text-neon-cyan">{totalQuantity} itens</p>
-              </div>
-              
-              <div className="text-center p-4 bg-neon-blue/10 rounded-lg border border-neon-blue/30">
-                <p className="text-tire-400 text-sm">Valor Total Investido</p>
-                <p className="text-2xl font-bold text-neon-blue">
-                  {formatCurrency(totalValue)}
-                </p>
-              </div>
-
-              <div className="text-center p-4 bg-neon-purple/10 rounded-lg border border-neon-purple/30">
-                <p className="text-tire-400 text-sm">Margem Média</p>
-                <p className={`text-2xl font-bold ${averageMargin > 0 ? 'text-neon-green' : 'text-red-400'}`}>
-                  {averageMargin.toFixed(1)}%
-                </p>
-              </div>
+      <Card className="bg-factory-800/50 border-tire-600/30">
+        <CardHeader>
+          <CardTitle className="text-tire-200 text-lg flex items-center gap-2">
+            <TrendingUp className="h-5 w-5 text-neon-purple" />
+            Resumo dos Produtos de Revenda
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="text-center p-4 bg-factory-700/30 rounded-lg border border-tire-600/20">
+              <p className="text-tire-400 text-sm">Total de Produtos</p>
+              <p className="text-2xl font-bold text-white">{productAnalysis.length}</p>
             </div>
-          </CardContent>
-        </Card>
-      )}
+            
+            <div className="text-center p-4 bg-factory-700/30 rounded-lg border border-tire-600/20">
+              <p className="text-tire-400 text-sm">Produtos em Estoque</p>
+              <p className="text-2xl font-bold text-neon-cyan">{productsInStock}</p>
+            </div>
+            
+            <div className="text-center p-4 bg-neon-blue/10 rounded-lg border border-neon-blue/30">
+              <p className="text-tire-400 text-sm">Valor Total Investido</p>
+              <p className="text-2xl font-bold text-neon-blue">
+                {formatCurrency(totalValue)}
+              </p>
+            </div>
+
+            <div className="text-center p-4 bg-neon-purple/10 rounded-lg border border-neon-purple/30">
+              <p className="text-tire-400 text-sm">Margem Média</p>
+              <p className={`text-2xl font-bold ${averageMargin > 0 ? 'text-neon-green' : 'text-red-400'}`}>
+                {averageMargin.toFixed(1)}%
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Dialog para adicionar estoque */}
+      <AddStockDialog
+        onAddStock={handleAddStock}
+        resaleProducts={resaleProducts}
+        isOpen={isAddDialogOpen}
+        onOpenChange={setIsAddDialogOpen}
+      />
     </div>
   );
 };
