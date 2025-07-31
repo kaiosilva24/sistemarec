@@ -131,13 +131,42 @@ const ProductStock = ({
     setProductCostCache({});
   }, []);
 
-  // Effect para sincronizar com elemento principal R$ 87,00 - OTIMIZADO
+  // Função para escrever valor médio de custo por pneu no elemento input
+  const writeAverageCostToInput = useCallback((averageCost: number) => {
+    try {
+      // Buscar pelo elemento input específico que contém "R$ 5.42"
+      const inputElements = document.querySelectorAll('input[readonly]');
+      
+      for (const input of inputElements) {
+        const inputElement = input as HTMLInputElement;
+        if (inputElement.value && inputElement.value.includes('R$')) {
+          // Atualizar o valor do input com o custo médio
+          const formattedValue = `R$ ${averageCost.toFixed(2)}`;
+          inputElement.value = formattedValue;
+          
+          console.log(`✅ [ProductStock] Valor médio de custo por pneu escrito no input: ${formattedValue}`);
+          
+          // Disparar evento para notificar mudança
+          const event = new Event('input', { bubbles: true });
+          inputElement.dispatchEvent(event);
+          break;
+        }
+      }
+    } catch (error) {
+      console.error("❌ [ProductStock] Erro ao escrever no elemento input:", error);
+    }
+  }, []);
+
+  // Effect para sincronizar com elemento principal e escrever no input - OTIMIZADO
   useEffect(() => {
     const checkMainElement = () => {
       const newValue = syncWithMainElement();
       if (Math.abs(newValue - mainElementValue) > 0.01) { // Só atualiza se diferença for significativa
         setMainElementValue(newValue);
         console.log(`🔄 [ProductStock] Valor principal atualizado de R$ ${mainElementValue.toFixed(2)} para R$ ${newValue.toFixed(2)}`);
+        
+        // Escrever o valor médio no elemento input
+        writeAverageCostToInput(newValue);
       }
     };
 
@@ -145,7 +174,11 @@ const ProductStock = ({
     checkMainElement();
 
     // Verificação periódica mais frequente para melhor sincronização
-    const interval = setInterval(checkMainElement, 2000);
+    const interval = setInterval(() => {
+      checkMainElement();
+      // Também escrever periodicamente no input para garantir sincronização
+      writeAverageCostToInput(mainElementValue);
+    }, 2000);
 
     // Observer para mudanças no DOM
     const observer = new MutationObserver((mutations) => {
@@ -173,7 +206,9 @@ const ProductStock = ({
       
       if (shouldCheck) {
         console.log('🔍 [ProductStock] DOM mudou, verificando sincronização...');
-        setTimeout(checkMainElement, 100); // Pequeno delay para garantir que o DOM foi atualizado
+        setTimeout(() => {
+          checkMainElement();
+        }, 100); // Pequeno delay para garantir que o DOM foi atualizado
       }
     });
 
@@ -188,7 +223,7 @@ const ProductStock = ({
       clearInterval(interval);
       observer.disconnect();
     };
-  }, [mainElementValue, syncWithMainElement]);
+  }, [mainElementValue, syncWithMainElement, writeAverageCostToInput]);
 
   // Get all available products based on local type filter
   const getAllAvailableProducts = useCallback(() => {
@@ -472,6 +507,10 @@ const ProductStock = ({
                             const productCost = getSpecificProductCost(
                               selectedProductData.name,
                             );
+                            
+                            // Forçar escrita no input para teste
+                            writeAverageCostToInput(currentMainValue);
+                            
                             console.log(
                               "📊 [ProductStock] Estado atual da sincronização:",
                               {
@@ -486,7 +525,8 @@ const ProductStock = ({
                               `Valor do elemento principal: R$ ${currentMainValue.toFixed(2)}\n` +
                               `Custo calculado para "${selectedProductData.name}": R$ ${productCost.toFixed(2)}\n` +
                               `Estado interno mainElementValue: R$ ${mainElementValue.toFixed(2)}\n\n` +
-                              `✅ Os valores ${currentMainValue === productCost ? 'ESTÃO' : 'NÃO ESTÃO'} sincronizados!`
+                              `✅ Os valores ${currentMainValue === productCost ? 'ESTÃO' : 'NÃO ESTÃO'} sincronizados!\n\n` +
+                              `📝 Valor escrito automaticamente no input!`
                             );
                           }}
                           className="text-xs h-6 px-2 bg-factory-700/50 border-tire-600/30 text-tire-300 hover:text-white hover:bg-tire-700/50"
