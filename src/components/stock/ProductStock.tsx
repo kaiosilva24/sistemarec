@@ -78,45 +78,59 @@ const ProductStock = ({
   // Função para ler dinamicamente o valor do elemento principal no DOM (REAL das métricas)
   const readMainElementValue = useCallback((): number => {
     try {
-      console.log('🔍 [ProductStock] Iniciando busca pelo valor exato das métricas...');
+      console.log('🔍 [ProductStock] Iniciando busca pelo valor DINÂMICO das métricas...');
       
-      // BUSCA ESPECÍFICA: Encontrar o container das métricas principais
-      const metricsContainer = document.querySelector('[class*="bg-factory-900"], [class*="backdrop-blur"]');
+      // BUSCA ESPECÍFICA: Encontrar exatamente "Custo Médio/Pneu" e seu valor
+      const allElements = document.querySelectorAll('*');
       
-      if (metricsContainer) {
-        console.log('📍 [ProductStock] Encontrou container das métricas principais');
+      for (const element of allElements) {
+        const textContent = element.textContent || '';
         
-        // Buscar dentro do container por "Custo Médio/Pneu" ou "Custo Médio por Pneu"
-        const allElements = metricsContainer.querySelectorAll('*');
-        
-        for (const element of allElements) {
-          const textContent = element.textContent || '';
+        // Verificar se é exatamente o label "Custo Médio/Pneu"
+        if (textContent.trim() === 'Custo Médio/Pneu') {
+          console.log('📍 [ProductStock] Encontrou EXATAMENTE "Custo Médio/Pneu"');
           
-          // Verificar se é o label do custo médio
-          if (textContent.includes('Custo Médio/Pneu') || textContent.includes('Custo Médio por Pneu')) {
-            console.log('📍 [ProductStock] Encontrou label "Custo Médio/Pneu"');
+          // Buscar o valor no próximo elemento da estrutura
+          const parent = element.closest('.p-4, div');
+          if (parent) {
+            // Procurar por elementos com classes de destaque que contém valores
+            const valueElements = parent.querySelectorAll('.text-neon-orange, .font-bold, .text-xl');
             
-            // Buscar o valor na estrutura próxima - pode estar no mesmo container ou no próximo elemento
-            const parent = element.parentElement;
-            if (parent) {
-              // Procurar por elementos com valores monetários na mesma estrutura
-              const siblings = parent.querySelectorAll('p, span, div');
+            for (const valueEl of valueElements) {
+              const valueText = valueEl.textContent || '';
+              // Buscar padrão: R$ + espaços/&nbsp; + número
+              const valueMatch = valueText.match(/R\$[\s\u00A0]*(\d+(?:[,\.]\d{2})?)/);
               
-              for (const sibling of siblings) {
-                const siblingText = sibling.textContent || '';
-                const valueMatch = siblingText.match(/R\$[\s\u00A0]*(\d+(?:[,\.]\d{2})?)/);
+              if (valueMatch && !valueText.includes('Custo Médio')) {
+                let valueStr = valueMatch[1];
+                if (valueStr.includes(',')) {
+                  valueStr = valueStr.replace(',', '.');
+                }
+                const value = parseFloat(valueStr);
                 
-                if (valueMatch && !siblingText.includes('Custo Médio')) {
-                  let valueStr = valueMatch[1];
-                  if (valueStr.includes(',')) {
-                    valueStr = valueStr.replace(',', '.');
-                  }
-                  const value = parseFloat(valueStr);
-                  
-                  if (value > 0 && value >= 90 && value <= 100) { // Range específico para R$ 94,87
-                    console.log(`🎯 [ProductStock] Valor EXATO encontrado: R$ ${value.toFixed(2)} (texto: "${siblingText.trim()}")`);
-                    return value;
-                  }
+                if (value > 0) {
+                  console.log(`🎯 [ProductStock] Valor DINÂMICO encontrado: R$ ${value.toFixed(2)} (texto: "${valueText.trim()}")`);
+                  return value;
+                }
+              }
+            }
+            
+            // Se não encontrou nos elementos destacados, buscar em todos os elementos do container
+            const allContainerElements = parent.querySelectorAll('p, span, div');
+            for (const containerEl of allContainerElements) {
+              const containerText = containerEl.textContent || '';
+              const valueMatch = containerText.match(/R\$[\s\u00A0]*(\d+(?:[,\.]\d{2})?)/);
+              
+              if (valueMatch && !containerText.includes('Custo Médio')) {
+                let valueStr = valueMatch[1];
+                if (valueStr.includes(',')) {
+                  valueStr = valueStr.replace(',', '.');
+                }
+                const value = parseFloat(valueStr);
+                
+                if (value > 50) { // Filtrar valores muito baixos
+                  console.log(`🎯 [ProductStock] Valor DINÂMICO no container: R$ ${value.toFixed(2)}`);
+                  return value;
                 }
               }
             }
@@ -124,10 +138,10 @@ const ProductStock = ({
         }
       }
       
-      // BUSCA ALTERNATIVA 1: Procurar diretamente por R$ 94,87 ou valores próximos
-      const allElements = document.querySelectorAll('*');
+      // BUSCA ALTERNATIVA: Procurar por elementos laranja com valores monetários (que é o padrão do custo médio)
+      const orangeElements = document.querySelectorAll('.text-neon-orange');
       
-      for (const element of allElements) {
+      for (const element of orangeElements) {
         const textContent = element.textContent || '';
         const valueMatch = textContent.match(/R\$[\s\u00A0]*(\d+(?:[,\.]\d{2})?)/);
         
@@ -138,40 +152,19 @@ const ProductStock = ({
           }
           const value = parseFloat(valueStr);
           
-          // Procurar especificamente por valores próximos de 94,87
-          if (value >= 94.8 && value <= 95.0) {
-            console.log(`🎯 [ProductStock] Valor específico R$ 94,87 encontrado: R$ ${value.toFixed(2)}`);
+          // Verificar se é um valor razoável para custo por pneu (baseado no HTML: R$ 102,43)
+          if (value > 50 && value < 200) {
+            console.log(`🎯 [ProductStock] Valor DINÂMICO alternativo: R$ ${value.toFixed(2)}`);
             return value;
           }
         }
       }
       
-      // BUSCA ALTERNATIVA 2: Elementos com classes de destaque (laranja/neon)
-      const highlightedElements = document.querySelectorAll('.text-neon-orange, .text-orange-400, .text-xl, .font-bold');
-      
-      for (const element of highlightedElements) {
-        const textContent = element.textContent || '';
-        const valueMatch = textContent.match(/R\$[\s\u00A0]*(\d+(?:[,\.]\d{2})?)/);
-        
-        if (valueMatch) {
-          let valueStr = valueMatch[1];
-          if (valueStr.includes(',')) {
-            valueStr = valueStr.replace(',', '.');
-          }
-          const value = parseFloat(valueStr);
-          
-          if (value > 80 && value < 110) { // Range mais amplo para custo por pneu
-            console.log(`🎯 [ProductStock] Valor em elemento destacado: R$ ${value.toFixed(2)} (classe: ${element.className})`);
-            return value;
-          }
-        }
-      }
-      
-      console.warn(`⚠️ [ProductStock] Nenhum valor específico encontrado - usando valor padrão`);
-      return 94.87; // Valor padrão baseado no que você mostrou
+      console.warn(`⚠️ [ProductStock] NENHUM valor dinâmico encontrado! Verificar estrutura HTML.`);
+      return 0; // Retornar 0 se não encontrar nada para forçar debug
     } catch (error) {
-      console.error(`❌ [ProductStock] Erro ao ler elemento principal:`, error);
-      return 94.87; // Fallback para o valor correto
+      console.error(`❌ [ProductStock] Erro ao ler valor dinâmico:`, error);
+      return 0;
     }
   }, []);
 
@@ -182,34 +175,39 @@ const ProductStock = ({
     return realValue;
   }, [readMainElementValue]);
 
-  // Função para obter o custo específico por produto - SEMPRE SINCRONIZADO COM ELEMENTO PRINCIPAL REAL
+  // Função para obter o custo específico por produto - SEMPRE DINÂMICO DO ELEMENTO REAL
   const getSpecificProductCost = useCallback((productName: string) => {
-    console.log(`🔍 [ProductStock] Buscando custo REAL para produto: "${productName}"`);
+    console.log(`🔍 [ProductStock] Buscando custo DINÂMICO para produto: "${productName}"`);
 
-    // Ler o valor REAL e ATUAL do elemento principal das métricas
-    const realValue = readMainElementValue();
+    // SEMPRE ler o valor DINÂMICO do elemento principal das métricas
+    const dynamicValue = readMainElementValue();
     
-    if (realValue === 0) {
-      console.warn(`⚠️ [ProductStock] Valor das métricas é 0, tentando buscar valor específico salvo`);
+    if (dynamicValue === 0) {
+      console.error(`❌ [ProductStock] ERRO: Valor dinâmico é 0! Elemento "Custo Médio/Pneu" não foi encontrado.`);
+      console.log(`🔧 [ProductStock] Tentando busca mais ampla...`);
       
-      // Tentar buscar valor específico do localStorage como fallback
-      try {
-        const savedData = localStorage.getItem('tireCostManager_specificAnalyses');
-        if (savedData) {
-          const analyses = JSON.parse(savedData);
-          const productAnalysis = analyses.find((analysis: any) => analysis.productName === productName);
-          if (productAnalysis && productAnalysis.costPerTire > 0) {
-            console.log(`🔄 [ProductStock] Usando valor salvo para "${productName}": R$ ${productAnalysis.costPerTire.toFixed(2)}`);
-            return productAnalysis.costPerTire;
+      // Busca mais ampla se falhou a busca específica
+      const allElements = document.querySelectorAll('*');
+      for (const element of allElements) {
+        const text = element.textContent || '';
+        if (text.includes('R$') && text.match(/\d+[,.]?\d*/)) {
+          const match = text.match(/R\$[\s\u00A0]*(\d+(?:[,\.]\d{2})?)/);
+          if (match) {
+            let value = parseFloat(match[1].replace(',', '.'));
+            if (value > 50 && value < 200) {
+              console.log(`🎯 [ProductStock] Valor de emergência encontrado: R$ ${value.toFixed(2)}`);
+              return value;
+            }
           }
         }
-      } catch (error) {
-        console.error(`❌ [ProductStock] Erro ao buscar dados salvos:`, error);
       }
+      
+      console.error(`❌ [ProductStock] CRÍTICO: Nenhum valor encontrado! Verificar HTML do "Custo Médio/Pneu"`);
+      return 0; // Não usar valor fixo, retornar 0 para mostrar erro
     }
 
-    console.log(`✅ [ProductStock] Usando custo REAL das métricas para "${productName}": R$ ${realValue.toFixed(2)}`);
-    return realValue;
+    console.log(`✅ [ProductStock] Custo DINÂMICO para "${productName}": R$ ${dynamicValue.toFixed(2)}`);
+    return dynamicValue;
   }, [readMainElementValue]);
 
   // Função para limpar cache e forçar nova busca
