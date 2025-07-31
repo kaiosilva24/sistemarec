@@ -78,22 +78,33 @@ const ProductStock = ({
   // Função para ler dinamicamente o valor do elemento principal no DOM (REAL das métricas)
   const readMainElementValue = useCallback((): number => {
     try {
-      // Primeiro, procurar especificamente por elementos com "Custo Médio por Pneu"
-      const allElements = document.querySelectorAll('*');
+      console.log('🔍 [ProductStock] Iniciando busca pelo valor das métricas...');
       
-      for (const element of allElements) {
-        const textContent = element.textContent || '';
-        if (textContent.includes('Custo Médio por Pneu')) {
-          // Encontrou o elemento que contém o título, agora buscar o valor na mesma estrutura
-          const container = element.closest('div.p-6, div.p-4');
-          if (container) {
-            // Procurar por elementos com valores monetários dentro do container
-            const valueElements = container.querySelectorAll('p, span');
+      // Buscar especificamente pelo valor "Custo Médio/Pneu" que você mostrou: R$ 94,87
+      const allParagraphs = document.querySelectorAll('p');
+      
+      for (const p of allParagraphs) {
+        const textContent = p.textContent || '';
+        
+        // Procurar por "Custo Médio/Pneu" ou similar
+        if (textContent.includes('Custo Médio/Pneu') || textContent.includes('Custo Médio por Pneu')) {
+          console.log('📍 [ProductStock] Encontrou elemento com "Custo Médio/Pneu"');
+          
+          // Buscar o próximo elemento irmão que contém o valor
+          const parent = p.parentElement;
+          if (parent) {
+            const valueElements = parent.querySelectorAll('p');
+            
             for (const valueEl of valueElements) {
               const valueText = valueEl.textContent || '';
-              // Buscar padrões: R$ XX,XX ou R$&nbsp;XX,XX
+              
+              // Buscar padrões: R$ XX,XX ou R$&nbsp;XX,XX com classes de cor laranja
               const valueMatch = valueText.match(/R\$[\s\u00A0]*(\d+(?:[,\.]\d{2})?)/);
-              if (valueMatch && !valueText.includes('Custo Médio por Pneu')) {
+              
+              if (valueMatch && 
+                  !valueText.includes('Custo Médio') && 
+                  (valueEl.className.includes('neon-orange') || valueEl.className.includes('text-xl'))) {
+                
                 let valueStr = valueMatch[1];
                 // Converter vírgula para ponto se necessário
                 if (valueStr.includes(',')) {
@@ -102,7 +113,7 @@ const ProductStock = ({
                 const value = parseFloat(valueStr);
                 
                 if (value > 0) {
-                  console.log(`🎯 [ProductStock] Valor REAL encontrado das métricas: R$ ${value.toFixed(2)}`);
+                  console.log(`🎯 [ProductStock] Valor REAL encontrado das métricas: R$ ${value.toFixed(2)} (classe: ${valueEl.className})`);
                   return value;
                 }
               }
@@ -111,20 +122,43 @@ const ProductStock = ({
         }
       }
       
-      // Se não encontrou nas métricas, buscar por valores estilo R$&nbsp;XX,XX
-      const spanElements = document.querySelectorAll('span');
-      for (const span of spanElements) {
-        const textContent = span.textContent || '';
+      // Busca alternativa: procurar diretamente por elementos com classes específicas e valores monetários
+      const orangeElements = document.querySelectorAll('.text-neon-orange, .text-xl');
+      
+      for (const element of orangeElements) {
+        const textContent = element.textContent || '';
         const valueMatch = textContent.match(/R\$[\s\u00A0]*(\d+(?:[,\.]\d{2})?)/);
-        if (valueMatch && span.className.includes('neon-green')) {
+        
+        if (valueMatch) {
           let valueStr = valueMatch[1];
           if (valueStr.includes(',')) {
             valueStr = valueStr.replace(',', '.');
           }
           const value = parseFloat(valueStr);
           
-          if (value > 0) {
-            console.log(`🎯 [ProductStock] Valor encontrado em span verde: R$ ${value.toFixed(2)}`);
+          if (value > 0 && value > 50) { // Filtrar valores muito pequenos que não são o custo por pneu
+            console.log(`🎯 [ProductStock] Valor alternativo encontrado: R$ ${value.toFixed(2)} (elemento: ${element.tagName}, classe: ${element.className})`);
+            return value;
+          }
+        }
+      }
+      
+      // Última tentativa: buscar por qualquer valor R$ maior que 50
+      const allElements = document.querySelectorAll('*');
+      
+      for (const element of allElements) {
+        const textContent = element.textContent || '';
+        const valueMatch = textContent.match(/R\$[\s\u00A0]*(\d+(?:[,\.]\d{2})?)/);
+        
+        if (valueMatch && element.className.includes('font-bold')) {
+          let valueStr = valueMatch[1];
+          if (valueStr.includes(',')) {
+            valueStr = valueStr.replace(',', '.');
+          }
+          const value = parseFloat(valueStr);
+          
+          if (value > 50 && value < 200) { // Range esperado para custo por pneu
+            console.log(`🎯 [ProductStock] Valor genérico encontrado: R$ ${value.toFixed(2)} (texto: "${textContent.trim()}")`);
             return value;
           }
         }
