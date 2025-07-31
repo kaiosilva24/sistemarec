@@ -188,9 +188,6 @@ const ProductStock = ({
       `🔄 [ProductStock] Custo médio dinâmico atualizado: R$ ${dynamicCost.toFixed(2)}`,
     );
 
-    // Atualizar o estado também
-    setDynamicAverageCost(dynamicCost);
-
     return dynamicCost;
   };
 
@@ -206,8 +203,11 @@ const ProductStock = ({
       setDynamicAverageCost(newCost);
     };
 
+    // Atualização inicial imediata
+    updateDynamicCost();
+
     // Múltiplas tentativas de atualização inicial
-    const initialUpdates = [100, 500, 1000, 2000, 3000];
+    const initialUpdates = [500, 1000, 2000, 3000];
     initialUpdates.forEach(delay => {
       setTimeout(() => {
         console.log(`⏰ [ProductStock] Verificação inicial após ${delay}ms...`);
