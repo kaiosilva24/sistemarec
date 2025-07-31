@@ -73,11 +73,6 @@ const ProductStock = ({
   const activeProducts = products.filter((p) => !p.archived);
   const activeResaleProducts = resaleProducts.filter((p) => !p.archived);
 
-  // Cache para armazenar custos específicos por produto
-  const [productCostCache, setProductCostCache] = useState<{
-    [key: string]: number;
-  }>({});
-
   // Função para obter o custo médio dinâmico do elemento HTML específico
   const getDynamicAverageCostPerTire = () => {
     try {
@@ -158,31 +153,8 @@ const ProductStock = ({
 
   // Função unificada para todos os produtos finais - SEMPRE USAR CUSTO MÉDIO DINÂMICO
   const getUnifiedFinalProductCost = () => {
-    // Verificar cache com timestamp
-    const cacheKey = "dynamicAverageCost";
-    const now = Date.now();
-    const cacheTimeout = 10000; // 10 segundos
-
-    if (
-      productCostCache[cacheKey] &&
-      productCostCache[`${cacheKey}_timestamp`] &&
-      now - productCostCache[`${cacheKey}_timestamp`] < cacheTimeout
-    ) {
-      console.log(
-        `💾 [ProductStock] Usando custo médio do cache: R$ ${productCostCache[cacheKey].toFixed(2)}`,
-      );
-      return productCostCache[cacheKey];
-    }
-
     // Buscar novo valor
     const dynamicCost = getDynamicAverageCostPerTire();
-
-    // Atualizar cache com timestamp
-    setProductCostCache((prev) => ({
-      ...prev,
-      [cacheKey]: dynamicCost,
-      [`${cacheKey}_timestamp`]: now,
-    }));
 
     console.log(
       `🔄 [ProductStock] Custo médio dinâmico atualizado: R$ ${dynamicCost.toFixed(2)}`,
@@ -191,115 +163,6 @@ const ProductStock = ({
     return dynamicCost;
   };
 
-  // Função para obter o custo por pneu sincronizado do financeiro (mantida para compatibilidade)
-  const getTireCostFromFinancial = () => {
-    const TIRE_COST_STORAGE_KEY = "dashboard_tireCostValue_unified";
-
-    try {
-      const storedData = localStorage.getItem(TIRE_COST_STORAGE_KEY);
-      if (storedData) {
-        const parsedData = JSON.parse(storedData);
-        const value = parsedData.value || 0;
-        const timestamp = parsedData.timestamp || 0;
-        const isRecent = Date.now() - timestamp < 30000; // 30 segundos
-
-        if (value > 0 && isRecent) {
-          console.log(
-            `✅ [ProductStock] Custo por pneu obtido do financeiro: R$ ${value.toFixed(2)}`,
-          );
-          return value;
-        }
-      }
-
-      // Valor padrão se não encontrar dados válidos
-      const defaultValue = 101.09;
-      console.log(
-        `⚠️ [ProductStock] Usando valor padrão: R$ ${defaultValue.toFixed(2)}`,
-      );
-      return defaultValue;
-    } catch (error) {
-      console.error("❌ [ProductStock] Erro ao obter custo por pneu:", error);
-      return 101.09; // Valor padrão
-    }
-  };
-
-  // Função para sincronizar custo diretamente do DOM
-  const syncCostFromDOM = () => {
-    try {
-      console.log("🔄 [ProductStock] Iniciando sincronização do DOM...");
-
-      // Primeira tentativa: elemento específico
-      const domElement = document.querySelector(
-        ".tempo-84fba273-da98-5b39-85a6-211bade21bcd",
-      );
-
-      console.log(
-        `🔍 [ProductStock] Elemento específico encontrado:`,
-        domElement ? "SIM" : "NÃO",
-        domElement ? `Conteúdo: "${domElement.textContent?.trim()}"` : "",
-      );
-
-      if (domElement && domElement.textContent) {
-        const textContent = domElement.textContent.trim();
-        const match = textContent.match(/R\$\s*([\d.,]+)/);
-        if (match) {
-          const valueStr = match[1].replace(",", ".");
-          const numericValue = parseFloat(valueStr);
-          if (!isNaN(numericValue) && numericValue > 0) {
-            console.log(
-              `✅ [ProductStock] Sincronizando custo do DOM: R$ ${numericValue.toFixed(2)}`,
-            );
-            setSynchronizedCostPerTire(numericValue);
-            return numericValue;
-          }
-        }
-      }
-
-      // Segunda tentativa: buscar por qualquer elemento que contenha R$ 101,09
-      const allElements = document.querySelectorAll("*");
-      for (const element of allElements) {
-        const textContent = element.textContent?.trim();
-        if (
-          textContent &&
-          textContent.includes("R$") &&
-          textContent.includes("101,09")
-        ) {
-          console.log(
-            `🎯 [ProductStock] Elemento alternativo encontrado para sincronização: "${textContent}"`,
-          );
-
-          const match = textContent.match(/R\$\s*([\d.,]+)/);
-          if (match) {
-            const valueStr = match[1].replace(",", ".");
-            const numericValue = parseFloat(valueStr);
-            if (!isNaN(numericValue) && numericValue > 0) {
-              console.log(
-                `✅ [ProductStock] Sincronizando custo alternativo do DOM: R$ ${numericValue.toFixed(2)}`,
-              );
-              setSynchronizedCostPerTire(numericValue);
-              return numericValue;
-            }
-          }
-        }
-      }
-
-      console.log(
-        "⚠️ [ProductStock] Nenhum elemento com custo encontrado no DOM",
-      );
-    } catch (error) {
-      console.error(
-        "❌ [ProductStock] Erro ao sincronizar custo do DOM:",
-        error,
-      );
-    }
-    return null;
-  };
-
-  // Função para limpar cache e forçar nova busca
-  const clearCostCache = () => {
-    console.log("🧹 [ProductStock] Limpando cache de custos por produto");
-    setProductCostCache({});
-  };
 
   // Effect para monitorar mudanças no DOM e sincronizar custo médio dinâmico
   useEffect(() => {
@@ -317,7 +180,7 @@ const ProductStock = ({
     // Observer para mudanças no DOM - foco no elemento específico
     const observer = new MutationObserver((mutations) => {
       let shouldUpdate = false;
-      
+
       mutations.forEach((mutation) => {
         // Verificar se a mudança afeta elementos com texto monetário
         if (mutation.type === 'childList' || mutation.type === 'characterData') {
@@ -338,7 +201,6 @@ const ProductStock = ({
         console.log(
           "🔍 [ProductStock] Mudança relevante detectada no DOM, atualizando custo médio dinâmico...",
         );
-        clearCostCache();
         updateDynamicCost();
       }
     });
@@ -357,7 +219,6 @@ const ProductStock = ({
       console.log(
         "⏰ [ProductStock] Verificação periódica - atualizando custo médio dinâmico...",
       );
-      clearCostCache();
       updateDynamicCost();
     }, 10000); // 10 segundos
 
@@ -627,44 +488,6 @@ const ProductStock = ({
                         <p className="text-xs text-neon-orange">
                           Custo médio dinâmico obtido do elemento: &lt;p class="text-xl font-bold text-neon-orange"&gt;R$ 101,09&lt;/p&gt;
                         </p>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            console.log(
-                              "🧹 [ProductStock] Limpando cache do custo médio dinâmico...",
-                            );
-                            clearCostCache();
-                            // Forçar nova busca do custo dinâmico
-                            const newCost = getUnifiedFinalProductCost();
-                            console.log(
-                              `🔄 [ProductStock] Novo custo médio dinâmico: R$ ${newCost.toFixed(2)}`,
-                            );
-                          }}
-                          className="text-xs h-6 px-2 bg-factory-700/50 border-tire-600/30 text-tire-300 hover:text-white hover:bg-tire-700/50"
-                        >
-                          🔄 Atualizar Custo Médio
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            console.log(
-                              "📊 [ProductStock] Testando busca do custo médio dinâmico...",
-                            );
-                            const testCost = getDynamicAverageCostPerTire();
-                            alert(
-                              `Custo médio dinâmico encontrado: R$ ${testCost.toFixed(2)}\n\nTodos os produtos finais usarão este valor.\n\nVerifique o console para mais detalhes.`,
-                            );
-                          }}
-                          className="text-xs h-6 px-2 bg-factory-700/50 border-tire-600/30 text-tire-300 hover:text-white hover:bg-tire-700/50"
-                        >
-                          🔍 Testar Custo Médio
-                        </Button>
                       </div>
                     </div>
                   </div>
