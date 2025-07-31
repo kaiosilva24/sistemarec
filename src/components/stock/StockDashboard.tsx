@@ -52,6 +52,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import RawMaterialStock from "./RawMaterialStock";
 import ProductStock from "./ProductStock";
+import FinalProductsStock from "./FinalProductsStock";
 import StockCharts from "./StockCharts";
 import {
   useMaterials,
@@ -1347,7 +1348,7 @@ const StockDashboard = ({
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2 bg-factory-800/50 border border-tire-600/30">
+          <TabsList className="grid w-full grid-cols-3 bg-factory-800/50 border border-tire-600/30">
             <TabsTrigger
               value="dashboard"
               className="text-tire-300 data-[state=active]:text-white data-[state=active]:bg-neon-blue/20"
@@ -1359,6 +1360,12 @@ const StockDashboard = ({
               className="text-tire-300 data-[state=active]:text-white data-[state=active]:bg-neon-blue/20"
             >
               Matéria Prima
+            </TabsTrigger>
+            <TabsTrigger
+              value="final-products"
+              className="text-tire-300 data-[state=active]:text-white data-[state=active]:bg-neon-blue/20"
+            >
+              Produtos Finais
             </TabsTrigger>
           </TabsList>
 
@@ -1385,6 +1392,14 @@ const StockDashboard = ({
               stockItems={getMaterialStockItems()}
               onStockUpdate={handleStockUpdate}
               onSetMinLevel={handleSetMinLevel}
+            />
+          </TabsContent>
+
+          <TabsContent value="final-products">
+            <FinalProductsStock
+              isLoading={
+                productsLoading || stockLoading
+              }
             />
           </TabsContent>
         </Tabs>
