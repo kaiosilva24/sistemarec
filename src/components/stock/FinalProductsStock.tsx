@@ -144,49 +144,6 @@ const FinalProductsStock = ({ isLoading = false }: FinalProductsStockProps) => {
     }
   }, [averageCostPerTire]);
 
-  // Função para sincronizar valor do elemento R$ 87,00 (fonte única)
-  const syncValueFromMainElement = (): number => {
-    try {
-      // Buscar pelo elemento específico que contém R$ 87,00
-      const allElements = document.querySelectorAll("*");
-
-      for (const element of allElements) {
-        const textContent = element.textContent?.trim();
-        if (textContent && textContent.includes("R$") && element.className.includes("text-2xl font-bold")) {
-          // Extrair valor monetário
-          const match = textContent.match(/R\$\s*([0-9.,]+)/);
-          if (match) {
-            const valueStr = match[1].replace(",", ".");
-            const numericValue = parseFloat(valueStr);
-            if (!isNaN(numericValue) && numericValue > 0) {
-              console.log(`🔄 [FinalProductsStock] Valor sincronizado do elemento principal: R$ ${numericValue.toFixed(2)}`);
-              return numericValue;
-            }
-          }
-        }
-      }
-
-      // Se não encontrar, usar custo médio sincronizado
-      if (averageCostPerTire > 0) {
-        console.log(`✅ [FinalProductsStock] Usando custo médio sincronizado: R$ ${averageCostPerTire.toFixed(2)}`);
-        return averageCostPerTire;
-      }
-
-      // Valor padrão final
-      return 87.00;
-    } catch (error) {
-      console.error("❌ [FinalProductsStock] Erro ao sincronizar valor:", error);
-      return 87.00;
-    }
-  };
-
-  // Função para obter custo médio dinâmico baseado no elemento principal
-  const getDynamicAverageCost = useMemo(() => {
-    return (): number => {
-      return syncValueFromMainElement();
-    };
-  }, [averageCostPerTire]);
-
   // Processar dados dos produtos finais
   const finalProductsData = useMemo(() => {
     const finalProducts = products.filter((p) => !p.archived);
