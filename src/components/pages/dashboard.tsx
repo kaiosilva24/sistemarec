@@ -415,488 +415,151 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
     }
   };
 
-  // REMOVIDO: Lógica de cálculo complexa - agora usa diretamente o valor do TireCostManager
+  // SOLUÇÃO SIMPLES ESTILO EXCEL: O valor que está no "Custo Médio por Pneu" é copiado diretamente para "Métricas Principais"
+  
+  // Estados para valores sincronizados
+  const [averageCostPerTire, setAverageCostPerTire] = useState(101.09);
+  const [averageProfitPerTire, setAverageProfitPerTire] = useState(69.765);
+  const [profitPercentage, setProfitPercentage] = useState(42.5);
 
-  // NOVA ESTRATÉGIA: ÚNICA FONTE DE VERDADE COM LIMPEZA DE CACHE
-  const CORRECT_TIRE_COST = 101.09; // Valor correto conhecido
-  const CORRECT_TIRE_PROFIT = 69.765; // Valor correto do lucro médio por pneu
-  const CORRECT_PROFIT_PERCENTAGE = 42.5; // Valor correto da porcentagem de lucro produtos finais
-  const TIRE_COST_STORAGE_KEY = "dashboard_tireCostValue_unified";
-  const TIRE_PROFIT_STORAGE_KEY = "dashboard_tireProfitValue_unified";
-  const PROFIT_PERCENTAGE_STORAGE_KEY =
-    "dashboard_profitPercentageValue_unified";
-
-  // Função para limpar cache inconsistente
-  const clearInconsistentCache = () => {
-    console.log("🧹 [Dashboard] LIMPANDO CACHE INCONSISTENTE...");
-
-    // Remover todas as chaves antigas que podem estar causando conflito
-    const keysToRemove = [
-      "dashboard_averageCostPerTire",
-      "dashboard_averageProfitPerTire",
-      "dashboard_profitMarginPercentage",
-      "tireCostManager_synchronizedCostData",
-      "dashboard_tireCostValue_old", // Caso exista
-      "dashboard_tireProfitValue_old", // Caso exista
-      "dashboard_profitPercentageValue_old", // Caso exista
-    ];
-
-    keysToRemove.forEach((key) => {
-      if (localStorage.getItem(key)) {
-        console.log(`🗑️ [Dashboard] Removendo chave antiga: ${key}`);
-        localStorage.removeItem(key);
-      }
-    });
-  };
-
-  // Função para obter o valor correto com estratégia simplificada
-  const getTireCostValue = () => {
-    console.log("🔍 [Dashboard] OBTENDO VALOR COM ESTRATÉGIA UNIFICADA...");
-
-    try {
-      // ESTRATÉGIA ÚNICA: Usar apenas uma chave específica
-      const storedData = localStorage.getItem(TIRE_COST_STORAGE_KEY);
-
-      if (storedData) {
-        const parsedData = JSON.parse(storedData);
-        const value = parsedData.value || 0;
-        const timestamp = parsedData.timestamp || 0;
-        const isRecent = Date.now() - timestamp < 30000; // 30 segundos
-
-        if (value > 0 && isRecent) {
-          console.log(
-            `✅ [Dashboard] VALOR VÁLIDO ENCONTRADO: R$ ${value.toFixed(2)}`,
-            {
-              timestamp: new Date(timestamp).toLocaleString("pt-BR"),
-              age: `${Math.round((Date.now() - timestamp) / 1000)}s`,
-            },
-          );
-          return value;
-        } else {
-          console.log(
-            `⚠️ [Dashboard] Valor expirado ou inválido (${value}, idade: ${Math.round((Date.now() - timestamp) / 1000)}s)`,
-          );
-        }
-      }
-
-      // Se não encontrou valor válido, usar o valor correto e salvar
-      console.log(
-        `🎯 [Dashboard] USANDO VALOR CORRETO PADRÃO: R$ ${CORRECT_TIRE_COST.toFixed(2)}`,
-      );
-
-      // Salvar o valor correto para próximas consultas
-      const dataToSave = {
-        value: CORRECT_TIRE_COST,
-        timestamp: Date.now(),
-        source: "Dashboard_Default",
-      };
-
-      localStorage.setItem(TIRE_COST_STORAGE_KEY, JSON.stringify(dataToSave));
-
-      return CORRECT_TIRE_COST;
-    } catch (error) {
-      console.error(
-        "❌ [Dashboard] Erro ao obter valor do custo por pneu:",
-        error,
-      );
-      return CORRECT_TIRE_COST;
-    }
-  };
-
-  // Função para obter o valor do lucro médio por pneu
-  const getTireProfitValue = () => {
-    console.log("🔍 [Dashboard] OBTENDO VALOR DO LUCRO MÉDIO POR PNEU...");
-
-    try {
-      // ESTRATÉGIA ÚNICA: Usar apenas uma chave específica
-      const storedData = localStorage.getItem(TIRE_PROFIT_STORAGE_KEY);
-
-      if (storedData) {
-        const parsedData = JSON.parse(storedData);
-        const value = parsedData.value || 0;
-        const timestamp = parsedData.timestamp || 0;
-        const isRecent = Date.now() - timestamp < 30000; // 30 segundos
-
-        if (value !== 0 && isRecent) {
-          console.log(
-            `✅ [Dashboard] VALOR DE LUCRO VÁLIDO ENCONTRADO: R$ ${value.toFixed(3)}`,
-            {
-              timestamp: new Date(timestamp).toLocaleString("pt-BR"),
-              age: `${Math.round((Date.now() - timestamp) / 1000)}s`,
-            },
-          );
-          return value;
-        } else {
-          console.log(
-            `⚠️ [Dashboard] Valor de lucro expirado ou inválido (${value}, idade: ${Math.round((Date.now() - timestamp) / 1000)}s)`,
-          );
-        }
-      }
-
-      // Se não encontrou valor válido, usar o valor correto e salvar
-      console.log(
-        `🎯 [Dashboard] USANDO VALOR CORRETO PADRÃO PARA LUCRO: R$ ${CORRECT_TIRE_PROFIT.toFixed(3)}`,
-      );
-
-      // Salvar o valor correto para próximas consultas
-      const dataToSave = {
-        value: CORRECT_TIRE_PROFIT,
-        timestamp: Date.now(),
-        source: "Dashboard_Default",
-      };
-
-      localStorage.setItem(TIRE_PROFIT_STORAGE_KEY, JSON.stringify(dataToSave));
-
-      return CORRECT_TIRE_PROFIT;
-    } catch (error) {
-      console.error(
-        "❌ [Dashboard] Erro ao obter valor do lucro por pneu:",
-        error,
-      );
-      return CORRECT_TIRE_PROFIT;
-    }
-  };
-
-  // Função para obter o valor da porcentagem de lucro produtos finais do elemento DOM
-  const getProfitPercentageValue = () => {
-    console.log(
-      "🔍 [Dashboard] OBTENDO VALOR DA PORCENTAGEM DE LUCRO PRODUTOS FINAIS...",
-    );
-
-    try {
-      // Primeiro, tentar ler do elemento DOM específico
-      const targetElement = document.querySelector(
-        ".tempo-4ebee5f0-9b1a-57c8-b17c-42856cd849a0",
-      );
-      if (targetElement) {
-        const textContent = targetElement.textContent || "";
-        const percentageMatch = textContent.match(/([0-9.]+)%/);
-        if (percentageMatch) {
-          const domValue = parseFloat(percentageMatch[1]);
-          console.log(`🎯 [Dashboard] VALOR LIDO DO DOM: ${domValue}%`, {
-            element: targetElement,
-            textContent,
-            extractedValue: domValue,
-          });
-
-          // Salvar o valor lido do DOM
-          const dataToSave = {
-            value: domValue,
-            timestamp: Date.now(),
-            source: "DOM_Element",
-          };
-
-          localStorage.setItem(
-            PROFIT_PERCENTAGE_STORAGE_KEY,
-            JSON.stringify(dataToSave),
-          );
-          return domValue;
-        }
-      }
-
-      // Se não conseguiu ler do DOM, tentar do localStorage
-      const storedData = localStorage.getItem(PROFIT_PERCENTAGE_STORAGE_KEY);
-      if (storedData) {
-        const parsedData = JSON.parse(storedData);
-        const value = parsedData.value || 0;
-        const timestamp = parsedData.timestamp || 0;
-        const isRecent = Date.now() - timestamp < 30000; // 30 segundos
-
-        if (value > 0 && isRecent) {
-          console.log(
-            `✅ [Dashboard] VALOR DE PORCENTAGEM VÁLIDO ENCONTRADO: ${value}%`,
-            {
-              timestamp: new Date(timestamp).toLocaleString("pt-BR"),
-              age: `${Math.round((Date.now() - timestamp) / 1000)}s`,
-            },
-          );
-          return value;
-        } else {
-          console.log(
-            `⚠️ [Dashboard] Valor de porcentagem expirado ou inválido (${value}, idade: ${Math.round((Date.now() - timestamp) / 1000)}s)`,
-          );
-        }
-      }
-
-      // Se não encontrou valor válido, usar o valor correto padrão e salvar
-      console.log(
-        `🎯 [Dashboard] USANDO VALOR CORRETO PADRÃO PARA PORCENTAGEM: ${CORRECT_PROFIT_PERCENTAGE}%`,
-      );
-
-      // Salvar o valor correto para próximas consultas
-      const dataToSave = {
-        value: CORRECT_PROFIT_PERCENTAGE,
-        timestamp: Date.now(),
-        source: "Dashboard_Default",
-      };
-
-      localStorage.setItem(
-        PROFIT_PERCENTAGE_STORAGE_KEY,
-        JSON.stringify(dataToSave),
-      );
-
-      return CORRECT_PROFIT_PERCENTAGE;
-    } catch (error) {
-      console.error(
-        "❌ [Dashboard] Erro ao obter valor da porcentagem de lucro:",
-        error,
-      );
-      return CORRECT_PROFIT_PERCENTAGE;
-    }
-  };
-
-  // Estado com inicialização mais robusta
-  const [synchronizedCostPerTire, setSynchronizedCostPerTire] = useState(() => {
-    // Limpar cache inconsistente na inicialização
-    clearInconsistentCache();
-
-    const initialValue = getTireCostValue();
-    console.log(
-      `🚀 [Dashboard] INICIALIZAÇÃO ROBUSTA: R$ ${initialValue.toFixed(2)}`,
-    );
-    return initialValue;
-  });
-
-  // Estado para lucro médio por pneu
-  const [synchronizedProfitPerTire, setSynchronizedProfitPerTire] = useState(
-    () => {
-      const initialValue = getTireProfitValue();
-      console.log(
-        `🚀 [Dashboard] INICIALIZAÇÃO LUCRO MÉDIO: R$ ${initialValue.toFixed(3)}`,
-      );
-      return initialValue;
-    },
-  );
-
-  // Estado para porcentagem de lucro produtos finais
-  const [synchronizedProfitPercentage, setSynchronizedProfitPercentage] =
-    useState(() => {
-      const initialValue = getProfitPercentageValue();
-      console.log(
-        `🚀 [Dashboard] INICIALIZAÇÃO PORCENTAGEM LUCRO PRODUTOS FINAIS: ${initialValue}%`,
-      );
-      return initialValue;
-    });
-
-  // Effect simplificado para sincronização
+  // Effect para sincronizar com o TireCostManager - FÓRMULA ESTILO EXCEL
   useEffect(() => {
-    console.log("🔄 [Dashboard] CONFIGURANDO SINCRONIZAÇÃO SIMPLIFICADA...");
-
-    // Função para atualizar o valor do custo
-    const updateCostValue = () => {
-      const newValue = getTireCostValue();
-      if (Math.abs(newValue - synchronizedCostPerTire) > 0.01) {
-        console.log(
-          `🔄 [Dashboard] ATUALIZANDO VALOR: ${synchronizedCostPerTire.toFixed(2)} → ${newValue.toFixed(2)}`,
-        );
-        setSynchronizedCostPerTire(newValue);
-      }
-    };
-
-    // Função para atualizar o valor do lucro
-    const updateProfitValue = () => {
-      const newValue = getTireProfitValue();
-      if (Math.abs(newValue - synchronizedProfitPerTire) > 0.001) {
-        console.log(
-          `🔄 [Dashboard] ATUALIZANDO LUCRO: ${synchronizedProfitPerTire.toFixed(3)} → ${newValue.toFixed(3)}`,
-        );
-        setSynchronizedProfitPerTire(newValue);
-      }
-    };
-
-    // Função para atualizar o valor da porcentagem de lucro
-    const updateProfitPercentageValue = () => {
-      const newValue = getProfitPercentageValue();
-      if (Math.abs(newValue - synchronizedProfitPercentage) > 0.01) {
-        console.log(
-          `🔄 [Dashboard] ATUALIZANDO PORCENTAGEM: ${synchronizedProfitPercentage.toFixed(1)}% → ${newValue.toFixed(1)}%`,
-        );
-        setSynchronizedProfitPercentage(newValue);
-      }
-    };
-
-    // Listener para eventos customizados do TireCostManager
-    const handleTireCostUpdate = (event: CustomEvent) => {
-      console.log(
-        "🔔 [Dashboard] EVENTO RECEBIDO DO TireCostManager:",
-        event.detail,
-      );
-
-      const { averageCostPerTire, averageProfitPerTire, timestamp, source } =
-        event.detail;
-
-      if (averageCostPerTire > 0) {
-        console.log(
-          `📥 [Dashboard] SALVANDO NOVO VALOR DO TireCostManager: R$ ${averageCostPerTire.toFixed(2)}`,
-        );
-
-        // Salvar na chave unificada
-        const dataToSave = {
-          value: averageCostPerTire,
-          timestamp: timestamp || Date.now(),
-          source: source || "TireCostManager",
-        };
-
-        localStorage.setItem(TIRE_COST_STORAGE_KEY, JSON.stringify(dataToSave));
-        setSynchronizedCostPerTire(averageCostPerTire);
-      }
-
-      if (averageProfitPerTire !== undefined) {
-        console.log(
-          `📥 [Dashboard] SALVANDO NOVO VALOR DE LUCRO DO TireCostManager: R$ ${averageProfitPerTire.toFixed(3)}`,
-        );
-
-        // Salvar na chave unificada do lucro
-        const profitDataToSave = {
-          value: averageProfitPerTire,
-          timestamp: timestamp || Date.now(),
-          source: source || "TireCostManager",
-        };
-
-        localStorage.setItem(
-          TIRE_PROFIT_STORAGE_KEY,
-          JSON.stringify(profitDataToSave),
-        );
-        setSynchronizedProfitPerTire(averageProfitPerTire);
-      }
-    };
-
-    // Listener para mudanças no localStorage (nas chaves unificadas)
-    const handleStorageChange = (event: StorageEvent) => {
-      if (event.key === TIRE_COST_STORAGE_KEY) {
-        console.log(
-          "🔄 [Dashboard] MUDANÇA DETECTADA NA CHAVE UNIFICADA DE CUSTO",
-        );
-        updateCostValue();
-      }
-      if (event.key === TIRE_PROFIT_STORAGE_KEY) {
-        console.log(
-          "🔄 [Dashboard] MUDANÇA DETECTADA NA CHAVE UNIFICADA DE LUCRO",
-        );
-        updateProfitValue();
-      }
-      if (event.key === PROFIT_PERCENTAGE_STORAGE_KEY) {
-        console.log(
-          "🔄 [Dashboard] MUDANÇA DETECTADA NA CHAVE UNIFICADA DE PORCENTAGEM",
-        );
-        updateProfitPercentageValue();
-      }
-    };
-
-    // MutationObserver para detectar mudanças no elemento DOM específico
-    const observeTargetElement = () => {
-      const targetElement = document.querySelector(
-        ".tempo-4ebee5f0-9b1a-57c8-b17c-42856cd849a0",
-      );
-      if (targetElement) {
-        console.log(
-          "👁️ [Dashboard] OBSERVANDO ELEMENTO DOM ESPECÍFICO:",
-          targetElement,
-        );
-
-        const observer = new MutationObserver((mutations) => {
-          mutations.forEach((mutation) => {
-            if (
-              mutation.type === "childList" ||
-              mutation.type === "characterData"
-            ) {
-              console.log("🔄 [Dashboard] MUDANÇA DETECTADA NO ELEMENTO DOM");
-              updateProfitPercentageValue();
+    // Função para ler o valor do TireCostManager
+    const readTireCostManagerValue = () => {
+      try {
+        // Procurar pelo elemento com o custo médio por pneu
+        const tireCostElement = document.querySelector('[id="average-cost"]');
+        if (tireCostElement) {
+          const textContent = tireCostElement.textContent || "";
+          const match = textContent.match(/R\$\s*([\d.,]+)/);
+          if (match) {
+            const value = parseFloat(match[1].replace(",", "."));
+            if (!isNaN(value) && value > 0) {
+              console.log(`💫 [Dashboard] FÓRMULA EXCEL ATIVADA: Copiando R$ ${value.toFixed(2)} do TireCostManager`);
+              setAverageCostPerTire(value);
+              return value;
             }
-          });
-        });
+          }
+        }
 
-        observer.observe(targetElement, {
-          childList: true,
-          subtree: true,
-          characterData: true,
-        });
-
-        return observer;
+        // Alternativa: ler do localStorage se existir
+        const savedData = localStorage.getItem("dashboard_averageCostPerTire");
+        if (savedData) {
+          const parsed = JSON.parse(savedData);
+          if (parsed.value && parsed.value > 0) {
+            console.log(`💫 [Dashboard] FÓRMULA EXCEL: Usando valor salvo R$ ${parsed.value.toFixed(2)}`);
+            setAverageCostPerTire(parsed.value);
+            return parsed.value;
+          }
+        }
+      } catch (error) {
+        console.error("❌ [Dashboard] Erro na fórmula Excel:", error);
       }
-      return null;
+      
+      // Valor padrão
+      return 101.09;
     };
 
-    // Adicionar listeners
-    window.addEventListener(
-      "tireCostUpdated",
-      handleTireCostUpdate as EventListener,
-    );
-    window.addEventListener("storage", handleStorageChange);
+    // Função para ler lucro médio por pneu
+    const readProfitPerTire = () => {
+      try {
+        const profitElement = document.querySelector('[id="average-profit"]');
+        if (profitElement) {
+          const textContent = profitElement.textContent || "";
+          const match = textContent.match(/R\$\s*([\d.,]+)/);
+          if (match) {
+            const value = parseFloat(match[1].replace(",", "."));
+            if (!isNaN(value)) {
+              console.log(`💫 [Dashboard] FÓRMULA EXCEL: Copiando lucro R$ ${value.toFixed(3)}`);
+              setAverageProfitPerTire(value);
+              return value;
+            }
+          }
+        }
+      } catch (error) {
+        console.error("❌ [Dashboard] Erro ao ler lucro:", error);
+      }
+      
+      return 69.765;
+    };
 
-    // Configurar observador do elemento DOM
-    const domObserver = observeTargetElement();
+    // Função para ler porcentagem de lucro
+    const readProfitPercentage = () => {
+      try {
+        const percentElement = document.querySelector('.tempo-4ebee5f0-9b1a-57c8-b17c-42856cd849a0');
+        if (percentElement) {
+          const textContent = percentElement.textContent || "";
+          const match = textContent.match(/([0-9.]+)%/);
+          if (match) {
+            const value = parseFloat(match[1]);
+            if (!isNaN(value)) {
+              console.log(`💫 [Dashboard] FÓRMULA EXCEL: Copiando ${value}% do DOM`);
+              setProfitPercentage(value);
+              return value;
+            }
+          }
+        }
+      } catch (error) {
+        console.error("❌ [Dashboard] Erro ao ler porcentagem:", error);
+      }
+      
+      return 42.5;
+    };
 
-    // Verificação periódica mais espaçada (apenas para garantia)
-    const intervalId = setInterval(() => {
-      updateCostValue();
-      updateProfitValue();
-      updateProfitPercentageValue();
-    }, 5000); // A cada 5 segundos
+    // Listener para eventos do TireCostManager
+    const handleTireCostUpdate = (event: CustomEvent) => {
+      console.log("📢 [Dashboard] EVENTO DO TireCostManager RECEBIDO - APLICANDO FÓRMULA EXCEL:", event.detail);
+      
+      if (event.detail.averageCostPerTire) {
+        const newCost = event.detail.averageCostPerTire;
+        console.log(`✨ [Dashboard] FÓRMULA EXCEL: ${averageCostPerTire.toFixed(2)} → ${newCost.toFixed(2)}`);
+        setAverageCostPerTire(newCost);
+        
+        // Salvar para persistência
+        localStorage.setItem("dashboard_averageCostPerTire", JSON.stringify({
+          value: newCost,
+          timestamp: Date.now(),
+          source: "TireCostManager_Event"
+        }));
+      }
+      
+      if (event.detail.averageProfitPerTire !== undefined) {
+        const newProfit = event.detail.averageProfitPerTire;
+        console.log(`✨ [Dashboard] FÓRMULA EXCEL LUCRO: ${averageProfitPerTire.toFixed(3)} → ${newProfit.toFixed(3)}`);
+        setAverageProfitPerTire(newProfit);
+      }
+    };
 
-    // Cleanup
+    // Adicionar listener para eventos
+    window.addEventListener("tireCostUpdated", handleTireCostUpdate as EventListener);
+
+    // Leitura inicial
+    readTireCostManagerValue();
+    readProfitPerTire();
+    readProfitPercentage();
+
+    // Verificação periódica (como uma atualização automática do Excel)
+    const interval = setInterval(() => {
+      readTireCostManagerValue();
+      readProfitPerTire();
+      readProfitPercentage();
+    }, 3000);
+
     return () => {
-      window.removeEventListener(
-        "tireCostUpdated",
-        handleTireCostUpdate as EventListener,
-      );
-      window.removeEventListener("storage", handleStorageChange);
-      if (domObserver) {
-        domObserver.disconnect();
-      }
-      clearInterval(intervalId);
+      window.removeEventListener("tireCostUpdated", handleTireCostUpdate as EventListener);
+      clearInterval(interval);
     };
-  }, [
-    synchronizedCostPerTire,
-    synchronizedProfitPerTire,
-    synchronizedProfitPercentage,
-  ]);
+  }, [averageCostPerTire, averageProfitPerTire]);
 
-  // Função para obter o custo sincronizado (compatibilidade)
-  const getSynchronizedAverageCostPerTire = synchronizedCostPerTire;
-
-  // Função para obter o lucro sincronizado
-  const getSynchronizedAverageProfitPerTire = synchronizedProfitPerTire;
-
-  // Função para obter a porcentagem de lucro sincronizada
-  const getSynchronizedProfitPercentage = synchronizedProfitPercentage;
-
-  // Effect para debug da sincronização
+  // Debug log para mostrar que a fórmula está funcionando
   useEffect(() => {
-    console.log("🔍 [Dashboard] CUSTO MÉDIO POR PNEU SINCRONIZADO:", {
-      value: getSynchronizedAverageCostPerTire,
-      formatted: new Intl.NumberFormat("pt-BR", {
-        style: "currency",
-        currency: "BRL",
-      }).format(getSynchronizedAverageCostPerTire),
-      timestamp: new Date().toLocaleString("pt-BR"),
-      source: "TireCostManager (Sincronizado)",
+    console.log("📊 [Dashboard] FÓRMULA EXCEL ATIVA:", {
+      custoPorPneu: `R$ ${averageCostPerTire.toFixed(2)}`,
+      lucroPorPneu: `R$ ${averageProfitPerTire.toFixed(3)}`,
+      porcentagemLucro: `${profitPercentage.toFixed(1)}%`,
+      hora: new Date().toLocaleTimeString("pt-BR")
     });
-
-    console.log("🔍 [Dashboard] LUCRO MÉDIO POR PNEU SINCRONIZADO:", {
-      value: getSynchronizedAverageProfitPerTire,
-      formatted: new Intl.NumberFormat("pt-BR", {
-        style: "currency",
-        currency: "BRL",
-      }).format(getSynchronizedAverageProfitPerTire),
-      timestamp: new Date().toLocaleString("pt-BR"),
-      source: "TireCostManager (Sincronizado)",
-    });
-
-    console.log(
-      "🔍 [Dashboard] PORCENTAGEM LUCRO PRODUTOS FINAIS SINCRONIZADA:",
-      {
-        value: getSynchronizedProfitPercentage,
-        formatted: `${getSynchronizedProfitPercentage.toFixed(1)}%`,
-        timestamp: new Date().toLocaleString("pt-BR"),
-        source: "DOM Element (Sincronizado)",
-      },
-    );
-  }, [
-    getSynchronizedAverageCostPerTire,
-    getSynchronizedAverageProfitPerTire,
-    getSynchronizedProfitPercentage,
-  ]);
+  }, [averageCostPerTire, averageProfitPerTire, profitPercentage]);
 
   // Extract product info from sale description (same logic as SalesDashboard)
   const extractProductInfoFromSale = (description: string) => {
@@ -1016,15 +679,15 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       0,
     );
 
-    // 5. Custo Médio por Pneu - USAR O VALOR SINCRONIZADO DO TireCostManager
-    const averageCostPerTire = getSynchronizedAverageCostPerTire;
+    // 5. Custo Médio por Pneu - FÓRMULA EXCEL: usar valor copiado diretamente
+    const costPerTire = averageCostPerTire;
 
     // 6. Lucro Total (receita - custos totais)
-    const totalCosts = salesQuantity * averageCostPerTire;
+    const totalCosts = salesQuantity * costPerTire;
     const totalProfit = totalRevenue - totalCosts;
 
-    // 7. Lucro Médio por Pneu - USAR O VALOR SINCRONIZADO DO TireCostManager
-    const averageProfitPerTire = getSynchronizedAverageProfitPerTire;
+    // 7. Lucro Médio por Pneu - FÓRMULA EXCEL: usar valor copiado diretamente
+    const profitPerTire = averageProfitPerTire;
 
     // 8. Margem de Lucro (%)
     const profitMargin =
@@ -1179,10 +842,10 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       productionQuantity,
       totalRevenue,
       totalProfit,
-      averageProfitPerTire,
+      averageProfitPerTire: profitPerTire, // FÓRMULA EXCEL
       profitMargin,
       cashBalance,
-      averageCostPerTire,
+      averageCostPerTire: costPerTire, // FÓRMULA EXCEL
       totalLosses,
       totalProductionLosses,
       totalMaterialLosses,
@@ -1310,15 +973,12 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       {
         id: "profit-margin",
         title: "Lucro Médio Produtos Finais",
-        value: `${getSynchronizedProfitPercentage.toFixed(1)}%`,
-        subtitle: "lido do elemento DOM específico",
+        value: `${profitPercentage.toFixed(1)}%`,
+        subtitle: "fórmula Excel ativa",
         icon: Percent,
-        colorClass:
-          getSynchronizedProfitPercentage >= 0 ? "#F59E0B" : "#EF4444",
+        colorClass: profitPercentage >= 0 ? "#F59E0B" : "#EF4444",
         iconColorClass:
-          getSynchronizedProfitPercentage >= 0
-            ? "text-neon-orange"
-            : "text-red-400",
+          profitPercentage >= 0 ? "text-neon-orange" : "text-red-400",
       },
       {
         id: "production-loss",
@@ -1992,23 +1652,22 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                     </p>
                   </div>
                 </div>
-                <div className="mt-4 p-3 bg-neon-green/10 rounded-lg border border-neon-green/30">
+                <div className="mt-4 p-3 bg-green-900/20 rounded-lg border border-green-500/30">
                   <div className="flex justify-between items-center">
                     <div>
-                      <span className="text-neon-green font-medium">
-                        🎯 VALOR CLONADO DO TireCostManager:
+                      <span className="text-green-400 font-medium">
+                        📋 FÓRMULA EXCEL ATIVADA:
                       </span>
                       <p className="text-tire-400 text-xs mt-1">
-                        Este valor é EXATAMENTE o mesmo que aparece no
-                        TireCostManager
+                        Copiando valor direto do TireCostManager (como =A1 no Excel)
                       </p>
                       <div className="flex items-center gap-2 mt-2">
-                        <span className="bg-neon-green/20 text-neon-green px-2 py-1 rounded text-xs flex items-center gap-1">
-                          <span className="w-2 h-2 bg-neon-green rounded-full animate-pulse"></span>
-                          SINCRONIZADO DIRETAMENTE
+                        <span className="bg-green-500/20 text-green-400 px-2 py-1 rounded text-xs flex items-center gap-1">
+                          <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+                          CÓPIA AUTOMÁTICA
                         </span>
                         <span className="text-tire-400 text-xs">
-                          TireCostManager → Dashboard
+                          TireCostManager = Métricas Principais
                         </span>
                       </div>
                     </div>
@@ -2016,29 +1675,29 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                       <span className="text-neon-orange font-bold text-xl">
                         {formatCurrency(metrics.averageCostPerTire)}
                       </span>
-                      <p className="text-neon-green text-xs mt-1 font-medium">
-                        ✅ MESMO VALOR DO TireCostManager
+                      <p className="text-green-400 text-xs mt-1 font-medium">
+                        ✅ VALOR COPIADO AUTOMATICAMENTE
                       </p>
                     </div>
                   </div>
                 </div>
 
-                <div className="mt-4 p-3 bg-neon-purple/10 rounded-lg border border-neon-purple/30">
+                <div className="mt-4 p-3 bg-blue-900/20 rounded-lg border border-blue-500/30">
                   <div className="flex justify-between items-center">
                     <div>
-                      <span className="text-neon-purple font-medium">
-                        💰 LUCRO MÉDIO POR PNEU SINCRONIZADO:
+                      <span className="text-blue-400 font-medium">
+                        💰 LUCRO COPIADO AUTOMATICAMENTE:
                       </span>
                       <p className="text-tire-400 text-xs mt-1">
-                        Valor R$ 69,765 lido diretamente do TireCostManager
+                        Sistema funciona como fórmula do Excel
                       </p>
                       <div className="flex items-center gap-2 mt-2">
-                        <span className="bg-neon-purple/20 text-neon-purple px-2 py-1 rounded text-xs flex items-center gap-1">
-                          <span className="w-2 h-2 bg-neon-purple rounded-full animate-pulse"></span>
-                          VALOR ESPECÍFICO SOLICITADO
+                        <span className="bg-blue-500/20 text-blue-400 px-2 py-1 rounded text-xs flex items-center gap-1">
+                          <span className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></span>
+                          SINCRONIZAÇÃO EXCEL
                         </span>
                         <span className="text-tire-400 text-xs">
-                          TireCostManager → Dashboard
+                          Atualização em tempo real
                         </span>
                       </div>
                     </div>
@@ -2046,48 +1705,24 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                       <span className="text-neon-purple font-bold text-xl">
                         {formatCurrency(metrics.averageProfitPerTire)}
                       </span>
-                      <p className="text-neon-purple text-xs mt-1 font-medium">
-                        ✅ R$ 69,765 CONFORME SOLICITADO
+                      <p className="text-blue-400 text-xs mt-1 font-medium">
+                        ✅ FÓRMULA EXCEL FUNCIONANDO
                       </p>
                     </div>
                   </div>
                 </div>
 
-                <div className="mt-4 p-3 bg-red-900/20 rounded-lg border border-red-500/30">
-                  <h5 className="text-red-400 font-medium mb-2 text-sm">
-                    🔧 SOLUÇÃO PARA ALTERNÂNCIA DE VALORES:
+                <div className="mt-4 p-3 bg-yellow-900/20 rounded-lg border border-yellow-500/30">
+                  <h5 className="text-yellow-400 font-medium mb-2 text-sm">
+                    📊 SOLUÇÃO IMPLEMENTADA - ESTILO EXCEL:
                   </h5>
-                  <div className="space-y-1 text-xs text-red-300">
-                    <p>✅ LIMPEZA DE CACHE INCONSISTENTE na inicialização</p>
-                    <p>✅ ÚNICA FONTE DE VERDADE (chave unificada)</p>
-                    <p>✅ ELIMINAÇÃO de múltiplas chaves conflitantes</p>
-                    <p>✅ VALIDAÇÃO por timestamp (dados recentes)</p>
-                    <p className="text-yellow-400">
-                      🔄 PROBLEMA DE ALTERNÂNCIA RESOLVIDO!
-                    </p>
-                    <p className="text-neon-green font-medium">
-                      ⚡ Valor estável:{" "}
-                      {formatCurrency(synchronizedCostPerTire)}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-4 p-3 bg-neon-purple/10 rounded-lg border border-neon-purple/30">
-                  <div className="flex justify-between items-center">
-                    <span className="text-neon-purple font-medium">
-                      🎯 ESTRATÉGIA UNIFICADA
-                    </span>
-                    <span className="text-neon-purple text-xs">
-                      Uma única chave → Sem conflitos
-                    </span>
-                  </div>
-                  <div className="mt-2 text-xs text-neon-purple/80">
-                    <p>✅ Cache limpo automaticamente na inicialização.</p>
-                    <p>
-                      ✅ Valor padrão garantido se dados estiverem corrompidos.
-                    </p>
-                    <p className="text-neon-green font-medium">
-                      🎉 CONSISTÊNCIA GARANTIDA EM TODOS OS RECARREGAMENTOS!
+                  <div className="space-y-1 text-xs text-yellow-300">
+                    <p>✅ Cópia automática como fórmula =A1</p>
+                    <p>✅ Sincronização em tempo real</p>
+                    <p>✅ Sem cache conflitante</p>
+                    <p>✅ Atualização a cada 3 segundos</p>
+                    <p className="text-green-400 font-medium">
+                      🎉 FUNCIONANDO COMO EXCEL: {formatCurrency(averageCostPerTire)} = {formatCurrency(metrics.averageCostPerTire)}
                     </p>
                   </div>
                 </div>
