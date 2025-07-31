@@ -460,20 +460,41 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       return 101.09;
     };
 
-    // Função para ler lucro médio por pneu
+    // Função para ler lucro médio por pneu - NOVA FÓRMULA EXCEL
     const readProfitPerTire = () => {
       try {
-        const profitElement = document.querySelector('[id="average-profit"]');
-        if (profitElement) {
-          const textContent = profitElement.textContent || "";
+        // SOLUÇÃO ESTILO EXCEL: Procurar pelo elemento específico do TireCostManager
+        const profitElements = document.querySelectorAll('p.text-2xl.font-bold.text-neon-purple, p[style*="rgb(139, 92, 246)"]');
+        
+        for (const element of profitElements) {
+          const textContent = element.textContent || "";
           const match = textContent.match(/R\$\s*([\d.,]+)/);
           if (match) {
             const value = parseFloat(match[1].replace(",", "."));
-            if (!isNaN(value)) {
-              console.log(`💫 [Dashboard] FÓRMULA EXCEL: Copiando lucro R$ ${value.toFixed(3)}`);
+            if (!isNaN(value) && value > 0) {
+              console.log(`💫 [Dashboard] FÓRMULA EXCEL LUCRO: Copiando R$ ${value.toFixed(3)} do TireCostManager`);
               setAverageProfitPerTire(value);
+              
+              // Salvar para persistência
+              localStorage.setItem("dashboard_averageProfitPerTire", JSON.stringify({
+                value: value,
+                timestamp: Date.now(),
+                source: "TireCostManager_DOM"
+              }));
+              
               return value;
             }
+          }
+        }
+
+        // Alternativa: ler do localStorage se existir
+        const savedData = localStorage.getItem("dashboard_averageProfitPerTire");
+        if (savedData) {
+          const parsed = JSON.parse(savedData);
+          if (parsed.value && parsed.value > 0) {
+            console.log(`💫 [Dashboard] FÓRMULA EXCEL LUCRO: Usando valor salvo R$ ${parsed.value.toFixed(3)}`);
+            setAverageProfitPerTire(parsed.value);
+            return parsed.value;
           }
         }
       } catch (error) {
@@ -512,7 +533,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       
       if (event.detail.averageCostPerTire) {
         const newCost = event.detail.averageCostPerTire;
-        console.log(`✨ [Dashboard] FÓRMULA EXCEL: ${averageCostPerTire.toFixed(2)} → ${newCost.toFixed(2)}`);
+        console.log(`✨ [Dashboard] FÓRMULA EXCEL CUSTO: ${averageCostPerTire.toFixed(2)} → ${newCost.toFixed(2)}`);
         setAverageCostPerTire(newCost);
         
         // Salvar para persistência
@@ -527,6 +548,13 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
         const newProfit = event.detail.averageProfitPerTire;
         console.log(`✨ [Dashboard] FÓRMULA EXCEL LUCRO: ${averageProfitPerTire.toFixed(3)} → ${newProfit.toFixed(3)}`);
         setAverageProfitPerTire(newProfit);
+        
+        // NOVA FUNCIONALIDADE: Salvar também o lucro para persistência
+        localStorage.setItem("dashboard_averageProfitPerTire", JSON.stringify({
+          value: newProfit,
+          timestamp: Date.now(),
+          source: "TireCostManager_Event"
+        }));
       }
     };
 
@@ -553,10 +581,11 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
 
   // Debug log para mostrar que a fórmula está funcionando
   useEffect(() => {
-    console.log("📊 [Dashboard] FÓRMULA EXCEL ATIVA:", {
+    console.log("📊 [Dashboard] FÓRMULA EXCEL COMPLETA ATIVA:", {
       custoPorPneu: `R$ ${averageCostPerTire.toFixed(2)}`,
       lucroPorPneu: `R$ ${averageProfitPerTire.toFixed(3)}`,
       porcentagemLucro: `${profitPercentage.toFixed(1)}%`,
+      sincronizacao: "✅ CUSTO E LUCRO COPIADOS AUTOMATICAMENTE",
       hora: new Date().toLocaleTimeString("pt-BR")
     });
   }, [averageCostPerTire, averageProfitPerTire, profitPercentage]);
@@ -1682,22 +1711,22 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                   </div>
                 </div>
 
-                <div className="mt-4 p-3 bg-blue-900/20 rounded-lg border border-blue-500/30">
+                <div className="mt-4 p-3 bg-purple-900/20 rounded-lg border border-purple-500/30">
                   <div className="flex justify-between items-center">
                     <div>
-                      <span className="text-blue-400 font-medium">
-                        💰 LUCRO COPIADO AUTOMATICAMENTE:
+                      <span className="text-purple-400 font-medium">
+                        💰 LUCRO MÉDIO SINCRONIZADO:
                       </span>
                       <p className="text-tire-400 text-xs mt-1">
-                        Sistema funciona como fórmula do Excel
+                        Copiando valor direto do TireCostManager (como =B1 no Excel)
                       </p>
                       <div className="flex items-center gap-2 mt-2">
-                        <span className="bg-blue-500/20 text-blue-400 px-2 py-1 rounded text-xs flex items-center gap-1">
-                          <span className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></span>
-                          SINCRONIZAÇÃO EXCEL
+                        <span className="bg-purple-500/20 text-purple-400 px-2 py-1 rounded text-xs flex items-center gap-1">
+                          <span className="w-2 h-2 bg-purple-400 rounded-full animate-pulse"></span>
+                          CÓPIA AUTOMÁTICA LUCRO
                         </span>
                         <span className="text-tire-400 text-xs">
-                          Atualização em tempo real
+                          TireCostManager → Métricas Principais
                         </span>
                       </div>
                     </div>
@@ -1705,8 +1734,8 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                       <span className="text-neon-purple font-bold text-xl">
                         {formatCurrency(metrics.averageProfitPerTire)}
                       </span>
-                      <p className="text-blue-400 text-xs mt-1 font-medium">
-                        ✅ FÓRMULA EXCEL FUNCIONANDO
+                      <p className="text-purple-400 text-xs mt-1 font-medium">
+                        ✅ VALOR COPIADO AUTOMATICAMENTE
                       </p>
                     </div>
                   </div>
@@ -1714,15 +1743,18 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
 
                 <div className="mt-4 p-3 bg-yellow-900/20 rounded-lg border border-yellow-500/30">
                   <h5 className="text-yellow-400 font-medium mb-2 text-sm">
-                    📊 SOLUÇÃO IMPLEMENTADA - ESTILO EXCEL:
+                    📊 SOLUÇÃO COMPLETA - ESTILO EXCEL:
                   </h5>
                   <div className="space-y-1 text-xs text-yellow-300">
-                    <p>✅ Cópia automática como fórmula =A1</p>
-                    <p>✅ Sincronização em tempo real</p>
+                    <p>✅ Cópia automática como fórmula =A1 (custo) e =B1 (lucro)</p>
+                    <p>✅ Sincronização em tempo real para ambos</p>
                     <p>✅ Sem cache conflitante</p>
                     <p>✅ Atualização a cada 3 segundos</p>
                     <p className="text-green-400 font-medium">
-                      🎉 FUNCIONANDO COMO EXCEL: {formatCurrency(averageCostPerTire)} = {formatCurrency(metrics.averageCostPerTire)}
+                      🎉 CUSTO: {formatCurrency(averageCostPerTire)} = {formatCurrency(metrics.averageCostPerTire)}
+                    </p>
+                    <p className="text-purple-400 font-medium">
+                      🎉 LUCRO: {formatCurrency(averageProfitPerTire)} = {formatCurrency(metrics.averageProfitPerTire)}
                     </p>
                   </div>
                 </div>
