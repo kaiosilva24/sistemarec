@@ -65,7 +65,7 @@ const ProductStock = ({
   const [selectedItemForLevels, setSelectedItemForLevels] = useState<string>("");
   const [minLevel, setMinLevel] = useState("");
   const [localProductType, setLocalProductType] = useState<"final" | "resale">("final");
-  const [mainElementValue, setMainElementValue] = useState(87.00);
+  const [mainElementValue, setMainElementValue] = useState(0);
 
   const activeProducts = useMemo(() => products.filter((p) => !p.archived), [products]);
   const activeResaleProducts = useMemo(() => resaleProducts.filter((p) => !p.archived), [resaleProducts]);
@@ -75,25 +75,73 @@ const ProductStock = ({
     [key: string]: number;
   }>({});
 
+  // Função para ler dinamicamente o valor do elemento principal no DOM
+  const readMainElementValue = useCallback((): number => {
+    try {
+      // Buscar o elemento que contém "Custo Médio por Pneu" e tem o valor dinâmico
+      const mainElements = document.querySelectorAll('p.text-2xl.font-bold');
+      
+      for (const element of mainElements) {
+        const textContent = element.textContent || '';
+        // Procurar por valores em formato R$ XX,XX
+        const valueMatch = textContent.match(/R\$\s*(\d+(?:,\d{2})?)/);
+        if (valueMatch) {
+          // Converter de formato brasileiro (XX,XX) para número
+          const valueStr = valueMatch[1].replace(',', '.');
+          const value = parseFloat(valueStr);
+          
+          console.log(`🎯 [ProductStock] Valor lido do elemento principal: R$ ${value.toFixed(2)}`);
+          return value;
+        }
+      }
+      
+      // Fallback: tentar encontrar qualquer elemento com valor monetário
+      const allElements = document.querySelectorAll('*');
+      for (const element of allElements) {
+        const textContent = element.textContent || '';
+        if (textContent.includes('Custo Médio por Pneu')) {
+          const parent = element.closest('div');
+          if (parent) {
+            const valueElements = parent.querySelectorAll('p.text-2xl, p[style*="color"]');
+            for (const valueEl of valueElements) {
+              const valueMatch = (valueEl.textContent || '').match(/R\$\s*(\d+(?:,\d{2})?)/);
+              if (valueMatch) {
+                const valueStr = valueMatch[1].replace(',', '.');
+                const value = parseFloat(valueStr);
+                console.log(`🎯 [ProductStock] Valor encontrado via fallback: R$ ${value.toFixed(2)}`);
+                return value;
+              }
+            }
+          }
+        }
+      }
+      
+      console.warn(`⚠️ [ProductStock] Elemento principal não encontrado, usando fallback`);
+      return 0;
+    } catch (error) {
+      console.error(`❌ [ProductStock] Erro ao ler elemento principal:`, error);
+      return 0;
+    }
+  }, []);
+
   // Função para sincronizar com o elemento principal (fonte única da verdade)
   const syncWithMainElement = useCallback((): number => {
-    // SEMPRE retornar o valor correto de R$ 87,00 conforme especificado
-    const correctValue = 87.00;
-    console.log(`🎯 [ProductStock] Valor correto do elemento principal: R$ ${correctValue.toFixed(2)}`);
-    return correctValue;
-  }, []);
+    const dynamicValue = readMainElementValue();
+    console.log(`🔄 [ProductStock] Sincronização dinâmica: R$ ${dynamicValue.toFixed(2)}`);
+    return dynamicValue;
+  }, [readMainElementValue]);
 
   // Função para obter o custo específico por produto - SEMPRE SINCRONIZADO COM ELEMENTO PRINCIPAL
   const getSpecificProductCost = useCallback((productName: string) => {
     console.log(`🔍 [ProductStock] Buscando custo específico para produto: "${productName}"`);
 
-    // SEMPRE usar o valor exato de R$ 87,00 do elemento principal
-    const mainElementValue = 87.00; // Valor fixo conforme elemento principal
+    // Usar o valor dinâmico do elemento principal
+    const dynamicValue = syncWithMainElement();
 
-    console.log(`✅ [ProductStock] Usando valor FIXO sincronizado para "${productName}": R$ ${mainElementValue.toFixed(2)}`);
+    console.log(`✅ [ProductStock] Usando custo DINÂMICO sincronizado para "${productName}": R$ ${dynamicValue.toFixed(2)}`);
 
-    return mainElementValue;
-  }, []);
+    return dynamicValue;
+  }, [syncWithMainElement]);
 
   // Função para limpar cache e forçar nova busca
   const clearCostCache = useCallback(() => {
@@ -101,12 +149,12 @@ const ProductStock = ({
     setProductCostCache({});
   }, []);
 
-  // Função para escrever valor médio de custo por pneu no elemento input
-  const writeAverageCostToInput = useCallback((value: number = 87.00) => {
+  // Função para escrever valor médio de custo por pneu no elemento input - DINÂMICO
+  const writeAverageCostToInput = useCallback((overrideValue?: number) => {
     try {
-      // Garantir que sempre usa o valor correto de R$ 87,00
-      const correctValue = 87.00;
-      const formattedValue = `R$ ${correctValue.toFixed(2)}`;
+      // Usar valor override ou ler dinamicamente do elemento principal
+      const dynamicValue = overrideValue !== undefined ? overrideValue : syncWithMainElement();
+      const formattedValue = `R$ ${dynamicValue.toFixed(2)}`;
       
       // Buscar pelo elemento input específico que contém "R$" e é readonly
       const inputElements = document.querySelectorAll('input[readonly]');
@@ -114,10 +162,10 @@ const ProductStock = ({
       for (const input of inputElements) {
         const inputElement = input as HTMLInputElement;
         if (inputElement.value && inputElement.value.includes('R$')) {
-          // Sempre definir o valor correto de R$ 87,00
+          // Definir o valor dinâmico sincronizado
           inputElement.value = formattedValue;
           
-          console.log(`✅ [ProductStock] Input corrigido para valor correto: ${formattedValue}`);
+          console.log(`✅ [ProductStock] Input sincronizado dinamicamente: ${formattedValue}`);
           
           // Disparar evento para notificar mudança
           const event = new Event('input', { bubbles: true });
@@ -128,35 +176,63 @@ const ProductStock = ({
     } catch (error) {
       console.error("❌ [ProductStock] Erro ao sincronizar input:", error);
     }
-  }, []);
+  }, [syncWithMainElement]);
 
-  // Effect para garantir que o valor sempre seja R$ 87,00
+  // Effect para sincronização dinâmica contínua
   useEffect(() => {
-    const correctValue = 87.00;
-    
-    const forceCorrectValue = () => {
-      // Sempre definir o valor correto
-      writeAverageCostToInput(correctValue);
+    const syncValues = () => {
+      // Ler o valor atual do elemento principal
+      const currentMainValue = syncWithMainElement();
       
-      // Garantir que o estado também esteja correto
-      if (Math.abs(correctValue - mainElementValue) > 0.01) {
-        setMainElementValue(correctValue);
-        console.log(`🔄 [ProductStock] Valor corrigido para: R$ ${correctValue.toFixed(2)}`);
+      // Sincronizar o input com o valor principal
+      writeAverageCostToInput(currentMainValue);
+      
+      // Atualizar o estado interno se necessário
+      if (Math.abs(currentMainValue - mainElementValue) > 0.01) {
+        setMainElementValue(currentMainValue);
+        console.log(`🔄 [ProductStock] Estado interno atualizado para: R$ ${currentMainValue.toFixed(2)}`);
       }
     };
 
-    // Aplicar imediatamente
-    forceCorrectValue();
+    // Aplicar sincronização imediatamente
+    syncValues();
 
-    // Verificar periodicamente para garantir que o valor permaneça correto
+    // Verificar periodicamente para detectar mudanças no elemento principal
     const interval = setInterval(() => {
-      forceCorrectValue();
-    }, 2000);
+      syncValues();
+    }, 1500); // Verificar a cada 1.5 segundos
+
+    // Observer para detectar mudanças no DOM
+    const observer = new MutationObserver((mutations) => {
+      let shouldSync = false;
+      mutations.forEach((mutation) => {
+        if (mutation.type === 'childList' || mutation.type === 'characterData') {
+          // Verificar se alguma mudança afeta elementos com valores monetários
+          const target = mutation.target as Element;
+          if (target.textContent && target.textContent.includes('R$')) {
+            shouldSync = true;
+          }
+        }
+      });
+      
+      if (shouldSync) {
+        console.log('🔍 [ProductStock] Mudança detectada no DOM, sincronizando...');
+        setTimeout(() => syncValues(), 100); // Delay para garantir que o DOM foi atualizado
+      }
+    });
+
+    // Observar mudanças no documento
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      characterData: true
+    });
 
     return () => {
       clearInterval(interval);
+      observer.disconnect();
     };
-  }, [mainElementValue, writeAverageCostToInput]);
+  }, [mainElementValue, writeAverageCostToInput, syncWithMainElement]);
 
   // Get all available products based on local type filter
   const getAllAvailableProducts = useCallback(() => {
