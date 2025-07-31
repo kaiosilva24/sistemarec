@@ -30,6 +30,7 @@ import {
   Target,
   Percent,
   Calculator,
+  AlertTriangle,
 } from "lucide-react";
 import {
   BarChart,
@@ -54,6 +55,7 @@ import type {
   WarrantyEntry,
 } from "@/types/financial";
 import { useCostCalculationOptions } from "@/hooks/useDataPersistence";
+import { formatCurrency } from "@/lib/utils";
 
 interface PresumedProfitManagerProps {
   isLoading?: boolean;
@@ -950,7 +952,8 @@ const PresumedProfitManager = ({
           `📅 [PresumedProfitManager] Filtro 'últimos 7 dias': ${filteredEntries.length} vendas de produtos finais com receitas`,
         );
         break;
-      case "last30days":
+```text
+        case "last30days":
         const last30Days = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
         filteredEntries = filteredEntries.filter((entry) => {
           // CORREÇÃO: Usar transaction_date em vez de date
@@ -958,7 +961,7 @@ const PresumedProfitManager = ({
           return entryDate >= last30Days && entryDate <= today;
         });
         console.log(
-          `[PresumedProfitManager] Filtro 'últimos 30 dias': ${filteredEntries.length} vendas de produtos finais com receitas`,
+          `📅 [PresumedProfitManager] Filtro 'últimos 30 dias': ${filteredEntries.length} vendas de produtos finais com receitas`,
         );
         break;
       case "custom":
@@ -1082,7 +1085,41 @@ const PresumedProfitManager = ({
     return null;
   };
 
-  // Calculate profit data for each product
+  // Effect para disparar eventos de sincronização com o dashboard
+  useEffect(() => {
+    if (summaryMetrics.averageCostPerTire && summaryMetrics.averageProfitPerTire) {
+      console.log("📡 [PresumedProfitManager] Disparando evento de sincronização:", {
+        averageCostPerTire: summaryMetrics.averageCostPerTire,
+        averageProfitPerTire: summaryMetrics.averageProfitPerTire,
+        timestamp: Date.now()
+      });
+
+      // Salvar no localStorage para o dashboard
+      localStorage.setItem("presumedProfitManager_averageCostPerTire", JSON.stringify({
+        value: summaryMetrics.averageCostPerTire,
+        timestamp: Date.now(),
+        source: "PresumedProfitManager"
+      }));
+
+      localStorage.setItem("presumedProfitManager_averageProfitPerTire", JSON.stringify({
+        value: summaryMetrics.averageProfitPerTire,
+        timestamp: Date.now(),
+        source: "PresumedProfitManager"
+      }));
+
+      // Disparar evento customizado
+      window.dispatchEvent(new CustomEvent("presumedProfitUpdated", {
+        detail: {
+          averageCostPerTire: summaryMetrics.averageCostPerTire,
+          averageProfitPerTire: summaryMetrics.averageProfitPerTire,
+          timestamp: Date.now(),
+          source: "PresumedProfitManager"
+        }
+      }));
+    }
+  }, [summaryMetrics.averageCostPerTire, summaryMetrics.averageProfitPerTire]);
+
+  // Calculate profit data for final products only
   const profitData = useMemo(() => {
     console.log(
       "🔄 [PresumedProfitManager] INICIANDO cálculo de dados de lucro - APENAS PRODUTOS FINAIS COM RECEITAS CADASTRADAS",
@@ -1386,6 +1423,8 @@ const PresumedProfitManager = ({
     const overallProfitMargin =
       totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
 
+    const averageCostPerTire = totalSales > 0 ? totalCost / totalSales : 0;
+
     return {
       totalRevenue,
       totalCost,
@@ -1393,54 +1432,9 @@ const PresumedProfitManager = ({
       totalSales,
       averageProfitPerTire,
       overallProfitMargin,
+      averageCostPerTire,
     };
   }, [profitData]);
-
-  // Effect para disparar evento quando o lucro médio por pneu mudar - SINCRONIZAÇÃO COM DASHBOARD MELHORADA
-  useEffect(() => {
-    console.log("🔄 [PresumedProfitManager] VERIFICANDO MUDANÇAS NO LUCRO para sincronização:", {
-      averageProfitPerTire: summaryMetrics.averageProfitPerTire,
-      totalSales: summaryMetrics.totalSales,
-      totalProfit: summaryMetrics.totalProfit,
-      timestamp: new Date().toISOString()
-    });
-
-    // SEMPRE disparar evento, mesmo se o valor for 0 (para limpar o dashboard)
-    const synchronizedProfitData = {
-      averageProfitPerTire: summaryMetrics.averageProfitPerTire,
-      totalProfit: summaryMetrics.totalProfit,
-      totalSales: summaryMetrics.totalSales,
-      overallProfitMargin: summaryMetrics.overallProfitMargin,
-      lastUpdated: new Date().toISOString(),
-      source: "PresumedProfitManager",
-      timestamp: Date.now(),
-    };
-
-    // Salvar no localStorage para persistência SEMPRE
-    localStorage.setItem(
-      "presumedProfitManager_synchronizedData",
-      JSON.stringify(synchronizedProfitData),
-    );
-
-    // Disparar evento customizado para notificar o dashboard SEMPRE
-    setTimeout(() => {
-      window.dispatchEvent(
-        new CustomEvent("profitUpdated", {
-          detail: {
-            averageProfitPerTire: summaryMetrics.averageProfitPerTire,
-            totalProfit: summaryMetrics.totalProfit,
-            totalSales: summaryMetrics.totalSales,
-            profitMargin: summaryMetrics.overallProfitMargin,
-            timestamp: Date.now(),
-            source: "PresumedProfitManager",
-          },
-        }),
-      );
-      
-      console.log("✅ [PresumedProfitManager] EVENTO DISPARADO - Valor sincronizado:", summaryMetrics.averageProfitPerTire);
-    }, 100); // Pequeno delay para garantir que o DOM seja atualizado primeiro
-
-  }, [summaryMetrics.averageProfitPerTire, summaryMetrics.totalProfit, summaryMetrics.totalSales, summaryMetrics.overallProfitMargin]);
 
   if (isLoading) {
     return (
@@ -1553,26 +1547,28 @@ const PresumedProfitManager = ({
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <Card className="bg-factory-800/50 border-tire-600/30">
+        <Card className="bg-factory-800/50 border-tire-600/30" data-component="presumed-profit-manager">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-tire-300 text-sm">Receita Total</p>
-                <p className="text-2xl font-bold text-neon-green">
-                  R${" "}
-                  {summaryMetrics.totalRevenue.toLocaleString("pt-BR", {
-                    minimumFractionDigits: 2,
-                  })}
+                <p className="text-tire-300 text-sm">Custo Médio por Pneu</p>
+                <p 
+                  className="text-2xl font-bold" 
+                  style={{color: "rgb(245, 158, 11)"}}
+                  data-value="average-cost-per-tire"
+                  id="presumed-profit-average-cost"
+                >
+                  {formatCurrency(summaryMetrics.averageCostPerTire)}
                 </p>
               </div>
-              <div className="text-neon-green">
-                <DollarSign className="h-8 w-8" />
+              <div className="text-neon-orange">
+                <AlertTriangle className="h-8 w-8" />
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="bg-factory-800/50 border-tire-600/30">
+        <Card className="bg-factory-800/50 border-tire-600/30" data-component="presumed-profit-manager">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
@@ -1591,18 +1587,18 @@ const PresumedProfitManager = ({
           </CardContent>
         </Card>
 
-        <Card className="bg-factory-800/50 border-tire-600/30">
+        <Card className="bg-factory-800/50 border-tire-600/30" data-component="presumed-profit-manager">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-tire-300 text-sm">
-                  Lucro Médio por Produto Final
-                </p>
-                <p className="text-2xl font-bold text-neon-purple">
-                  R${" "}
-                  {summaryMetrics.averageProfitPerTire.toLocaleString("pt-BR", {
-                    minimumFractionDigits: 2,
-                  })}
+                <p className="text-tire-300 text-sm">Lucro Médio por Pneu</p>
+                <p 
+                  className="text-2xl font-bold" 
+                  style={{color: "rgb(139, 92, 246)"}}
+                  data-value="average-profit-per-tire"
+                  id="presumed-profit-average-profit"
+                >
+                  {formatCurrency(summaryMetrics.averageProfitPerTire)}
                 </p>
               </div>
               <div className="text-neon-purple">

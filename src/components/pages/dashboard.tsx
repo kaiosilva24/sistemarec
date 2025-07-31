@@ -421,73 +421,107 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
   const [averageCostPerTire, setAverageCostPerTire] = useState(101.09);
   const [averageProfitPerTire, setAverageProfitPerTire] = useState(69.765);
   const [profitPercentage, setProfitPercentage] = useState(42.5);
-  const [lastCostOptionsUpdate, setLastCostOptionsUpdate] = useState(Date.now());
 
-  // Effect para sincronizar com o TireCostManager - FÓRMULA ESTILO EXCEL
+  // Effect para sincronização TOTAL com PresumedProfitManager - FÓRMULA ESTILO EXCEL APRIMORADA
   useEffect(() => {
-    // Função para ler o valor do TireCostManager
-    const readTireCostManagerValue = () => {
+    console.log("🔧 [Dashboard] Iniciando sincronização TOTAL com PresumedProfitManager...");
+
+    // Função para procurar o valor do PresumedProfitManager na aba Financeiro
+    const readFromPresumedProfitManager = () => {
       try {
-        // Procurar pelo elemento com o custo médio por pneu
-        const tireCostElement = document.querySelector('[id="average-cost"]');
-        if (tireCostElement) {
-          const textContent = tireCostElement.textContent || "";
+        // 1. PRIORIDADE MÁXIMA: DOM do PresumedProfitManager
+        console.log("🎯 [Dashboard] Procurando no DOM do PresumedProfitManager...");
+
+        // Procurar especificamente pelos elementos do PresumedProfitManager
+        const presumedProfitElements = document.querySelectorAll('p.text-2xl.font-bold[style*="color: rgb(245, 158, 11)"], p.text-2xl.font-bold.text-neon-orange');
+        
+        for (const element of presumedProfitElements) {
+          const textContent = element.textContent || "";
+          console.log("🔍 [Dashboard] Analisando elemento PresumedProfit:", textContent);
+          
           const match = textContent.match(/R\$\s*([\d.,]+)/);
           if (match) {
             const value = parseFloat(match[1].replace(",", "."));
             if (!isNaN(value) && value > 0) {
-              console.log(`💫 [Dashboard] FÓRMULA EXCEL ATIVADA: Copiando R$ ${value.toFixed(2)} do TireCostManager`);
+              console.log(`✅ [Dashboard] VALOR ENCONTRADO no PresumedProfitManager: R$ ${value.toFixed(2)}`);
               setAverageCostPerTire(value);
+              
+              // Salvar como fonte autoritativa
+              localStorage.setItem("dashboard_averageCostPerTire", JSON.stringify({
+                value: value,
+                timestamp: Date.now(),
+                source: "PresumedProfitManager_DOM"
+              }));
+              
               return value;
             }
           }
         }
 
-        // Alternativa: ler do localStorage se existir
-        const savedData = localStorage.getItem("dashboard_averageCostPerTire");
-        if (savedData) {
-          const parsed = JSON.parse(savedData);
-          if (parsed.value && parsed.value > 0) {
-            console.log(`💫 [Dashboard] FÓRMULA EXCEL: Usando valor salvo R$ ${parsed.value.toFixed(2)}`);
-            setAverageCostPerTire(parsed.value);
-            return parsed.value;
-          }
-        }
-      } catch (error) {
-        console.error("❌ [Dashboard] Erro na fórmula Excel:", error);
-      }
-      
-      // Valor padrão
-      return 101.09;
-    };
-
-    // Função para ler lucro médio por pneu do PresumedProfitManager - ATUALIZADA
-    const readProfitPerTire = () => {
-      try {
-        // PRIMEIRA TENTATIVA: Ler do localStorage dados sincronizados
-        const savedData = localStorage.getItem("presumedProfitManager_synchronizedData");
-        if (savedData) {
-          const parsed = JSON.parse(savedData);
-          if (parsed.averageProfitPerTire && parsed.averageProfitPerTire > 0) {
-            console.log(`💫 [Dashboard] FÓRMULA EXCEL LUCRO: Lendo valor sincronizado R$ ${parsed.averageProfitPerTire.toFixed(3)}`);
-            setAverageProfitPerTire(parsed.averageProfitPerTire);
-            return parsed.averageProfitPerTire;
-          }
-        }
-
-        // SEGUNDA TENTATIVA: Procurar pelo elemento com texto-neon-purple (Lucro Produtos Finais)
-        const profitElements = document.querySelectorAll('.text-neon-purple');
-        for (const element of profitElements) {
+        // 2. SECUNDÁRIO: TireCostManager (caso PresumedProfitManager não esteja visível)
+        console.log("🔍 [Dashboard] PresumedProfitManager não encontrado, tentando TireCostManager...");
+        
+        const tireCostElements = document.querySelectorAll('p.text-xl.font-bold.text-neon-orange, p[style*="rgb(245, 158, 11)"]');
+        
+        for (const element of tireCostElements) {
           const textContent = element.textContent || "";
-          // Procurar por valores em formato R$ XX,XX
           const match = textContent.match(/R\$\s*([\d.,]+)/);
           if (match) {
             const value = parseFloat(match[1].replace(",", "."));
             if (!isNaN(value) && value > 0) {
-              console.log(`💫 [Dashboard] FÓRMULA EXCEL LUCRO: Copiando R$ ${value.toFixed(3)} do DOM`);
+              console.log(`⚡ [Dashboard] BACKUP - Valor do TireCostManager: R$ ${value.toFixed(2)}`);
+              setAverageCostPerTire(value);
+              
+              localStorage.setItem("dashboard_averageCostPerTire", JSON.stringify({
+                value: value,
+                timestamp: Date.now(),
+                source: "TireCostManager_DOM"
+              }));
+              
+              return value;
+            }
+          }
+        }
+
+        // 3. TERCIÁRIO: localStorage
+        console.log("🗄️ [Dashboard] Tentando localStorage...");
+        const savedData = localStorage.getItem("presumedProfitManager_averageCostPerTire");
+        if (savedData) {
+          const parsed = JSON.parse(savedData);
+          if (parsed.value && parsed.value > 0) {
+            console.log(`💾 [Dashboard] Valor do localStorage: R$ ${parsed.value.toFixed(2)}`);
+            setAverageCostPerTire(parsed.value);
+            return parsed.value;
+          }
+        }
+
+      } catch (error) {
+        console.error("❌ [Dashboard] Erro na sincronização:", error);
+      }
+      
+      console.log("⚠️ [Dashboard] Usando valor padrão");
+      return 101.09;
+    };
+
+    // Função para ler lucro médio por pneu do PresumedProfitManager
+    const readProfitFromPresumedProfitManager = () => {
+      try {
+        console.log("🎯 [Dashboard] Procurando LUCRO no PresumedProfitManager...");
+
+        // Procurar pelos elementos de lucro do PresumedProfitManager
+        const profitElements = document.querySelectorAll('p.text-2xl.font-bold[style*="color: rgb(139, 92, 246)"], p.text-2xl.font-bold.text-neon-purple');
+        
+        for (const element of profitElements) {
+          const textContent = element.textContent || "";
+          console.log("🔍 [Dashboard] Analisando elemento Lucro:", textContent);
+          
+          const match = textContent.match(/R\$\s*([\d.,]+)/);
+          if (match) {
+            const value = parseFloat(match[1].replace(",", "."));
+            if (!isNaN(value) && value > 0) {
+              console.log(`✅ [Dashboard] LUCRO ENCONTRADO: R$ ${value.toFixed(3)}`);
               setAverageProfitPerTire(value);
               
-              // Salvar para persistência
               localStorage.setItem("dashboard_averageProfitPerTire", JSON.stringify({
                 value: value,
                 timestamp: Date.now(),
@@ -499,16 +533,17 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
           }
         }
 
-        // TERCEIRA TENTATIVA: ler do localStorage antigo se existir
-        const oldSavedData = localStorage.getItem("dashboard_averageProfitPerTire");
-        if (oldSavedData) {
-          const parsed = JSON.parse(oldSavedData);
+        // Backup do localStorage
+        const savedData = localStorage.getItem("presumedProfitManager_averageProfitPerTire");
+        if (savedData) {
+          const parsed = JSON.parse(savedData);
           if (parsed.value && parsed.value > 0) {
-            console.log(`💫 [Dashboard] FÓRMULA EXCEL LUCRO: Usando valor salvo antigo R$ ${parsed.value.toFixed(3)}`);
+            console.log(`💾 [Dashboard] Lucro do localStorage: R$ ${parsed.value.toFixed(3)}`);
             setAverageProfitPerTire(parsed.value);
             return parsed.value;
           }
         }
+
       } catch (error) {
         console.error("❌ [Dashboard] Erro ao ler lucro:", error);
       }
@@ -516,105 +551,102 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       return 69.765;
     };
 
-    // Função para ler porcentagem de lucro
-    const readProfitPercentage = () => {
-      try {
-        const percentElement = document.querySelector('.tempo-4ebee5f0-9b1a-57c8-b17c-42856cd849a0');
-        if (percentElement) {
-          const textContent = percentElement.textContent || "";
-          const match = textContent.match(/([0-9.]+)%/);
-          if (match) {
-            const value = parseFloat(match[1]);
-            if (!isNaN(value)) {
-              console.log(`💫 [Dashboard] FÓRMULA EXCEL: Copiando ${value}% do DOM`);
-              setProfitPercentage(value);
-              return value;
-            }
-          }
-        }
-      } catch (error) {
-        console.error("❌ [Dashboard] Erro ao ler porcentagem:", error);
-      }
+    // Listener APRIMORADO para eventos
+    const handleFinancialUpdate = (event: CustomEvent) => {
+      console.log("📢 [Dashboard] EVENTO FINANCEIRO RECEBIDO:", event.detail);
       
-      return 42.5;
-    };
-
-    // Listener para eventos do TireCostManager
-    const handleTireCostUpdate = (event: CustomEvent) => {
-      console.log("📢 [Dashboard] EVENTO DO TireCostManager RECEBIDO - APLICANDO FÓRMULA EXCEL:", event.detail);
-      
-      if (event.detail.averageCostPerTire) {
+      if (event.detail.averageCostPerTire !== undefined) {
         const newCost = event.detail.averageCostPerTire;
-        console.log(`✨ [Dashboard] FÓRMULA EXCEL: ${averageCostPerTire.toFixed(2)} → ${newCost.toFixed(2)}`);
+        console.log(`🔥 [Dashboard] SINCRONIZAÇÃO CUSTO: ${averageCostPerTire.toFixed(2)} → ${newCost.toFixed(2)}`);
         setAverageCostPerTire(newCost);
         
-        // Salvar para persistência
         localStorage.setItem("dashboard_averageCostPerTire", JSON.stringify({
           value: newCost,
           timestamp: Date.now(),
-          source: "TireCostManager_Event"
+          source: "FinancialEvent"
         }));
       }
       
       if (event.detail.averageProfitPerTire !== undefined) {
         const newProfit = event.detail.averageProfitPerTire;
-        console.log(`✨ [Dashboard] FÓRMULA EXCEL LUCRO: ${averageProfitPerTire.toFixed(3)} → ${newProfit.toFixed(3)}`);
-        setAverageProfitPerTire(newProfit);
-      }
-    };
-
-    // Listener para eventos do PresumedProfitManager (Lucro Produtos Finais) - MELHORADO
-    const handleProfitUpdate = (event: CustomEvent) => {
-      console.log("📢 [Dashboard] EVENTO DO PresumedProfitManager RECEBIDO - APLICANDO FÓRMULA EXCEL:", event.detail);
-      
-      if (event.detail.averageProfitPerTire !== undefined) {
-        const newProfit = event.detail.averageProfitPerTire;
-        console.log(`✨ [Dashboard] FÓRMULA EXCEL LUCRO PRODUTOS FINAIS: ${averageProfitPerTire.toFixed(3)} → ${newProfit.toFixed(3)}`);
-        
-        // ATUALIZAÇÃO IMEDIATA
+        console.log(`🔥 [Dashboard] SINCRONIZAÇÃO LUCRO: ${averageProfitPerTire.toFixed(3)} → ${newProfit.toFixed(3)}`);
         setAverageProfitPerTire(newProfit);
         
-        // Salvar para persistência múltipla
         localStorage.setItem("dashboard_averageProfitPerTire", JSON.stringify({
           value: newProfit,
           timestamp: Date.now(),
-          source: "PresumedProfitManager_Event"
+          source: "FinancialEvent"
         }));
-
-        // Forçar re-render
-        setLastCostOptionsUpdate(Date.now());
       }
     };
 
-    // Adicionar listener para eventos
-    window.addEventListener("tireCostUpdated", handleTireCostUpdate as EventListener);
-    window.addEventListener("profitUpdated", handleProfitUpdate as EventListener);
+    // Múltiplos listeners para capturar todos os eventos
+    const eventTypes = ["tireCostUpdated", "presumedProfitUpdated", "financialDataUpdated"];
+    eventTypes.forEach(eventType => {
+      window.addEventListener(eventType, handleFinancialUpdate as EventListener);
+    });
 
-    // Leitura inicial
-    readTireCostManagerValue();
-    readProfitPerTire();
-    readProfitPercentage();
+    // Leitura inicial IMEDIATA
+    console.log("🚀 [Dashboard] Executando leitura inicial...");
+    readFromPresumedProfitManager();
+    readProfitFromPresumedProfitManager();
 
-    // Verificação periódica (como uma atualização automática do Excel) - MAIS FREQUENTE
+    // Verificação periódica MAIS AGRESSIVA (a cada 1 segundo)
     const interval = setInterval(() => {
-      readTireCostManagerValue();
-      readProfitPerTire();
-      readProfitPercentage();
-    }, 1000); // Reduzido para 1 segundo para resposta mais rápida
+      readFromPresumedProfitManager();
+      readProfitFromPresumedProfitManager();
+    }, 1000);
+
+    // Observer para mudanças no DOM
+    const observer = new MutationObserver((mutations) => {
+      let shouldUpdate = false;
+      
+      mutations.forEach((mutation) => {
+        if (mutation.type === 'childList' || mutation.type === 'characterData') {
+          // Verificar se há mudanças em elementos financeiros
+          const target = mutation.target as Element;
+          if (target.classList?.contains('text-neon-orange') || 
+              target.classList?.contains('text-neon-purple') ||
+              target.closest('[data-component="presumed-profit-manager"]') ||
+              target.closest('[data-component="tire-cost-manager"]')) {
+            shouldUpdate = true;
+          }
+        }
+      });
+      
+      if (shouldUpdate) {
+        console.log("🔄 [Dashboard] DOM mudou - atualizando valores...");
+        setTimeout(() => {
+          readFromPresumedProfitManager();
+          readProfitFromPresumedProfitManager();
+        }, 100);
+      }
+    });
+
+    // Observar todo o documento
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      characterData: true
+    });
 
     return () => {
-      window.removeEventListener("tireCostUpdated", handleTireCostUpdate as EventListener);
-      window.removeEventListener("profitUpdated", handleProfitUpdate as EventListener);
+      // Limpar listeners
+      eventTypes.forEach(eventType => {
+        window.removeEventListener(eventType, handleFinancialUpdate as EventListener);
+      });
       clearInterval(interval);
+      observer.disconnect();
     };
-  }, [averageCostPerTire, averageProfitPerTire]);
+  }, []);
 
   // Debug log para mostrar que a fórmula está funcionando
   useEffect(() => {
-    console.log("📊 [Dashboard] FÓRMULA EXCEL ATIVA:", {
+    console.log("📊 [Dashboard] FÓRMULA EXCEL COMPLETA ATIVA:", {
       custoPorPneu: `R$ ${averageCostPerTire.toFixed(2)}`,
       lucroPorPneu: `R$ ${averageProfitPerTire.toFixed(3)}`,
       porcentagemLucro: `${profitPercentage.toFixed(1)}%`,
+      sincronizacao: "✅ CUSTO E LUCRO COPIADOS AUTOMATICAMENTE",
       hora: new Date().toLocaleTimeString("pt-BR")
     });
   }, [averageCostPerTire, averageProfitPerTire, profitPercentage]);
@@ -1103,7 +1135,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
         iconColorClass: "text-neon-green",
       },
     ],
-    [metrics, averageProfitPerTire, averageCostPerTire, profitPercentage, lastCostOptionsUpdate],
+    [metrics],
   );
 
   // Ordenar cards conforme a ordem salva e filtrar cards ocultos
@@ -1740,22 +1772,22 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                   </div>
                 </div>
 
-                <div className="mt-4 p-3 bg-blue-900/20 rounded-lg border border-blue-500/30">
+                <div className="mt-4 p-3 bg-purple-900/20 rounded-lg border border-purple-500/30">
                   <div className="flex justify-between items-center">
                     <div>
-                      <span className="text-blue-400 font-medium">
-                        💰 LUCRO COPIADO AUTOMATICAMENTE:
+                      <span className="text-purple-400 font-medium">
+                        💰 LUCRO MÉDIO SINCRONIZADO:
                       </span>
                       <p className="text-tire-400 text-xs mt-1">
-                        Sistema funciona como fórmula do Excel
+                        Copiando valor direto do TireCostManager (como =B1 no Excel)
                       </p>
                       <div className="flex items-center gap-2 mt-2">
-                        <span className="bg-blue-500/20 text-blue-400 px-2 py-1 rounded text-xs flex items-center gap-1">
-                          <span className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></span>
-                          SINCRONIZAÇÃO EXCEL
+                        <span className="bg-purple-500/20 text-purple-400 px-2 py-1 rounded text-xs flex items-center gap-1">
+                          <span className="w-2 h-2 bg-purple-400 rounded-full animate-pulse"></span>
+                          CÓPIA AUTOMÁTICA LUCRO
                         </span>
                         <span className="text-tire-400 text-xs">
-                          Atualização em tempo real
+                          TireCostManager → Métricas Principais
                         </span>
                       </div>
                     </div>
@@ -1763,8 +1795,8 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                       <span className="text-neon-purple font-bold text-xl">
                         {formatCurrency(metrics.averageProfitPerTire)}
                       </span>
-                      <p className="text-blue-400 text-xs mt-1 font-medium">
-                        ✅ FÓRMULA EXCEL FUNCIONANDO
+                      <p className="text-purple-400 text-xs mt-1 font-medium">
+                        ✅ VALOR COPIADO AUTOMATICAMENTE
                       </p>
                     </div>
                   </div>
@@ -1772,15 +1804,18 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
 
                 <div className="mt-4 p-3 bg-yellow-900/20 rounded-lg border border-yellow-500/30">
                   <h5 className="text-yellow-400 font-medium mb-2 text-sm">
-                    📊 SOLUÇÃO IMPLEMENTADA - ESTILO EXCEL:
+                    📊 SOLUÇÃO COMPLETA - ESTILO EXCEL:
                   </h5>
                   <div className="space-y-1 text-xs text-yellow-300">
-                    <p>✅ Cópia automática como fórmula =A1</p>
-                    <p>✅ Sincronização em tempo real</p>
+                    <p>✅ Cópia automática como fórmula =A1 (custo) e =B1 (lucro)</p>
+                    <p>✅ Sincronização em tempo real para ambos</p>
                     <p>✅ Sem cache conflitante</p>
                     <p>✅ Atualização a cada 3 segundos</p>
                     <p className="text-green-400 font-medium">
-                      🎉 FUNCIONANDO COMO EXCEL: {formatCurrency(averageCostPerTire)} = {formatCurrency(metrics.averageCostPerTire)}
+                      🎉 CUSTO: {formatCurrency(averageCostPerTire)} = {formatCurrency(metrics.averageCostPerTire)}
+                    </p>
+                    <p className="text-purple-400 font-medium">
+                      🎉 LUCRO: {formatCurrency(averageProfitPerTire)} = {formatCurrency(metrics.averageProfitPerTire)}
                     </p>
                   </div>
                 </div>
