@@ -142,13 +142,22 @@ const ResaleProductsStock = ({ isLoading = false }: ResaleProductsStockProps) =>
     }
 
     // Validação e conversão de dados
-    const quantityValue = Math.round(Math.abs(parseFloat(quantity) || 0));
-    const priceValue = Math.abs(parseFloat(unitPrice) || 0);
+    const quantityValue = parseInt(quantity) || 0;
+    const priceValue = parseFloat(unitPrice) || 0;
 
     if (quantityValue <= 0) {
       toast({
         title: "Erro",
         description: "A quantidade deve ser maior que zero.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (stockOperation === "add" && priceValue < 0) {
+      toast({
+        title: "Erro",
+        description: "O preço não pode ser negativo.",
         variant: "destructive",
       });
       return;
@@ -180,8 +189,8 @@ const ResaleProductsStock = ({ isLoading = false }: ResaleProductsStockProps) =>
 
       if (product.stockId) {
         // Update existing stock
-        const currentQuantity = Math.round(product.quantity || 0);
-        const currentUnitCost = Math.abs(product.unitCost || 0);
+        const currentQuantity = product.quantity || 0;
+        const currentUnitCost = product.unitCost || 0;
 
         let newQuantity = currentQuantity;
         let newUnitCost = currentUnitCost;
@@ -193,16 +202,16 @@ const ResaleProductsStock = ({ isLoading = false }: ResaleProductsStockProps) =>
           if (priceValue > 0) {
             const currentTotalValue = currentQuantity * currentUnitCost;
             const newTotalValue = quantityValue * priceValue;
-            newUnitCost = newQuantity > 0 ? (currentTotalValue + newTotalValue) / newQuantity : 0;
+            newUnitCost = newQuantity > 0 ? (currentTotalValue + newTotalValue) / newQuantity : priceValue;
           }
         } else {
           newQuantity = Math.max(0, currentQuantity - quantityValue);
         }
 
         const updateData = {
-          quantity: Math.round(newQuantity),
-          unit_cost: Math.round(newUnitCost * 100) / 100,
-          total_value: Math.round(newQuantity * newUnitCost * 100) / 100,
+          quantity: newQuantity,
+          unit_cost: newUnitCost,
+          total_value: newQuantity * newUnitCost,
           last_updated: new Date().toISOString(),
         };
 
@@ -226,15 +235,15 @@ const ResaleProductsStock = ({ isLoading = false }: ResaleProductsStockProps) =>
         }
 
         const newUnitCost = priceValue > 0 ? priceValue : (product.purchase_price || 0);
-        const newQuantity = quantityValue; // sempre será "add" aqui
+        const newQuantity = quantityValue;
 
         const newStockData = {
           item_id: product.id,
           item_type: "product" as const,
           item_name: product.name,
-          quantity: Math.round(newQuantity),
-          unit_cost: Math.round(newUnitCost * 100) / 100,
-          total_value: Math.round(newQuantity * newUnitCost * 100) / 100,
+          quantity: newQuantity,
+          unit_cost: newUnitCost,
+          total_value: newQuantity * newUnitCost,
           min_level: 0,
           unit: product.unit || "un",
           last_updated: new Date().toISOString(),
@@ -250,11 +259,6 @@ const ResaleProductsStock = ({ isLoading = false }: ResaleProductsStockProps) =>
 
         console.log("✅ Novo estoque criado com sucesso");
       }
-
-      // Forçar recarregamento dos dados
-      setTimeout(() => {
-        window.location.reload();
-      }, 500);
 
       toast({
         title: "Sucesso!",
@@ -280,18 +284,20 @@ const ResaleProductsStock = ({ isLoading = false }: ResaleProductsStockProps) =>
       let errorMessage = "Não foi possível atualizar o estoque.";
       
       if (error instanceof Error) {
-        const message = error.message.toLowerCase();
+        console.log("Erro detalhado:", error.message);
         
-        if (message.includes("duplicate") || message.includes("unique")) {
+        if (error.message.includes("duplicate") || error.message.includes("unique")) {
           errorMessage = "Este item já existe no estoque.";
-        } else if (message.includes("foreign key") || message.includes("violates")) {
+        } else if (error.message.includes("foreign") || error.message.includes("violates")) {
           errorMessage = "Produto não encontrado no sistema.";
-        } else if (message.includes("permission") || message.includes("unauthorized")) {
+        } else if (error.message.includes("permission") || error.message.includes("unauthorized")) {
           errorMessage = "Sem permissão para atualizar estoque.";
-        } else if (message.includes("network") || message.includes("connection")) {
+        } else if (error.message.includes("network") || error.message.includes("connection")) {
           errorMessage = "Erro de conexão. Verifique sua internet.";
         } else if (error.message.includes("Falha ao")) {
           errorMessage = error.message;
+        } else {
+          errorMessage = `Erro interno: ${error.message}`;
         }
       }
 
