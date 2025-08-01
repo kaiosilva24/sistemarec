@@ -422,7 +422,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
   const [averageProfitPerTire, setAverageProfitPerTire] = useState(69.765);
   const [profitPercentage, setProfitPercentage] = useState(42.5);
 
-  // Effect para sincronizar com o TireCostManager e PresumedProfitManager - FÓRMULA ESTILO EXCEL
+  // Effect para sincronizar com o TireCostManager - FÓRMULA ESTILO EXCEL
   useEffect(() => {
     // Função para ler o valor do TireCostManager
     const readTireCostManagerValue = () => {
@@ -460,29 +460,50 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       return 101.09;
     };
 
-    // Função para ler lucro médio por pneu do localStorage (atualizado pelo PresumedProfitManager)
-    const readProfitPerTireFromStorage = () => {
+    // Função para ler lucro médio por pneu
+    const readProfitPerTire = () => {
       try {
-        const savedData = localStorage.getItem("dashboard_averageProfitPerTire");
-        if (savedData) {
-          const parsed = JSON.parse(savedData);
-          if (parsed.value !== undefined && parsed.value >= 0) {
-            console.log(`💫 [Dashboard] SINCRONIZAÇÃO EM TEMPO REAL: Lucro R$ ${parsed.value.toFixed(3)} (${parsed.source})`);
-            setAverageProfitPerTire(parsed.value);
-            
-            if (parsed.margin !== undefined) {
-              setProfitPercentage(parsed.margin);
-              console.log(`💫 [Dashboard] SINCRONIZAÇÃO MARGEM: ${parsed.margin.toFixed(1)}%`);
+        const profitElement = document.querySelector('[id="average-profit"]');
+        if (profitElement) {
+          const textContent = profitElement.textContent || "";
+          const match = textContent.match(/R\$\s*([\d.,]+)/);
+          if (match) {
+            const value = parseFloat(match[1].replace(",", "."));
+            if (!isNaN(value)) {
+              console.log(`💫 [Dashboard] FÓRMULA EXCEL: Copiando lucro R$ ${value.toFixed(3)}`);
+              setAverageProfitPerTire(value);
+              return value;
             }
-            
-            return parsed.value;
           }
         }
       } catch (error) {
-        console.error("❌ [Dashboard] Erro ao ler lucro do localStorage:", error);
+        console.error("❌ [Dashboard] Erro ao ler lucro:", error);
       }
 
       return 69.765;
+    };
+
+    // Função para ler porcentagem de lucro
+    const readProfitPercentage = () => {
+      try {
+        const percentElement = document.querySelector('.tempo-4ebee5f0-9b1a-57c8-b17c-42856cd849a0');
+        if (percentElement) {
+          const textContent = percentElement.textContent || "";
+          const match = textContent.match(/([0-9.]+)%/);
+          if (match) {
+            const value = parseFloat(match[1]);
+            if (!isNaN(value)) {
+              console.log(`💫 [Dashboard] FÓRMULA EXCEL: Copiando ${value}% do DOM`);
+              setProfitPercentage(value);
+              return value;
+            }
+          }
+        }
+      } catch (error) {
+        console.error("❌ [Dashboard] Erro ao ler porcentagem:", error);
+      }
+
+      return 42.5;
     };
 
     // Listener para eventos do TireCostManager
@@ -509,43 +530,26 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       }
     };
 
-    // Listener para eventos do PresumedProfitManager (NOVO)
-    const handleFinalProductProfitUpdate = (event: CustomEvent) => {
-      console.log("🎯 [Dashboard] EVENTO DO PresumedProfitManager RECEBIDO - SINCRONIZAÇÃO EM TEMPO REAL:", event.detail);
-
-      if (event.detail.averageProfitPerUnit !== undefined) {
-        const newProfit = event.detail.averageProfitPerUnit;
-        console.log(`🔥 [Dashboard] SINCRONIZAÇÃO AUTOMÁTICA: Lucro ${averageProfitPerTire.toFixed(3)} → ${newProfit.toFixed(3)}`);
-        setAverageProfitPerTire(newProfit);
-      }
-
-      if (event.detail.overallProfitMargin !== undefined) {
-        const newMargin = event.detail.overallProfitMargin;
-        console.log(`🔥 [Dashboard] SINCRONIZAÇÃO MARGEM: ${profitPercentage.toFixed(1)}% → ${newMargin.toFixed(1)}%`);
-        setProfitPercentage(newMargin);
-      }
-    };
-
-    // Adicionar listeners para eventos
+    // Adicionar listener para eventos
     window.addEventListener("tireCostUpdated", handleTireCostUpdate as EventListener);
-    window.addEventListener("finalProductProfitUpdated", handleFinalProductProfitUpdate as EventListener);
 
     // Leitura inicial
     readTireCostManagerValue();
-    readProfitPerTireFromStorage();
+    readProfitPerTire();
+    readProfitPercentage();
 
     // Verificação periódica (como uma atualização automática do Excel)
     const interval = setInterval(() => {
       readTireCostManagerValue();
-      readProfitPerTireFromStorage();
-    }, 2000); // Reduzido para 2 segundos para resposta mais rápida
+      readProfitPerTire();
+      readProfitPercentage();
+    }, 3000);
 
     return () => {
       window.removeEventListener("tireCostUpdated", handleTireCostUpdate as EventListener);
-      window.removeEventListener("finalProductProfitUpdated", handleFinalProductProfitUpdate as EventListener);
       clearInterval(interval);
     };
-  }, [averageCostPerTire, averageProfitPerTire, profitPercentage]);
+  }, [averageCostPerTire, averageProfitPerTire]);
 
   // Debug log para mostrar que a fórmula está funcionando
   useEffect(() => {
@@ -832,6 +836,30 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       }).length,
     });
 
+    // Calculate average profit per tire (matching PresumedProfitManager logic)
+    const salesEntries = cashFlowEntries.filter(
+      (entry) => entry.type === "income" && entry.category === "venda",
+    );
+
+    const totalFinalProductSales = salesEntries
+      .filter((sale) => sale.product_type === "final")
+      .reduce((sum, sale) => sum + Number(sale.quantity), 0);
+
+    const totalFinalProductProfit = salesEntries
+      .filter((sale) => sale.product_type === "final")
+      .reduce((sum: number, sale: any) => {
+        const quantity = Number(sale.quantity) || 0;
+        const unitPrice = Number(sale.unit_price) || 0;
+        const unitCost = Number(sale.unit_cost) || 0;
+        const revenue = quantity * unitPrice;
+        const cost = quantity * unitCost;
+        const profit = revenue - cost;
+        return sum + profit;
+      }, 0);
+
+    const profitPerTire =
+      totalFinalProductSales > 0 ? totalFinalProductProfit / totalFinalProductSales : 0;
+
     const metrics = {
       productStockQuantity,
       salesQuantity,
@@ -958,7 +986,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
         id: "average-profit",
         title: "Lucro Médio/Pneu",
         value: formatCurrency(metrics.averageProfitPerTire),
-        subtitle: "sincronizado em tempo real",
+        subtitle: "lucro por unidade",
         icon: Target,
         colorClass: metrics.averageProfitPerTire >= 0 ? "#8B5CF6" : "#EF4444",
         iconColorClass:
@@ -970,7 +998,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
         id: "profit-margin",
         title: "Lucro Médio Produtos Finais",
         value: `${profitPercentage.toFixed(1)}%`,
-        subtitle: "sincronizado automaticamente",
+        subtitle: "fórmula Excel ativa",
         icon: Percent,
         colorClass: profitPercentage >= 0 ? "#F59E0B" : "#EF4444",
         iconColorClass:
@@ -1644,8 +1672,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                         {formatCurrency(metrics.averageCostPerTire)}
                       </span>
                       <p className="text-green-400 text-xs mt-1 font-medium">
-                        ✅ VALOR COPIADO AUTOMATICAMENTE
-                      </p>
+                        ✅ VALOR COPIADO AUTOMATICAMENTE                      </p>
                     </div>
                   </div>
                 </div>

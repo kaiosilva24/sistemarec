@@ -951,8 +951,7 @@ const PresumedProfitManager = ({
         );
         break;
       case "last30days":
-        const last30Days =```text
- new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+        const last30Days = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
         filteredEntries = filteredEntries.filter((entry) => {
           // CORREÇÃO: Usar transaction_date em vez de date
           const entryDate = new Date(entry.transaction_date);
@@ -1383,7 +1382,7 @@ const PresumedProfitManager = ({
       (sum, item) => sum + item.totalSales,
       0,
     );
-    const averageProfitPerUnit = totalSales > 0 ? totalProfit / totalSales : 0;
+    const averageProfitPerTire = totalSales > 0 ? totalProfit / totalSales : 0;
     const overallProfitMargin =
       totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
 
@@ -1392,46 +1391,10 @@ const PresumedProfitManager = ({
       totalCost,
       totalProfit,
       totalSales,
-      averageProfitPerUnit,
+      averageProfitPerTire,
       overallProfitMargin,
     };
   }, [profitData]);
-
-  // Sincronização em tempo real com o dashboard principal
-  useEffect(() => {
-    if (summaryMetrics.averageProfitPerUnit > 0) {
-      console.log(`📡 [PresumedProfitManager] Enviando dados para dashboard:`, {
-        averageProfitPerUnit: summaryMetrics.averageProfitPerUnit,
-        overallProfitMargin: summaryMetrics.overallProfitMargin,
-        totalSales: summaryMetrics.totalSales,
-        timestamp: new Date().toISOString(),
-      });
-
-      // Disparar evento customizado para sincronizar com o dashboard
-      const profitUpdateEvent = new CustomEvent("finalProductProfitUpdated", {
-        detail: {
-          averageProfitPerUnit: summaryMetrics.averageProfitPerUnit,
-          overallProfitMargin: summaryMetrics.overallProfitMargin,
-          totalSales: summaryMetrics.totalSales,
-          source: "PresumedProfitManager",
-          timestamp: Date.now(),
-        },
-      });
-
-      window.dispatchEvent(profitUpdateEvent);
-
-      // Salvar no localStorage para persistência
-      localStorage.setItem("dashboard_averageProfitPerTire", JSON.stringify({
-        value: summaryMetrics.averageProfitPerUnit,
-        margin: summaryMetrics.overallProfitMargin,
-        totalSales: summaryMetrics.totalSales,
-        timestamp: Date.now(),
-        source: "PresumedProfitManager"
-      }));
-
-      console.log(`✅ [PresumedProfitManager] Dados sincronizados: R$ ${summaryMetrics.averageProfitPerUnit.toFixed(3)}`);
-    }
-  }, [summaryMetrics.averageProfitPerUnit, summaryMetrics.overallProfitMargin, summaryMetrics.totalSales]);
 
   if (isLoading) {
     return (
@@ -1591,7 +1554,7 @@ const PresumedProfitManager = ({
                 </p>
                 <p className="text-2xl font-bold text-neon-purple">
                   R${" "}
-                  {summaryMetrics.averageProfitPerUnit.toLocaleString("pt-BR", {
+                  {summaryMetrics.averageProfitPerTire.toLocaleString("pt-BR", {
                     minimumFractionDigits: 2,
                   })}
                 </p>
@@ -1766,7 +1729,7 @@ const PresumedProfitManager = ({
                   }))}
                   margin={{
                     top: 20,
-                    right                    : 30,
+                    right: 30,
                     left: 20,
                     bottom: 80,
                   }}
