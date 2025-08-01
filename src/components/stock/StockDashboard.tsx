@@ -913,7 +913,8 @@ const StockDashboard = ({
             currency: "BRL",
             minimumFractionDigits: 0,
             maximumFractionDigits: 0,
-          }).format(metrics.finalProductTotalValue),
+          }).format(```typescript
+metrics.finalProductTotalValue),
         };      default:return card;
     }
   });
