@@ -1936,96 +1936,6 @@ export const useCostCalculationOptions = () => {
     };
   }, [costOptions, synchronizedCostData]);
 
-  // Get stock items and resale products using the corresponding hooks FIRST
-  const { stockItems } = useStockItems();
-  const { resaleProducts } = useResaleProducts();
-
-  // Calculate resale products balance from stock items - SINCRONIZADO COM VALOR TOTAL
-  const calculateResaleProductsBalance = useCallback(() => {
-    const resaleStockItems = stockItems.filter(
-      (item) => 
-        item.item_type === "product" && 
-        resaleProducts.some(rp => rp.id === item.item_id && !rp.archived)
-    );
-
-    // SEMPRE usar o total_value diretamente dos itens de estoque
-    const totalValue = resaleStockItems.reduce((sum, item) => {
-      const itemTotalValue = item.total_value || 0;
-      console.log(`💰 [useDataPersistence] Item ${item.item_name}: total_value = R$ ${itemTotalValue.toFixed(2)}`);
-      return sum + itemTotalValue;
-    }, 0);
-
-    console.log("📦 [useDataPersistence] SALDO PRODUTOS REVENDA SINCRONIZADO:", {
-      resaleStockItemsCount: resaleStockItems.length,
-      totalValueSincronizado: totalValue,
-      items: resaleStockItems.map(item => ({
-        name: item.item_name,
-        quantity: item.quantity,
-        unitCost: item.unit_cost,
-        totalValue: item.total_value,
-        averageValue: item.quantity > 0 ? (item.total_value || 0) / item.quantity : 0
-      }))
-    });
-
-    return totalValue;
-  }, [stockItems, resaleProducts]);
-
-  // Função para verificar e garantir sincronização do saldo de produtos de revenda
-  const ensureResaleProductsBalanceSync = useCallback(() => {
-    const currentBalance = calculateResaleProductsBalance();
-
-    console.log("🔍 [useDataPersistence] VERIFICAÇÃO DE SINCRONIZAÇÃO:", {
-      saldoAtual: currentBalance,
-      timestamp: new Date().toISOString(),
-      sincronizadoComEstoque: "SIM - baseado em total_value dos stock_items"
-    });
-
-    return currentBalance;
-  }, [calculateResaleProductsBalance]);
-
-  // Calculate dashboard metrics using synchronized values
-  const dashboardMetrics = useMemo(() => {
-    // Separate final products and resale products (baseado na lógica do StockDashboard)
-    const finalProductIds = [];
-    const resaleProductIds = resaleProducts
-      .filter((p) => !p.archived)
-      .map((p) => p.id);
-
-    const productStockItems = stockItems.filter(
-      (item) => item.item_type === "product",
-    );
-
-    const finalProductStockItems = productStockItems.filter((item) =>
-      finalProductIds.includes(item.item_id),
-    );
-    const resaleProductStockItems = productStockItems.filter((item) =>
-      resaleProductIds.includes(item.item_id),
-    );
-
-    // Calculate metrics - USANDO VALORES SINCRONIZADOS
-    const finalProductQuantity = finalProductStockItems.reduce((sum, item) => sum + item.quantity, 0);
-    const resaleProductQuantity = resaleProductStockItems.reduce((sum, item) => sum + item.quantity, 0);
-    const finalProductValue = finalProductStockItems.reduce((sum, item) => sum + (item.total_value || 0), 0);
-
-    // SALDO PRODUTOS REVENDA: SEMPRE SINCRONIZADO COM VALOR TOTAL DO ESTOQUE
-    const resaleProductValue = calculateResaleProductsBalance();
-
-    console.log("🔄 [useDataPersistence] SINCRONIZAÇÃO SALDO PRODUTOS REVENDA:", {
-      resaleProductValue,
-      resaleProductQuantity,
-      resaleStockItemsCount: resaleProductStockItems.length,
-      estaSincronizado: true
-    });
-
-    return {
-      finalProductQuantity,
-      resaleProductQuantity,
-      finalProductValue,
-      resaleProductValue,
-    };
-  }, [stockItems, resaleProducts, calculateResaleProductsBalance]);
-  
-
   return {
     costOptions,
     synchronizedCostData,
@@ -2036,12 +1946,5 @@ export const useCostCalculationOptions = () => {
     isIncludingDefectiveTireSales: costOptions.includeDefectiveTireSales,
     isIncludingWarrantyValues: costOptions.includeWarrantyValues,
     isDividingByProduction: costOptions.divideByProduction,
-    
-// Dashboard metrics
-    dashboardMetrics: dashboardMetrics,
-
-    // Funções de sincronização
-    calculateResaleProductsBalance,
-    ensureResaleProductsBalanceSync,
   };
 };
