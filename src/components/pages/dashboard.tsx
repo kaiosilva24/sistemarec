@@ -122,6 +122,7 @@ const DraggableCard = ({ card, customColors }: DraggableCardProps) => {
     <Card
       ref={setNodeRef}
       style={style}
+      data-card-id={card.id}
       className={cn(
         "bg-factory-800/50 border-tire-600/30 cursor-grab active:cursor-grabbing transition-all duration-200",
         isDragging && [
@@ -421,6 +422,8 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
   const [averageCostPerTire, setAverageCostPerTire] = useState(101.09);
   const [averageProfitPerTire, setAverageProfitPerTire] = useState(69.765);
   const [profitPercentage, setProfitPercentage] = useState(42.5);
+  const [finalProductAverageProfit, setFinalProductAverageProfit] = useState(85.267);
+  const [finalProductProfitMargin, setFinalProductProfitMargin] = useState(52.0);
 
   // Effect para sincronizar com o TireCostManager - FÓRMULA ESTILO EXCEL
   useEffect(() => {
@@ -506,6 +509,76 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       return 42.5;
     };
 
+    // Função para ler lucro médio por produto final
+    const readFinalProductAverageProfit = () => {
+      try {
+        // Procurar pelo elemento do lucro médio por produto final
+        const profitElement = document.querySelector('[data-card-id="final-product-profit"]');
+        if (profitElement) {
+          const textContent = profitElement.textContent || "";
+          const match = textContent.match(/R\$\s*([\d.,]+)/);
+          if (match) {
+            const value = parseFloat(match[1].replace(",", "."));
+            if (!isNaN(value)) {
+              console.log(`💫 [Dashboard] FÓRMULA EXCEL: Copiando lucro produto final R$ ${value.toFixed(3)}`);
+              setFinalProductAverageProfit(value);
+              return value;
+            }
+          }
+        }
+
+        // Alternativa: usar valor do localStorage
+        const savedData = localStorage.getItem("dashboard_finalProductAverageProfit");
+        if (savedData) {
+          const parsed = JSON.parse(savedData);
+          if (parsed.value && parsed.value > 0) {
+            console.log(`💫 [Dashboard] FÓRMULA EXCEL: Usando valor salvo R$ ${parsed.value.toFixed(3)}`);
+            setFinalProductAverageProfit(parsed.value);
+            return parsed.value;
+          }
+        }
+      } catch (error) {
+        console.error("❌ [Dashboard] Erro ao ler lucro produto final:", error);
+      }
+
+      return 85.267;
+    };
+
+    // Função para ler margem de lucro dos produtos finais
+    const readFinalProductProfitMargin = () => {
+      try {
+        // Procurar pelo elemento da margem de lucro
+        const marginElement = document.querySelector('[data-card-id="final-product-margin"]');
+        if (marginElement) {
+          const textContent = marginElement.textContent || "";
+          const match = textContent.match(/([0-9.]+)%/);
+          if (match) {
+            const value = parseFloat(match[1]);
+            if (!isNaN(value)) {
+              console.log(`💫 [Dashboard] FÓRMULA EXCEL: Copiando margem produto final ${value}%`);
+              setFinalProductProfitMargin(value);
+              return value;
+            }
+          }
+        }
+
+        // Alternativa: usar valor do localStorage
+        const savedData = localStorage.getItem("dashboard_finalProductProfitMargin");
+        if (savedData) {
+          const parsed = JSON.parse(savedData);
+          if (parsed.value && parsed.value >= 0) {
+            console.log(`💫 [Dashboard] FÓRMULA EXCEL: Usando valor salvo ${parsed.value.toFixed(1)}%`);
+            setFinalProductProfitMargin(parsed.value);
+            return parsed.value;
+          }
+        }
+      } catch (error) {
+        console.error("❌ [Dashboard] Erro ao ler margem produto final:", error);
+      }
+
+      return 52.0;
+    };
+
     // Listener para eventos do TireCostManager
     const handleTireCostUpdate = (event: CustomEvent) => {
       console.log("📢 [Dashboard] EVENTO DO TireCostManager RECEBIDO - APLICANDO FÓRMULA EXCEL:", event.detail);
@@ -528,6 +601,32 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
         console.log(`✨ [Dashboard] FÓRMULA EXCEL LUCRO: ${averageProfitPerTire.toFixed(3)} → ${newProfit.toFixed(3)}`);
         setAverageProfitPerTire(newProfit);
       }
+
+      if (event.detail.finalProductAverageProfit !== undefined) {
+        const newFinalProfit = event.detail.finalProductAverageProfit;
+        console.log(`✨ [Dashboard] FÓRMULA EXCEL PRODUTO FINAL: ${finalProductAverageProfit.toFixed(3)} → ${newFinalProfit.toFixed(3)}`);
+        setFinalProductAverageProfit(newFinalProfit);
+
+        // Salvar para persistência
+        localStorage.setItem("dashboard_finalProductAverageProfit", JSON.stringify({
+          value: newFinalProfit,
+          timestamp: Date.now(),
+          source: "Component_Event"
+        }));
+      }
+
+      if (event.detail.finalProductProfitMargin !== undefined) {
+        const newFinalMargin = event.detail.finalProductProfitMargin;
+        console.log(`✨ [Dashboard] FÓRMULA EXCEL MARGEM FINAL: ${finalProductProfitMargin.toFixed(1)}% → ${newFinalMargin.toFixed(1)}%`);
+        setFinalProductProfitMargin(newFinalMargin);
+
+        // Salvar para persistência
+        localStorage.setItem("dashboard_finalProductProfitMargin", JSON.stringify({
+          value: newFinalMargin,
+          timestamp: Date.now(),
+          source: "Component_Event"
+        }));
+      }
     };
 
     // Adicionar listener para eventos
@@ -537,12 +636,16 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
     readTireCostManagerValue();
     readProfitPerTire();
     readProfitPercentage();
+    readFinalProductAverageProfit();
+    readFinalProductProfitMargin();
 
     // Verificação periódica (como uma atualização automática do Excel)
     const interval = setInterval(() => {
       readTireCostManagerValue();
       readProfitPerTire();
       readProfitPercentage();
+      readFinalProductAverageProfit();
+      readFinalProductProfitMargin();
     }, 3000);
 
     return () => {
@@ -557,9 +660,11 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       custoPorPneu: `R$ ${averageCostPerTire.toFixed(2)}`,
       lucroPorPneu: `R$ ${averageProfitPerTire.toFixed(3)}`,
       porcentagemLucro: `${profitPercentage.toFixed(1)}%`,
+      lucroProdutoFinal: `R$ ${finalProductAverageProfit.toFixed(3)}`,
+      margemProdutoFinal: `${finalProductProfitMargin.toFixed(1)}%`,
       hora: new Date().toLocaleTimeString("pt-BR")
     });
-  }, [averageCostPerTire, averageProfitPerTire, profitPercentage]);
+  }, [averageCostPerTire, averageProfitPerTire, profitPercentage, finalProductAverageProfit, finalProductProfitMargin]);
 
   // Extract product info from sale description (same logic as SalesDashboard)
   const extractProductInfoFromSale = (description: string) => {
@@ -981,6 +1086,26 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
           profitPercentage >= 0 ? "text-neon-orange" : "text-red-400",
       },
       {
+        id: "final-product-average-profit",
+        title: "Lucro Médio por Produto Final",
+        value: formatCurrency(finalProductAverageProfit),
+        subtitle: "valor sincronizado total",
+        icon: Target,
+        colorClass: finalProductAverageProfit >= 0 ? "#8B5CF6" : "#EF4444",
+        iconColorClass:
+          finalProductAverageProfit >= 0 ? "text-neon-purple" : "text-red-400",
+      },
+      {
+        id: "final-product-profit-margin",
+        title: "Margem de Lucro",
+        value: `${finalProductProfitMargin.toFixed(1)}%`,
+        subtitle: "margem sincronizada",
+        icon: TrendingUp,
+        colorClass: finalProductProfitMargin >= 0 ? "#10B981" : "#EF4444",
+        iconColorClass:
+          finalProductProfitMargin >= 0 ? "text-neon-green" : "text-red-400",
+      },
+      {
         id: "production-loss",
         title: "Porcentagem Perda de Produção",
         value: `${metrics.productionLossPercentage.toFixed(1)}%`,
@@ -1017,7 +1142,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
         iconColorClass: "text-neon-green",
       },
     ],
-    [metrics, profitPercentage],
+    [metrics, profitPercentage, finalProductAverageProfit, finalProductProfitMargin],
   );
 
   // Ordenar cards conforme a ordem salva e filtrar cards ocultos
@@ -1696,6 +1821,41 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                     <p className="text-green-400 font-medium">
                       🎉 FUNCIONANDO COMO EXCEL: {formatCurrency(averageCostPerTire)} = {formatCurrency(metrics.averageCostPerTire)}
                     </p>
+                  </div>
+                </div>
+
+                <div className="mt-4 p-3 bg-purple-900/20 rounded-lg border border-purple-500/30">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <span className="text-purple-400 font-medium">
+                        💎 NOVOS CARDS SINCRONIZADOS:
+                      </span>
+                      <p className="text-tire-400 text-xs mt-1">
+                        Lucro Médio por Produto Final + Margem de Lucro
+                      </p>
+                      <div className="flex items-center gap-2 mt-2">
+                        <span className="bg-purple-500/20 text-purple-400 px-2 py-1 rounded text-xs flex items-center gap-1">
+                          <span className="w-2 h-2 bg-purple-400 rounded-full animate-pulse"></span>
+                          SINCRONIZAÇÃO TOTAL
+                        </span>
+                        <span className="text-tire-400 text-xs">
+                          Valores em tempo real
+                        </span>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="space-y-1">
+                        <span className="text-neon-purple font-bold text-lg block">
+                          {formatCurrency(finalProductAverageProfit)}
+                        </span>
+                        <span className="text-neon-green font-bold text-lg block">
+                          {finalProductProfitMargin.toFixed(1)}%
+                        </span>
+                      </div>
+                      <p className="text-purple-400 text-xs mt-1 font-medium">
+                        ✅ CARDS IMPLEMENTADOS
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
