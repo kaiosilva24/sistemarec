@@ -422,6 +422,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
   const [averageProfitPerTire, setAverageProfitPerTire] = useState(69.765);
   const [profitPercentage, setProfitPercentage] = useState(42.5);
   const [finalProductProfit, setFinalProductProfit] = useState(73.214);
+  const [totalFinalProductProfit, setTotalFinalProductProfit] = useState(2832.20);
 
   // Effect para sincronizar com o TireCostManager - FÓRMULA ESTILO EXCEL MELHORADA
   useEffect(() => {
@@ -621,12 +622,16 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
           
           setAverageProfitPerTire(newProfitPerTire);
           
+          // Calcular lucro total de produtos finais
+          const newTotalFinalProductProfit = newProfitPerTire * currentMetrics.salesQuantity;
+          setTotalFinalProductProfit(newTotalFinalProductProfit);
+          
           // Calcular nova porcentagem de lucro
           if (averageSellingPrice > 0) {
             const newProfitPercentage = (newProfitPerTire / averageSellingPrice) * 100;
             setProfitPercentage(newProfitPercentage);
             
-            console.log(`✅ [Dashboard] LUCRO RECALCULADO: ${newProfitPerTire.toFixed(3)} (${newProfitPercentage.toFixed(1)}%)`);
+            console.log(`✅ [Dashboard] LUCRO RECALCULADO: ${newProfitPerTire.toFixed(3)} (${newProfitPercentage.toFixed(1)}%) - Total: ${newTotalFinalProductProfit.toFixed(2)}`);
           }
           
           return newProfitPerTire;
@@ -664,6 +669,52 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       }
 
       return averageProfitPerTire;
+    };
+
+    // Função para calcular lucro total de produtos finais sincronizado
+    const readTotalFinalProductProfit = () => {
+      try {
+        // Calcular baseado no lucro por pneu e quantidade vendida
+        const currentMetrics = calculateMetrics();
+        
+        if (currentMetrics.salesQuantity > 0 && averageProfitPerTire > 0) {
+          const calculatedTotal = averageProfitPerTire * currentMetrics.salesQuantity;
+          
+          console.log(`💰 [Dashboard] CALCULANDO LUCRO TOTAL DE PRODUTOS FINAIS:`, {
+            lucroPorPneu: averageProfitPerTire.toFixed(3),
+            quantidadeVendida: currentMetrics.salesQuantity,
+            lucroTotal: calculatedTotal.toFixed(2)
+          });
+          
+          setTotalFinalProductProfit(calculatedTotal);
+          
+          // Salvar no localStorage para persistência
+          localStorage.setItem("dashboard_totalFinalProductProfit", JSON.stringify({
+            value: calculatedTotal,
+            timestamp: Date.now(),
+            source: "Dashboard_CalculatedFromProfitPerTire",
+            profitPerTire: averageProfitPerTire,
+            salesQuantity: currentMetrics.salesQuantity
+          }));
+          
+          return calculatedTotal;
+        } else {
+          // Tentar ler valor salvo do localStorage
+          const savedData = localStorage.getItem("dashboard_totalFinalProductProfit");
+          if (savedData) {
+            const parsed = JSON.parse(savedData);
+            if (parsed.value && parsed.value > 0) {
+              console.log(`💾 [Dashboard] USANDO LUCRO TOTAL SALVO: R$ ${parsed.value.toFixed(2)}`);
+              setTotalFinalProductProfit(parsed.value);
+              return parsed.value;
+            }
+          }
+        }
+      } catch (error) {
+        console.error("❌ [Dashboard] Erro ao calcular lucro total de produtos finais:", error);
+      }
+
+      return 2832.20; // Valor padrão
     };
 
     // Listener para eventos do TireCostManager - SINCRONIZAÇÃO COMPLETA
@@ -754,6 +805,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
     readProfitPerTire();
     readProfitPercentage();
     readFinalProductProfit();
+    readTotalFinalProductProfit();
 
     // Verificação periódica MELHORADA (como uma atualização automática do Excel)
     const interval = setInterval(() => {
@@ -766,10 +818,12 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       // E outras métricas
       readProfitPercentage();
       readFinalProductProfit();
+      readTotalFinalProductProfit();
       
       console.log(`🔄 [Dashboard] FÓRMULA EXCEL SINCRONIZAÇÃO:`, {
         custo: `R$ ${currentCost.toFixed(2)}`,
         lucro: `R$ ${currentProfit.toFixed(3)}`,
+        lucroTotal: `R$ ${totalFinalProductProfit.toFixed(2)}`,
         hora: new Date().toLocaleTimeString("pt-BR")
       });
     }, 3000);
@@ -820,6 +874,16 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       console.log(`🎯 [Dashboard] CORREÇÃO AUTOMÁTICA: ${finalProductProfit.toFixed(3)} → ${averageProfitPerTire.toFixed(3)}`);
       setFinalProductProfit(averageProfitPerTire);
     }
+    
+    // Recalcular lucro total baseado no novo lucro por pneu
+    const currentMetrics = calculateMetrics();
+    if (currentMetrics.salesQuantity > 0) {
+      const newTotalProfit = averageProfitPerTire * currentMetrics.salesQuantity;
+      if (Math.abs(totalFinalProductProfit - newTotalProfit) > 0.01) {
+        console.log(`💰 [Dashboard] ATUALIZANDO LUCRO TOTAL: R$ ${totalFinalProductProfit.toFixed(2)} → R$ ${newTotalProfit.toFixed(2)}`);
+        setTotalFinalProductProfit(newTotalProfit);
+      }
+    }
   }, [averageProfitPerTire]);
 
   // Debug log para mostrar que a fórmula está funcionando
@@ -829,9 +893,10 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       lucroPorPneu: `R$ ${averageProfitPerTire.toFixed(3)}`,
       porcentagemLucro: `${profitPercentage.toFixed(1)}%`,
       lucroProdutoFinal: `R$ ${finalProductProfit.toFixed(3)}`,
+      lucroTotalProdutosFinals: `R$ ${totalFinalProductProfit.toFixed(2)}`,
       hora: new Date().toLocaleTimeString("pt-BR")
     });
-  }, [averageCostPerTire, averageProfitPerTire, profitPercentage, finalProductProfit]);
+  }, [averageCostPerTire, averageProfitPerTire, profitPercentage, finalProductProfit, totalFinalProductProfit]);
 
   // Extract product info from sale description (same logic as SalesDashboard)
   const extractProductInfoFromSale = (description: string) => {
@@ -1284,8 +1349,17 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
         colorClass: "#10B981",
         iconColorClass: "text-neon-green",
       },
+      {
+        id: "total-final-product-profit",
+        title: "Lucro Total de Produtos Finais",
+        value: formatCurrency(totalFinalProductProfit),
+        subtitle: "lucro total sincronizado automaticamente",
+        icon: TrendingUp,
+        colorClass: "#3B82F6",
+        iconColorClass: "text-neon-blue",
+      },
     ],
-    [metrics, profitPercentage],
+    [metrics, profitPercentage, totalFinalProductProfit],
   );
 
   // Ordenar cards conforme a ordem salva e filtrar cards ocultos
