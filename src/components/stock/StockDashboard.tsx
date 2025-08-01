@@ -36,6 +36,9 @@ import {
   Plus,
   DollarSign,
   ShoppingCart,
+  AlertTriangle,
+  Factory,
+  Warehouse,
 } from "lucide-react";
 import {
   DndContext,
@@ -534,12 +537,13 @@ const StockDashboard = ({
   const { materials, isLoading: materialsLoading } = useMaterials();
   const { products, isLoading: productsLoading } = useProducts();
   const { stockItems, isLoading: stockLoading } = useStockItems();
+  const { resaleProducts, isLoading: resaleProductsLoading } = useResaleProducts();
 
   const { updateStockItem } = useStockItems();
   const { averageCostPerTire, synchronizedCostData } =
     useCostCalculationOptions();
 
-  const handleStockUpdate = async (
+  handleStockUpdate = async (
     itemId: string,
     itemType: "material" | "product",
     quantity: number,
@@ -606,7 +610,7 @@ const StockDashboard = ({
     }
   };
 
-  const handleSetMinLevel = async (
+  handleSetMinLevel = async (
     itemId: string,
     itemType: "material" | "product",
     minLevel: number,
@@ -816,16 +820,32 @@ const StockDashboard = ({
             : "N/A",
       },
     );
+    // Calculate total low stock items (materials, final products, and resale products)
+  const materialLowStock = stockItems.filter(item => {
+    if (item.item_type !== "material") return false;
+    const minLevel = item.min_level || 0;
+    return minLevel > 0 && item.quantity <= minLevel;
+  }).length;
 
-    // Itens com estoque baixo por categoria
-    const materialLowStock = materialStockItems.filter(
-      (item) =>
-        item.min_level && item.min_level > 0 && item.quantity <= item.min_level,
-    ).length;
-    const finalProductLowStock = finalProductStockItems.filter(
-      (item) =>
-        item.min_level && item.min_level > 0 && item.quantity <= item.min_level,
-    ).length;
+  const finalProductLowStock = stockItems.filter(item => {
+    if (item.item_type !== "product") return false;
+    // Check if it's a final product (has a matching product in products table)
+    const isResaleProduct = resaleProducts.some(rp => rp.id === item.item_id);
+    if (isResaleProduct) return false;
+    const minLevel = item.min_level || 0;
+    return minLevel > 0 && item.quantity <= minLevel;
+  }).length;
+
+  const resaleProductLowStock = stockItems.filter(item => {
+    if (item.item_type !== "product") return false;
+    // Check if it's a resale product
+    const isResaleProduct = resaleProducts.some(rp => rp.id === item.item_id);
+    if (!isResaleProduct) return false;
+    const minLevel = item.min_level || 0;
+    return minLevel > 0 && item.quantity <= minLevel;
+  }).length;
+
+  const totalLowStock = materialLowStock + finalProductLowStock + resaleProductLowStock;
 
     console.log(
       `⚠️ [StockDashboard] Estoque baixo - Matéria-prima: ${materialLowStock}, Finais: ${finalProductLowStock}`,
@@ -866,6 +886,7 @@ const StockDashboard = ({
       // Estoque baixo
       materialLowStock,
       finalProductLowStock,
+      resaleProductLowStock,
       // Totais gerais
       totalLowStock:
         materialLowStock + finalProductLowStock,
@@ -877,9 +898,9 @@ const StockDashboard = ({
     console.log("✅ [StockDashboard] RESULTADO FINAL das métricas:", result);
 
     return result;
-  };
+  };```python
 
-    const metrics = calculateMetrics();
+  const metrics = calculateMetrics();
 
   // Update card values with current metrics
   const updatedCards = cards.map((card) => {
@@ -913,7 +934,8 @@ const StockDashboard = ({
             currency: "BRL",
             minimumFractionDigits: 0,
             maximumFractionDigits: 0,
-          }).format(metrics.finalProductTotalValue),        };      default:return card;
+          }).format(metrics.finalProductTotalValue),
+        };      default:return card;
     }
   });
 
@@ -1233,7 +1255,142 @@ const StockDashboard = ({
           </TabsContent>
         </Tabs>
       </div>
-    </TooltipProvider>
+
+      {/* Comprehensive Low Stock Alerts */}
+      {totalLowStock > 0 && (
+        <Card className="mt-6 bg-red-900/20 border-red-600/30">
+          <CardHeader>
+            <CardTitle className="text-red-400 text-lg flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5" />
+              Alertas de Estoque Baixo ({totalLowStock})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {/* Raw Materials Low Stock */}
+              {materialLowStock > 0 && (
+                <div>
+                  <h4 className="text-tire-300 font-medium mb-2 flex items-center gap-2">
+                    <Factory className="h-4 w-4" />
+                    Matérias-Primas ({materialLowStock})
+                  </h4>
+                  <div className="space-y-2">
+                    {stockItems
+                      .filter(item => {
+                        if (item.item_type !== "material") return false;
+                        const minLevel = item.min_level || 0;
+                        return minLevel > 0 && item.quantity <= minLevel;
+                      })
+                      .map((item) => (
+                        <div
+                          key={item.id}
+                          className="flex items-center justify-between p-3 bg-red-900/10 rounded border border-red-600/20"
+                        >
+                          <div>
+                            <span className="text-white font-medium">{item.item_name}</span>
+                            <div className="text-sm text-tire-300">Matéria-Prima</div>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-red-400 font-medium">
+                              {item.quantity.toFixed(1)} {item.unit}
+                            </span>
+                            <div className="text-xs text-tire-400">
+                              Mín: {item.min_level} {item.unit}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Final Products Low Stock */}
+              {finalProductLowStock > 0 && (
+                <div>
+                  <h4 className="text-tire-300 font-medium mb-2 flex items-center gap-2">
+                    <Package className="h-4 w-4" />
+                    Produtos Finais ({finalProductLowStock})
+                  </h4>
+                  <div className="space-y-2">
+                    {stockItems
+                      .filter(item => {
+                        if (item.item_type !== "product") return false;
+                        const isResaleProduct = resaleProducts.some(rp => rp.id === item.item_id);
+                        if (isResaleProduct) return false;
+                        const minLevel = item.min_level || 0;
+                        return minLevel > 0 && item.quantity <= minLevel;
+                      })
+                      .map((item) => (
+                        <div
+                          key={item.id}
+                          className="flex items-center justify-between p-3 bg-red-900/10 rounded border border-red-600/20"
+                        >
+                          <div>
+                            <span className="text-white font-medium">{item.item_name}</span>
+                            <div className="text-sm text-tire-300">Produto Final</div>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-red-400 font-medium">
+                              {item.quantity} {item.unit}
+                            </span>
+                            <div className="text-xs text-tire-400">
+                              Mín: {item.min_level} {item.unit}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Resale Products Low Stock */}
+              {resaleProductLowStock > 0 && (
+                <div>
+                  <h4 className="text-tire-300 font-medium mb-2 flex items-center gap-2">
+                    <ShoppingCart className="h-4 w-4" />
+                    Produtos de Revenda ({resaleProductLowStock})
+                  </h4>
+                  <div className="space-y-2">
+                    {stockItems
+                      .filter(item => {
+                        if (item.item_type !== "product") return false;
+                        const isResaleProduct = resaleProducts.some(rp => rp.id === item.item_id);
+                        if (!isResaleProduct) return false;
+                        const minLevel = item.min_level || 0;
+                        return minLevel > 0 && item.quantity <= minLevel;
+                      })
+                      .map((item) => {
+                        const resaleProduct = resaleProducts.find(rp => rp.id === item.item_id);
+                        return (
+                          <div
+                            key={item.id}
+                            className="flex items-center justify-between p-3 bg-red-900/10 rounded border border-red-600/20"
+                          >
+                            <div>
+                              <span className="text-white font-medium">{item.item_name}</span>
+                              <div className="text-sm text-tire-300">
+                                Produto de Revenda {resaleProduct?.supplier_name && `- ${resaleProduct.supplier_name}`}
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-red-400 font-medium">
+                                {item.quantity} {item.unit}
+                              </span>
+                              <div className="text-xs text-tire-400">
+                                Mín: {item.min_level} {item.unit}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
   );
 };
 
