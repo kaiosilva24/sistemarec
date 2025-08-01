@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -99,7 +98,7 @@ const AddStockDialog: React.FC<AddStockDialogProps> = ({
               ))}
             </select>
           </div>
-          
+
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label className="text-tire-300">Quantidade</Label>
@@ -115,7 +114,7 @@ const AddStockDialog: React.FC<AddStockDialogProps> = ({
                 required
               />
             </div>
-            
+
             <div className="space-y-2">
               <Label className="text-tire-300">Custo Unitário</Label>
               <div className="relative">
@@ -136,7 +135,7 @@ const AddStockDialog: React.FC<AddStockDialogProps> = ({
               </div>
             </div>
           </div>
-          
+
           <div className="flex gap-2 pt-4">
             <Button
               type="button"
@@ -247,7 +246,7 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
   const handleQuantityChange = (productId: string, newQuantity: string) => {
     const cleanValue = newQuantity.replace(/[^\d]/g, '');
     const numericQuantity = parseInt(cleanValue) || 0;
-    
+
     setProductAnalysis(prev => 
       prev.map(product => 
         product.productId === productId 
@@ -264,7 +263,7 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
   const handlePurchasePriceChange = (productId: string, newPrice: string) => {
     const cleanValue = newPrice.replace(/[^\d]/g, '');
     const numericPrice = parseInt(cleanValue) || 0;
-    
+
     setProductAnalysis(prev => 
       prev.map(product => 
         product.productId === productId 
@@ -283,7 +282,7 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
   const handleSalePriceChange = (productId: string, newPrice: string) => {
     const cleanValue = newPrice.replace(/[^\d]/g, '');
     const numericPrice = parseInt(cleanValue) || 0;
-    
+
     setProductAnalysis(prev => 
       prev.map(product => 
         product.productId === productId 
@@ -360,10 +359,10 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
       const stockItem = stockItems.find(item => 
         item.item_id === productId && item.item_type === "resaleProduct"
       );
-      
+
       if (stockItem) {
         const newTotalValue = product.editableQuantity * product.editablePurchasePrice;
-        
+
         await updateStockItem(stockItem.id, {
           quantity: product.editableQuantity,
           unit_cost: product.editablePurchasePrice,
@@ -377,7 +376,7 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
           await addStockItem({
             item_id: productId,
             item_name: resaleProduct.name,
-            item_type: "resaleProduct",
+            item_type: "product", // CORRIGIDO: usar "product" para compatibilidade
             unit: resaleProduct.unit,
             quantity: product.editableQuantity,
             unit_cost: product.editablePurchasePrice,
@@ -585,7 +584,7 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
                         )}
                       </div>
                     </div>
-                    
+
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                       {/* Quantidade */}
                       <div>
@@ -609,7 +608,7 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
                           </p>
                         )}
                       </div>
-                      
+
                       {/* Preço de Compra */}
                       <div>
                         <Label className="text-tire-400 text-sm">Preço de Compra</Label>
@@ -655,7 +654,7 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
                           </p>
                         )}
                       </div>
-                      
+
                       {/* Margem de Lucro */}
                       <div>
                         <Label className="text-tire-400 text-sm">Margem de Lucro</Label>
@@ -691,7 +690,7 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
               <p className="text-tire-400 text-sm">Total de Produtos</p>
               <p className="text-2xl font-bold text-white">{productAnalysis.length}</p>
             </div>
-            
+
             <div className={`text-center p-4 rounded-lg border transition-all duration-300 ${
               productsInStock > 0 
                 ? 'bg-neon-cyan/10 border-neon-cyan/30' 
@@ -704,7 +703,7 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
                 {productsInStock}
               </p>
             </div>
-            
+
             <div className={`text-center p-4 rounded-lg border transition-all duration-300 ${
               totalValue > 0 
                 ? 'bg-neon-blue/10 border-neon-blue/30' 
