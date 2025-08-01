@@ -479,94 +479,26 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       return 101.09;
     };
 
-    // Função para ler lucro médio por pneu - LEITURA DIRETA DO ELEMENTO HTML
+    // Função para ler lucro médio por pneu
     const readProfitPerTire = () => {
       try {
-        console.log("🔍 [Dashboard] INICIANDO LEITURA DIRETA DO LUCRO...");
-        
-        // MÉTODO 1: Buscar pelo texto específico "Lucro Médio por Produto Final"
-        const allElements = document.querySelectorAll("*");
-        for (const element of allElements) {
-          const textContent = element.textContent?.trim();
-          if (textContent && textContent.includes("Lucro Médio por Produto Final")) {
-            console.log("🎯 [Dashboard] ENCONTROU elemento com 'Lucro Médio por Produto Final'");
-            
-            // Procurar pelo próximo elemento que contém R$ valor
-            const parent = element.closest('.p-4, div[class*="p-4"]');
-            if (parent) {
-              const valueElements = parent.querySelectorAll('*');
-              for (const valueEl of valueElements) {
-                const valueText = valueEl.textContent?.trim();
-                if (valueText && valueText.includes('R$') && valueText.includes('77,02')) {
-                  console.log(`✅ [Dashboard] ENCONTROU VALOR: "${valueText}"`);
-                  const match = valueText.match(/R\$\s*([\d.,]+)/);
-                  if (match) {
-                    const value = parseFloat(match[1].replace(",", "."));
-                    if (!isNaN(value) && value > 0) {
-                      console.log(`💫 [Dashboard] FÓRMULA EXCEL DIRETA: Copiando R$ ${value.toFixed(2)}`);
-                      setAverageProfitPerTire(value);
-                      return value;
-                    }
-                  }
-                }
-              }
+        const profitElement = document.querySelector('[id="average-profit"]');
+        if (profitElement) {
+          const textContent = profitElement.textContent || "";
+          const match = textContent.match(/R\$\s*([\d.,]+)/);
+          if (match) {
+            const value = parseFloat(match[1].replace(",", "."));
+            if (!isNaN(value)) {
+              console.log(`💫 [Dashboard] FÓRMULA EXCEL: Copiando lucro R$ ${value.toFixed(3)}`);
+              setAverageProfitPerTire(value);
+              return value;
             }
           }
         }
-
-        // MÉTODO 2: Buscar por class específica text-neon-purple que contém R$
-        const purpleElements = document.querySelectorAll('.text-neon-purple');
-        for (const element of purpleElements) {
-          const textContent = element.textContent?.trim();
-          if (textContent && textContent.includes('R$')) {
-            console.log(`🔍 [Dashboard] Elemento roxo com R$: "${textContent}"`);
-            const match = textContent.match(/R\$\s*([\d.,]+)/);
-            if (match) {
-              const value = parseFloat(match[1].replace(",", "."));
-              if (!isNaN(value) && value > 0) {
-                console.log(`💫 [Dashboard] LUCRO ENCONTRADO: R$ ${value.toFixed(2)}`);
-                setAverageProfitPerTire(value);
-                return value;
-              }
-            }
-          }
-        }
-
-        // MÉTODO 3: Buscar por qualquer elemento que contenha exatamente "R$ 77,02"
-        for (const element of allElements) {
-          const textContent = element.textContent?.trim();
-          if (textContent === "R$ 77,02" || (textContent && textContent.includes("77,02"))) {
-            console.log(`🎯 [Dashboard] VALOR EXATO ENCONTRADO: "${textContent}"`);
-            const match = textContent.match(/R\$\s*([\d.,]+)/);
-            if (match) {
-              const value = parseFloat(match[1].replace(",", "."));
-              if (!isNaN(value)) {
-                console.log(`✅ [Dashboard] SINCRONIZAÇÃO DIRETA: R$ ${value.toFixed(2)}`);
-                setAverageProfitPerTire(value);
-                return value;
-              }
-            }
-          }
-        }
-
-        // MÉTODO 4: Usar localStorage como backup
-        const savedProfit = localStorage.getItem("dashboard_averageProfitPerTire");
-        if (savedProfit) {
-          const parsed = JSON.parse(savedProfit);
-          if (parsed.value && parsed.value > 0) {
-            console.log(`💾 [Dashboard] USANDO VALOR SALVO: R$ ${parsed.value.toFixed(2)}`);
-            setAverageProfitPerTire(parsed.value);
-            return parsed.value;
-          }
-        }
-
-        console.warn("⚠️ [Dashboard] NENHUM MÉTODO FUNCIONOU - usando valor padrão");
-        
       } catch (error) {
-        console.error("❌ [Dashboard] Erro na leitura direta do lucro:", error);
+        console.error("❌ [Dashboard] Erro ao ler lucro:", error);
       }
 
-      // Valor padrão
       return 69.765;
     };
 
@@ -624,13 +556,6 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
         const newProfit = event.detail.averageProfitPerTire;
         console.log(`💰 [Dashboard] LUCRO SINCRONIZADO: ${averageProfitPerTire.toFixed(3)} → ${newProfit.toFixed(3)}`);
         setAverageProfitPerTire(newProfit);
-        
-        // Salvar automaticamente
-        localStorage.setItem("dashboard_averageProfitPerTire", JSON.stringify({
-          value: newProfit,
-          timestamp: Date.now(),
-          source: "Event_DirectDOM_Sync"
-        }));
       }
     };
 
@@ -642,30 +567,6 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
     readProfitPerTire();
     readProfitPercentage();
 
-    // Observer para mudanças no DOM - especificamente para lucro
-    const observer = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
-        if (mutation.type === 'childList' || mutation.type === 'characterData') {
-          const target = mutation.target as Element;
-          
-          // Verificar se a mudança está relacionada ao lucro
-          if (target.textContent?.includes('R$') || 
-              target.textContent?.includes('Lucro Médio') ||
-              target.classList?.contains('text-neon-purple')) {
-            console.log("🔄 [Dashboard] DETECTOU MUDANÇA NO LUCRO - atualizando");
-            setTimeout(readProfitPerTire, 100); // Pequeno delay para DOM se estabilizar
-          }
-        }
-      });
-    });
-
-    // Observar o documento inteiro para mudanças
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-      characterData: true
-    });
-
     // Verificação periódica (como uma atualização automática do Excel)
     const interval = setInterval(() => {
       readTireCostManagerValue();
@@ -675,7 +576,6 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
 
     return () => {
       window.removeEventListener("tireCostUpdated", handleTireCostUpdate as EventListener);
-      observer.disconnect();
       clearInterval(interval);
     };
   }, [averageCostPerTire, averageProfitPerTire]);
