@@ -168,18 +168,35 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
 
   useEffect(() => {
-    if (!resaleProducts.length) return;
+    if (!resaleProducts.length || stockLoading) return;
 
-    // Começar sempre com valores zerados - apenas usar o novo sistema de cálculo
+    console.log('🔄 [ResaleProductsStock] Carregando dados dos produtos de revenda...');
+
+    // Carregar dados reais do banco - NÃO zerar mais
     const analysis = resaleProducts
       .filter(product => !product.archived)
       .map(product => {
-        // ZERADO: Ignorar dados antigos, começar sempre com 0
-        const quantity = 0;
-        const purchasePrice = 0;
-        const salePrice = 0;
-        const totalValue = 0;
-        const profitMargin = 0;
+        // Buscar item de estoque correspondente
+        const stockItem = stockItems.find(
+          item => item.item_id === product.id && item.item_type === "resaleProduct"
+        );
+
+        // Usar dados reais do banco ou valores padrão se não existir
+        const quantity = stockItem?.quantity || 0;
+        const purchasePrice = stockItem?.unit_cost || product.purchase_price || 0;
+        const salePrice = product.sale_price || 0;
+        const totalValue = stockItem?.total_value || (quantity * purchasePrice);
+        const profitMargin = salePrice > 0 ? 
+          ((salePrice - purchasePrice) / salePrice * 100) : 0;
+
+        console.log(`📦 [ResaleProductsStock] Produto carregado: ${product.name}`, {
+          quantity,
+          purchasePrice,
+          salePrice,
+          totalValue,
+          profitMargin: profitMargin.toFixed(2) + '%',
+          hasStockItem: !!stockItem
+        });
 
         return {
           productId: product.id,
@@ -198,7 +215,12 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
       });
 
     setProductAnalysis(analysis);
-  }, [resaleProducts]);
+    console.log('✅ [ResaleProductsStock] Análise de produtos concluída:', {
+      totalProducts: analysis.length,
+      productsWithStock: analysis.filter(p => p.quantity > 0).length,
+      totalValue: analysis.reduce((sum, p) => sum + p.totalValue, 0)
+    });
+  }, [resaleProducts, stockItems, stockLoading]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
@@ -365,12 +387,28 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
         }
       }
 
-      // Atualizar produto de revenda
-      await updateResaleProduct(productId, {
+      // Atualizar produto de revenda com os novos valores
+      console.log(`🔄 [ResaleProductsStock] Atualizando produto de revenda: ${product.productName}`, {
         purchase_price: product.editablePurchasePrice,
         sale_price: product.editableSalePrice,
         profit_margin: product.profitMargin
       });
+
+      const updatedProduct = await updateResaleProduct(productId, {
+        purchase_price: product.editablePurchasePrice,
+        sale_price: product.editableSalePrice,
+        profit_margin: product.profitMargin
+      });
+
+      if (updatedProduct) {
+        console.log(`✅ [ResaleProductsStock] Produto de revenda atualizado no banco:`, {
+          id: updatedProduct.id,
+          name: updatedProduct.name,
+          purchase_price: updatedProduct.purchase_price,
+          sale_price: updatedProduct.sale_price,
+          profit_margin: updatedProduct.profit_margin
+        });
+      }
 
       // Atualizar estado local
       setProductAnalysis(prev => 
@@ -388,9 +426,26 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
         )
       );
 
-      console.log(`✅ Produto de revenda atualizado: ${product.productName}`);
+      console.log(`✅ [ResaleProductsStock] TODAS as alterações salvas com sucesso para: ${product.productName}`, {
+        stockUpdated: !!stockItem || product.editableQuantity > 0,
+        productUpdated: true,
+        finalQuantity: product.editableQuantity,
+        finalPurchasePrice: product.editablePurchasePrice,
+        finalSalePrice: product.editableSalePrice,
+        finalTotalValue: product.editableQuantity * product.editablePurchasePrice,
+        finalProfitMargin: product.profitMargin.toFixed(2) + '%'
+      });
     } catch (error) {
-      console.error("Erro ao salvar alterações:", error);
+      console.error(`❌ [ResaleProductsStock] Erro crítico ao salvar alterações para ${product.productName}:`, {
+        error: error instanceof Error ? error.message : error,
+        stack: error instanceof Error ? error.stack : undefined,
+        productId,
+        productData: {
+          quantity: product.editableQuantity,
+          purchasePrice: product.editablePurchasePrice,
+          salePrice: product.editableSalePrice
+        }
+      });
     } finally {
       setIsSaving(false);
     }

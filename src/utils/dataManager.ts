@@ -421,6 +421,13 @@ export class DataManager {
         ...dataToSave
       } = stockItem;
 
+      // Validar tipos aceitos
+      const validItemTypes = ["material", "product", "resaleProduct"];
+      if (!validItemTypes.includes(dataToSave.item_type)) {
+        console.warn(`⚠️ [DataManager] Tipo de item não reconhecido: ${dataToSave.item_type}, convertendo para 'product'`);
+        dataToSave.item_type = "product";
+      }
+
       console.log(
         `🔧 [DataManager] Inserindo stock item com dados:`,
         dataToSave,
