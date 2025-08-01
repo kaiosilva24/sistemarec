@@ -79,6 +79,11 @@ import {
 } from "@dnd-kit/sortable";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { createClient } from '@supabase/supabase-js'
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Interface para definir um card de métrica
 interface MetricCard {
@@ -180,16 +185,6 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
   const { warrantyEntries, isLoading: warrantyEntriesLoading } =
     useWarrantyEntries();
 
-  // Load cost calculation options from TireCostManager
-  const {
-    costOptions,
-    isIncludingLaborCosts,
-    isIncludingCashFlowExpenses,
-    isIncludingProductionLosses,
-    isIncludingDefectiveTireSales,
-    isDividingByProduction,
-  } = useCostCalculationOptions();
-
   const isDataLoading =
     isLoading ||
     cashFlowLoading ||
@@ -213,6 +208,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
   );
   const [hiddenCards, setHiddenCards] = useState<string[]>([]);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'syncing'>('disconnected');
 
   // Sensores para drag-and-drop
   const sensors = useSensors(
@@ -424,6 +420,28 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
   const [finalProductProfit, setFinalProductProfit] = useState(73.214);
   const [totalFinalProductProfit, setTotalFinalProductProfit] = useState(2832.20);
 
+  // Função para atualizar métricas no Supabase
+  const updateSupabaseMetric = async (metricName: string, metricValue: number) => {
+    try {
+      const { data, error } = await supabase
+        .from('metrics')
+        .upsert([
+          { name: metricName, value: metricValue, updated_at: new Date() }
+        ], { onConflict: ['name'] });
+
+      if (error) {
+        console.error("❌ [Supabase] Erro ao atualizar métrica:", error);
+        setSyncStatus('disconnected');
+      } else {
+        console.log("✅ [Supabase] Métrica atualizada:", metricName, metricValue);
+        setSyncStatus('connected');
+      }
+    } catch (error) {
+      console.error("❌ [Supabase] Erro ao comunicar com Supabase:", error);
+      setSyncStatus('disconnected');
+    }
+  };
+
   // Effect para sincronizar com o TireCostManager - FÓRMULA ESTILO EXCEL MELHORADA
   useEffect(() => {
     // Função para ler o valor do TireCostManager
@@ -486,11 +504,11 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
             if (currentMetrics.salesQuantity > 0) {
               const averageSellingPrice = currentMetrics.totalRevenue / currentMetrics.salesQuantity;
               const calculatedProfit = averageSellingPrice - parsed.averageCostPerTire;
-              
+
               if (calculatedProfit > 0) {
                 console.log(`💫 [Dashboard] FÓRMULA EXCEL LUCRO: Calculado automaticamente R$ ${calculatedProfit.toFixed(3)}`);
                 setAverageProfitPerTire(calculatedProfit);
-                
+
                 // Salvar o valor calculado
                 localStorage.setItem("dashboard_averageProfitPerTire", JSON.stringify({
                   value: calculatedProfit,
@@ -499,7 +517,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                   costUsed: parsed.averageCostPerTire,
                   averageSellingPrice: averageSellingPrice
                 }));
-                
+
                 return calculatedProfit;
               }
             }
@@ -512,11 +530,11 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
         let validAnalyses = 0;
 
         const productNames = ["175 70 14 P6", "175 65 14 P1"]; // Produtos conhecidos
-        
+
         for (const productName of productNames) {
           const productKey = `tireAnalysis_${productName.toLowerCase().replace(/\s+/g, "_")}`;
           const productData = localStorage.getItem(productKey);
-          
+
           if (productData) {
             const parsed = JSON.parse(productData);
             if (parsed.totalSold > 0 && parsed.totalRevenue > 0 && parsed.costPerTire > 0) {
@@ -524,7 +542,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
               totalProfit += productProfit * parsed.totalSold;
               totalSold += parsed.totalSold;
               validAnalyses++;
-              
+
               console.log(`📊 [Dashboard] FÓRMULA EXCEL: Produto ${productName} - Lucro unitário: R$ ${productProfit.toFixed(3)}`);
             }
           }
@@ -606,12 +624,12 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       try {
         // Obter métricas atuais de vendas
         const currentMetrics = calculateMetrics();
-        
+
         if (currentMetrics.salesQuantity > 0) {
           // Calcular novo lucro por pneu: (Receita Total / Vendas) - Custo por Pneu
           const averageSellingPrice = currentMetrics.totalRevenue / currentMetrics.salesQuantity;
           const newProfitPerTire = averageSellingPrice - costPerTire;
-          
+
           console.log(`🔄 [Dashboard] RECALCULANDO LUCRO AUTOMATICAMENTE:`, {
             averageSellingPrice: averageSellingPrice.toFixed(2),
             costPerTire: costPerTire.toFixed(2),
@@ -619,27 +637,27 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
             salesQuantity: currentMetrics.salesQuantity,
             totalRevenue: currentMetrics.totalRevenue
           });
-          
+
           setAverageProfitPerTire(newProfitPerTire);
-          
+
           // Calcular lucro total de produtos finais
           const newTotalFinalProductProfit = newProfitPerTire * currentMetrics.salesQuantity;
           setTotalFinalProductProfit(newTotalFinalProductProfit);
-          
+
           // Calcular nova porcentagem de lucro
           if (averageSellingPrice > 0) {
             const newProfitPercentage = (newProfitPerTire / averageSellingPrice) * 100;
             setProfitPercentage(newProfitPercentage);
-            
+
             console.log(`✅ [Dashboard] LUCRO RECALCULADO: ${newProfitPerTire.toFixed(3)} (${newProfitPercentage.toFixed(1)}%) - Total: ${newTotalFinalProductProfit.toFixed(2)}`);
           }
-          
+
           return newProfitPerTire;
         }
       } catch (error) {
         console.error("❌ [Dashboard] Erro ao recalcular lucro:", error);
       }
-      
+
       return 69.765; // Valor padrão
     };
 
@@ -648,13 +666,13 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       try {
         // 🔥 SOLUÇÃO DEFINITIVA: SEMPRE USAR O MESMO VALOR DO LUCRO POR PNEU
         console.log(`🔥 [Dashboard] FORÇANDO SINCRONIZAÇÃO TOTAL: Lucro Produto Final = Lucro por Pneu`);
-        
+
         // Usar diretamente o valor do lucro por pneu atual
         const identicalProfit = averageProfitPerTire;
-        
+
         console.log(`💫 [Dashboard] FÓRMULA EXCEL IDÊNTICA: R$ ${identicalProfit.toFixed(3)} = R$ ${identicalProfit.toFixed(3)}`);
         setFinalProductProfit(identicalProfit);
-        
+
         // Salvar no localStorage para persistência
         localStorage.setItem("dashboard_finalProductProfit", JSON.stringify({
           value: identicalProfit,
@@ -662,7 +680,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
           source: "Dashboard_ForcedSync",
           syncedWithProfitPerTire: true
         }));
-        
+
         return identicalProfit;
       } catch (error) {
         console.error("❌ [Dashboard] Erro ao sincronizar lucro produto final:", error);
@@ -676,18 +694,18 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       try {
         // Calcular baseado no lucro por pneu e quantidade vendida
         const currentMetrics = calculateMetrics();
-        
+
         if (currentMetrics.salesQuantity > 0 && averageProfitPerTire > 0) {
           const calculatedTotal = averageProfitPerTire * currentMetrics.salesQuantity;
-          
+
           console.log(`💰 [Dashboard] CALCULANDO LUCRO TOTAL DE PRODUTOS FINAIS:`, {
             lucroPorPneu: averageProfitPerTire.toFixed(3),
             quantidadeVendida: currentMetrics.salesQuantity,
             lucroTotal: calculatedTotal.toFixed(2)
           });
-          
+
           setTotalFinalProductProfit(calculatedTotal);
-          
+
           // Salvar no localStorage para persistência
           localStorage.setItem("dashboard_totalFinalProductProfit", JSON.stringify({
             value: calculatedTotal,
@@ -696,7 +714,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
             profitPerTire: averageProfitPerTire,
             salesQuantity: currentMetrics.salesQuantity
           }));
-          
+
           return calculatedTotal;
         } else {
           // Tentar ler valor salvo do localStorage
@@ -726,9 +744,19 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
         console.log(`✨ [Dashboard] FÓRMULA EXCEL CUSTO: ${averageCostPerTire.toFixed(2)} → ${newCost.toFixed(2)}`);
         setAverageCostPerTire(newCost);
 
+        // Salvar no localStorage para persistência
+        localStorage.setItem("dashboard_averageCostPerTire", JSON.stringify({
+          value: newCost,
+          timestamp: Date.now(),
+          source: "TireCostManager_Event"
+        }));
+
+        // 🔥 SINCRONIZAR COM SUPABASE AUTOMATICAMENTE
+        updateSupabaseMetric('custo_medio_pneu', newCost);
+
         // 🔥 RECALCULAR LUCRO AUTOMATICAMENTE QUANDO CUSTO MUDA
         const newProfit = calculateProfitFromCurrentMetrics(newCost);
-        
+
         // Atualizar também o lucro de produto final para manter consistência
         setFinalProductProfit(newProfit);
 
@@ -744,20 +772,20 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       if (event.detail.averageProfitPerTire !== undefined) {
         const newProfit = event.detail.averageProfitPerTire;
         console.log(`✨ [Dashboard] FÓRMULA EXCEL LUCRO DIRETO: ${averageProfitPerTire.toFixed(3)} → ${newProfit.toFixed(3)}`);
-        
+
         // 🔥 APLICAR O MESMO VALOR EM AMBOS OS CAMPOS
         setAverageProfitPerTire(newProfit);
         setFinalProductProfit(newProfit); // FORÇAR IDENTIDADE TOTAL
-        
+
         console.log(`🎯 [Dashboard] VALORES FORÇADOS PARA SER IDÊNTICOS: Lucro por Pneu = R$ ${newProfit.toFixed(3)}, Produto Final = R$ ${newProfit.toFixed(3)}`);
-        
+
         // Salvar ambos valores
         localStorage.setItem("dashboard_averageProfitPerTire", JSON.stringify({
           value: newProfit,
           timestamp: Date.now(),
           source: "TireCostManager_Event_LUCRO"
         }));
-        
+
         localStorage.setItem("dashboard_finalProductProfit", JSON.stringify({
           value: newProfit,
           timestamp: Date.now(),
@@ -768,18 +796,18 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       // 🔥 NOVO: SINCRONIZAÇÃO DE ANÁLISES ESPECÍFICAS POR PRODUTO
       if (event.detail.specificAnalyses && Array.isArray(event.detail.specificAnalyses)) {
         console.log(`📊 [Dashboard] Recebendo análises específicas:`, event.detail.specificAnalyses);
-        
+
         // Calcular média ponderada dos lucros por produto
         let totalProfitWeighted = 0;
         let totalQuantity = 0;
-        
+
         event.detail.specificAnalyses.forEach((analysis: any) => {
           if (analysis.costPerTire > 0) {
             const currentMetrics = calculateMetrics();
             if (currentMetrics.salesQuantity > 0) {
               const avgSellingPrice = currentMetrics.totalRevenue / currentMetrics.salesQuantity;
               const productProfit = avgSellingPrice - analysis.costPerTire;
-              
+
               // Usar peso baseado na quantidade vendida (assumindo distribuição igual)
               const weight = 1; // Peso igual para todos os produtos por enquanto
               totalProfitWeighted += productProfit * weight;
@@ -787,7 +815,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
             }
           }
         });
-        
+
         if (totalQuantity > 0) {
           const averageProfit = totalProfitWeighted / totalQuantity;
           console.log(`🎯 [Dashboard] Lucro médio calculado das análises específicas: R$ ${averageProfit.toFixed(3)}`);
@@ -807,19 +835,19 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
     readFinalProductProfit();
     readTotalFinalProductProfit();
 
-    // Verificação periódica MELHORADA (como uma atualização automática do Excel)
+    // Verificação periódica MELHORADA (como uma atualizaçãoautomática do Excel)
     const interval = setInterval(() => {
       // Sempre ler o custo primeiro
       const currentCost = readTireCostManagerValue();
-      
+
       // Depois ler o lucro diretamente
       const currentProfit = readProfitPerTire();
-      
+
       // E outras métricas
       readProfitPercentage();
       readFinalProductProfit();
       readTotalFinalProductProfit();
-      
+
       console.log(`🔄 [Dashboard] FÓRMULA EXCEL SINCRONIZAÇÃO:`, {
         custo: `R$ ${currentCost.toFixed(2)}`,
         lucro: `R$ ${currentProfit.toFixed(3)}`,
@@ -827,6 +855,36 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
         hora: new Date().toLocaleTimeString("pt-BR")
       });
     }, 3000);
+
+    // Supabase Realtime listener
+    const setupSupabaseRealtime = async () => {
+      console.log("⚡️ [Supabase] Iniciando listener de Realtime...");
+      setSyncStatus('connecting');
+
+      supabase
+        .channel('public:metrics')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'metrics' }, (payload) => {
+          console.log("✨ [Supabase] Alteração detectada:", payload);
+
+          // Recarrega os valores do localStorage
+          readTireCostManagerValue();
+          readProfitPerTire();
+          readProfitPercentage();
+          readFinalProductProfit();
+          readTotalFinalProductProfit();
+          setSyncStatus('connected');
+        })
+        .subscribe(status => {
+          console.log("✅ [Supabase] Subscribed:", status);
+          if (status === 'SUBSCRIBED') {
+            setSyncStatus('connected');
+          } else {
+            setSyncStatus('disconnected');
+          }
+        });
+    };
+
+    setupSupabaseRealtime();
 
     return () => {
       window.removeEventListener("tireCostUpdated", handleTireCostUpdate as EventListener);
@@ -839,11 +897,11 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
     if (averageCostPerTire > 0) {
       // Obter métricas atuais
       const currentMetrics = calculateMetrics();
-      
+
       if (currentMetrics.salesQuantity > 0) {
         const averageSellingPrice = currentMetrics.totalRevenue / currentMetrics.salesQuantity;
         const calculatedProfitPerTire = averageSellingPrice - averageCostPerTire;
-        
+
         // Atualizar lucro se for diferente do atual (evitar loops infinitos)
         if (Math.abs(calculatedProfitPerTire - averageProfitPerTire) > 0.01) {
           console.log(`🔄 [Dashboard] CUSTO MUDOU - RECALCULANDO LUCRO:`, {
@@ -851,10 +909,10 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
             precoMedioVenda: averageSellingPrice.toFixed(2),
             novoLucro: calculatedProfitPerTire.toFixed(3)
           });
-          
+
           setAverageProfitPerTire(calculatedProfitPerTire);
           setFinalProductProfit(calculatedProfitPerTire); // 🔥 FORÇAR IDENTIDADE TOTAL
-          
+
           // Recalcular porcentagem
           if (averageSellingPrice > 0) {
             const newProfitPercentage = (calculatedProfitPerTire / averageSellingPrice) * 100;
@@ -868,13 +926,13 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
   // 🔥 NOVO EFFECT: FORÇAR SINCRONIZAÇÃO TOTAL SEMPRE QUE LUCRO POR PNEU MUDAR
   useEffect(() => {
     console.log(`🔥 [Dashboard] FORÇANDO SINCRONIZAÇÃO: Lucro por Pneu mudou para R$ ${averageProfitPerTire.toFixed(3)}`);
-    
+
     // Sempre manter os valores idênticos
     if (Math.abs(finalProductProfit - averageProfitPerTire) > 0.001) {
       console.log(`🎯 [Dashboard] CORREÇÃO AUTOMÁTICA: ${finalProductProfit.toFixed(3)} → ${averageProfitPerTire.toFixed(3)}`);
       setFinalProductProfit(averageProfitPerTire);
     }
-    
+
     // Recalcular lucro total baseado no novo lucro por pneu
     const currentMetrics = calculateMetrics();
     if (currentMetrics.salesQuantity > 0) {
@@ -1223,7 +1281,8 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
     () => [
       {
         id: "cash-balance",
-        title: "Saldo de Caixa",        value: formatCurrency(metrics.cashBalance),
+        title: "Saldo de Caixa",
+        value: formatCurrency(metrics.cashBalance),
         subtitle: "entradas - saídas",
         icon: DollarSign,
         colorClass: metrics.cashBalance >= 0 ? "#10B981" : "#EF4444",
@@ -1600,14 +1659,27 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
             </div>
 
             <DialogFooter className="flex items-center justify-between">
-              <Button
-                variant="outline"
-                onClick={resetToDefault}
-                className="bg-factory-700/50 border-tire-600/30 text-tire-300 hover:text-white hover:bg-factory-600/50 flex items-center gap-2"
-              >
-                <RotateCcw className="h-4 w-4" />
-                Resetar Padrão
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  onClick={resetToDefault}
+                  className="bg-factory-700/50 border-tire-600/30 text-tire-300 hover:text-white hover:bg-factory-600/50 flex items-center gap-2"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  Resetar Padrão
+                </Button>
+
+                <Button
+                  onClick={async () => {
+                    setSyncStatus('syncing');
+                    const testValue = Math.random() * 100 + 50;
+                    await updateSupabaseMetric('lucro_medio_pneu', testValue);
+                    setTimeout(() => setSyncStatus('connected'), 1000);
+                  }}
+                  className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2"
+                >
+                  📡 Teste Supabase
+                </Button>
+              </div>
 
               <Button
                 onClick={() => setShowCustomization(false)}
