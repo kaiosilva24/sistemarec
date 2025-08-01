@@ -472,109 +472,55 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       return 101.09;
     };
 
-    // Função para ler lucro médio por pneu - SINCRONIZAÇÃO DIRETA COM TIRECOSTMANAGER
-    const readProfitPerTire = () => {
+    // FÓRMULA EFICAZ: CALCULAR LUCRO DINAMICAMENTE COM BASE NO CUSTO E VENDAS
+    const calculateDynamicProfitPerTire = () => {
       try {
-        // 1. PRIMEIRA PRIORIDADE: Ler dos dados sincronizados do TireCostManager
-        const synchronizedData = localStorage.getItem("tireCostManager_synchronizedCostData");
-        if (synchronizedData) {
-          const parsed = JSON.parse(synchronizedData);
-          if (parsed.averageCostPerTire && parsed.productCount > 0) {
-            // Calcular lucro baseado no custo sincronizado e métricas atuais
-            const currentMetrics = calculateMetrics();
-            if (currentMetrics.salesQuantity > 0) {
-              const averageSellingPrice = currentMetrics.totalRevenue / currentMetrics.salesQuantity;
-              const calculatedProfit = averageSellingPrice - parsed.averageCostPerTire;
-              
-              if (calculatedProfit > 0) {
-                console.log(`💫 [Dashboard] FÓRMULA EXCEL LUCRO: Calculado automaticamente R$ ${calculatedProfit.toFixed(3)}`);
-                setAverageProfitPerTire(calculatedProfit);
-                
-                // Salvar o valor calculado
-                localStorage.setItem("dashboard_averageProfitPerTire", JSON.stringify({
-                  value: calculatedProfit,
-                  timestamp: Date.now(),
-                  source: "TireCostManager_Calculated",
-                  costUsed: parsed.averageCostPerTire,
-                  averageSellingPrice: averageSellingPrice
-                }));
-                
-                return calculatedProfit;
-              }
-            }
-          }
-        }
-
-        // 2. SEGUNDA PRIORIDADE: Ler análises específicas por produto do TireCostManager
-        let totalProfit = 0;
-        let totalSold = 0;
-        let validAnalyses = 0;
-
-        const productNames = ["175 70 14 P6", "175 65 14 P1"]; // Produtos conhecidos
+        console.log(`🔥 [Dashboard] EXECUTANDO FÓRMULA EFICAZ - Custo atual: R$ ${averageCostPerTire.toFixed(2)}`);
         
-        for (const productName of productNames) {
-          const productKey = `tireAnalysis_${productName.toLowerCase().replace(/\s+/g, "_")}`;
-          const productData = localStorage.getItem(productKey);
+        // Obter métricas atuais para cálculo dinâmico
+        const currentMetrics = calculateMetrics();
+        
+        if (currentMetrics.salesQuantity > 0 && currentMetrics.totalRevenue > 0) {
+          // FÓRMULA PRINCIPAL: Preço Médio de Venda - Custo Médio por Pneu
+          const averageSellingPrice = currentMetrics.totalRevenue / currentMetrics.salesQuantity;
+          const dynamicProfit = averageSellingPrice - averageCostPerTire;
           
-          if (productData) {
-            const parsed = JSON.parse(productData);
-            if (parsed.totalSold > 0 && parsed.totalRevenue > 0 && parsed.costPerTire > 0) {
-              const productProfit = (parsed.totalRevenue / parsed.totalSold) - parsed.costPerTire;
-              totalProfit += productProfit * parsed.totalSold;
-              totalSold += parsed.totalSold;
-              validAnalyses++;
-              
-              console.log(`📊 [Dashboard] FÓRMULA EXCEL: Produto ${productName} - Lucro unitário: R$ ${productProfit.toFixed(3)}`);
-            }
-          }
-        }
-
-        if (totalSold > 0 && validAnalyses > 0) {
-          const averageProfit = totalProfit / totalSold;
-          console.log(`💫 [Dashboard] FÓRMULA EXCEL LUCRO: Média ponderada R$ ${averageProfit.toFixed(3)}`);
-          setAverageProfitPerTire(averageProfit);
-          return averageProfit;
-        }
-
-        // 3. TERCEIRA PRIORIDADE: Ler do localStorage específico
-        const savedData = localStorage.getItem("dashboard_averageProfitPerTire");
-        if (savedData) {
-          const parsed = JSON.parse(savedData);
-          if (parsed.value && parsed.value > 0) {
-            console.log(`💫 [Dashboard] FÓRMULA EXCEL LUCRO: Usando valor salvo R$ ${parsed.value.toFixed(3)}`);
-            setAverageProfitPerTire(parsed.value);
-            return parsed.value;
-          }
-        }
-
-        // 4. ÚLTIMA ALTERNATIVA: Procurar no DOM
-        const elements = document.querySelectorAll('p, span, div');
-        for (const element of elements) {
-          const text = element.textContent || "";
-          if (text.includes("Lucro Médio por Pneu") || text.includes("lucro por unidade")) {
-            const parent = element.parentElement;
-            if (parent) {
-              const siblingElements = parent.querySelectorAll('p, span, div');
-              for (const sibling of siblingElements) {
-                const siblingText = sibling.textContent || "";
-                const match = siblingText.match(/R\$\s*([0-9.,]+)/);
-                if (match) {
-                  const value = parseFloat(match[1].replace(",", "."));
-                  if (!isNaN(value) && value > 0 && value < 1000) {
-                    console.log(`💫 [Dashboard] FÓRMULA EXCEL LUCRO: Encontrado no DOM R$ ${value.toFixed(3)}`);
-                    setAverageProfitPerTire(value);
-                    return value;
-                  }
-                }
-              }
-            }
-          }
+          console.log(`✅ [Dashboard] FÓRMULA EFICAZ APLICADA:`, {
+            receita: currentMetrics.totalRevenue,
+            quantidadeVendida: currentMetrics.salesQuantity,
+            precoMedioVenda: averageSellingPrice.toFixed(2),
+            custoMedioPneu: averageCostPerTire.toFixed(2),
+            lucroDinamico: dynamicProfit.toFixed(3),
+            formula: `${averageSellingPrice.toFixed(2)} - ${averageCostPerTire.toFixed(2)} = ${dynamicProfit.toFixed(3)}`
+          });
+          
+          // Salvar valor calculado
+          localStorage.setItem("dashboard_averageProfitPerTire", JSON.stringify({
+            value: dynamicProfit,
+            timestamp: Date.now(),
+            source: "Dashboard_DynamicCalculation",
+            costUsed: averageCostPerTire,
+            averageSellingPrice: averageSellingPrice,
+            salesQuantity: currentMetrics.salesQuantity,
+            totalRevenue: currentMetrics.totalRevenue
+          }));
+          
+          return dynamicProfit;
+        } else {
+          console.log(`⚠️ [Dashboard] Sem dados de venda para cálculo dinâmico - usando estimativa baseada no custo`);
+          
+          // FALLBACK: Se não há vendas, estimar lucro baseado no custo
+          // Assumir margem de 40% sobre o custo
+          const estimatedProfit = averageCostPerTire * 0.4;
+          
+          console.log(`💡 [Dashboard] ESTIMATIVA DE LUCRO: 40% sobre custo = R$ ${estimatedProfit.toFixed(3)}`);
+          
+          return estimatedProfit;
         }
       } catch (error) {
-        console.error("❌ [Dashboard] Erro na fórmula Excel do lucro:", error);
+        console.error("❌ [Dashboard] Erro na fórmula eficaz:", error);
+        return 0;
       }
-
-      return 69.765;
     };
 
     // Função para ler porcentagem de lucro
@@ -675,11 +621,12 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
         console.log(`✨ [Dashboard] FÓRMULA EXCEL CUSTO: ${averageCostPerTire.toFixed(2)} → ${newCost.toFixed(2)}`);
         setAverageCostPerTire(newCost);
 
-        // 🔥 RECALCULAR LUCRO AUTOMATICAMENTE QUANDO CUSTO MUDA
-        const newProfit = calculateProfitFromCurrentMetrics(newCost);
+        // 🔥 APLICAR FÓRMULA EFICAZ QUANDO CUSTO MUDA
+        const dynamicProfit = calculateDynamicProfitPerTire();
+        setAverageProfitPerTire(dynamicProfit);
+        setFinalProductProfit(dynamicProfit);
         
-        // Atualizar também o lucro de produto final para manter consistência
-        setFinalProductProfit(newProfit);
+        console.log(`🎯 [Dashboard] FÓRMULA EFICAZ - Custo mudou: R$ ${newCost.toFixed(2)} → Lucro recalculado: R$ ${dynamicProfit.toFixed(3)}`);
 
         // Salvar para persistência
         localStorage.setItem("dashboard_averageCostPerTire", JSON.stringify({
@@ -749,28 +696,39 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
     // Adicionar listener para eventos
     window.addEventListener("tireCostUpdated", handleTireCostUpdate as EventListener);
 
-    // Leitura inicial
+    // Leitura inicial com fórmula eficaz
     readTireCostManagerValue();
-    readProfitPerTire();
+    const initialProfit = calculateDynamicProfitPerTire();
+    setAverageProfitPerTire(initialProfit);
+    setFinalProductProfit(initialProfit);
     readProfitPercentage();
-    readFinalProductProfit();
 
-    // Verificação periódica MELHORADA (como uma atualização automática do Excel)
+    // Verificação periódica com FÓRMULA EFICAZ (atualização automática em tempo real)
     const interval = setInterval(() => {
-      // Sempre ler o custo primeiro
+      // 1. Ler custo atualizado
       const currentCost = readTireCostManagerValue();
       
-      // Depois ler o lucro diretamente
-      const currentProfit = readProfitPerTire();
+      // 2. APLICAR FÓRMULA EFICAZ para calcular lucro dinamicamente
+      const dynamicProfit = calculateDynamicProfitPerTire();
+      setAverageProfitPerTire(dynamicProfit);
+      setFinalProductProfit(dynamicProfit);
       
-      // E outras métricas
-      readProfitPercentage();
-      readFinalProductProfit();
+      // 3. Recalcular porcentagem baseada no lucro dinâmico
+      const currentMetrics = calculateMetrics();
+      if (currentMetrics.salesQuantity > 0) {
+        const averageSellingPrice = currentMetrics.totalRevenue / currentMetrics.salesQuantity;
+        if (averageSellingPrice > 0) {
+          const dynamicProfitPercentage = (dynamicProfit / averageSellingPrice) * 100;
+          setProfitPercentage(dynamicProfitPercentage);
+        }
+      }
       
-      console.log(`🔄 [Dashboard] FÓRMULA EXCEL SINCRONIZAÇÃO:`, {
+      console.log(`🔄 [Dashboard] FÓRMULA EFICAZ SINCRONIZAÇÃO:`, {
         custo: `R$ ${currentCost.toFixed(2)}`,
-        lucro: `R$ ${currentProfit.toFixed(3)}`,
-        hora: new Date().toLocaleTimeString("pt-BR")
+        lucroDinamico: `R$ ${dynamicProfit.toFixed(3)}`,
+        porcentagem: `${profitPercentage.toFixed(1)}%`,
+        hora: new Date().toLocaleTimeString("pt-BR"),
+        status: "FÓRMULA EFICAZ ATIVA"
       });
     }, 3000);
 
@@ -811,16 +769,62 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
     }
   }, [averageCostPerTire]);
 
-  // 🔥 NOVO EFFECT: FORÇAR SINCRONIZAÇÃO TOTAL SEMPRE QUE LUCRO POR PNEU MUDAR
+  // 🔥 FÓRMULA EFICAZ: CALCULAR LUCRO DINAMICAMENTE SEMPRE
   useEffect(() => {
-    console.log(`🔥 [Dashboard] FORÇANDO SINCRONIZAÇÃO: Lucro por Pneu mudou para R$ ${averageProfitPerTire.toFixed(3)}`);
+    const calculateDynamicProfit = () => {
+      try {
+        // Obter métricas atuais
+        const currentMetrics = calculateMetrics();
+        
+        if (currentMetrics.salesQuantity > 0 && averageCostPerTire > 0) {
+          // FÓRMULA DINÂMICA: Preço Médio de Venda - Custo por Pneu
+          const averageSellingPrice = currentMetrics.totalRevenue / currentMetrics.salesQuantity;
+          const dynamicProfit = averageSellingPrice - averageCostPerTire;
+          
+          console.log(`🔥 [Dashboard] FÓRMULA EFICAZ APLICADA:`, {
+            precoMedioVenda: averageSellingPrice.toFixed(2),
+            custoAtual: averageCostPerTire.toFixed(2),
+            lucroDinamico: dynamicProfit.toFixed(3),
+            receita: currentMetrics.totalRevenue,
+            vendas: currentMetrics.salesQuantity
+          });
+          
+          // Aplicar o lucro calculado dinamicamente
+          setAverageProfitPerTire(dynamicProfit);
+          setFinalProductProfit(dynamicProfit);
+          
+          // Calcular porcentagem
+          if (averageSellingPrice > 0) {
+            const dynamicProfitPercentage = (dynamicProfit / averageSellingPrice) * 100;
+            setProfitPercentage(dynamicProfitPercentage);
+          }
+          
+          return dynamicProfit;
+        } else {
+          console.log(`⚠️ [Dashboard] Dados insuficientes para calcular lucro dinâmico:`, {
+            vendas: currentMetrics.salesQuantity,
+            custoMedio: averageCostPerTire,
+            receita: currentMetrics.totalRevenue
+          });
+          
+          // Se não há vendas, usar valor baseado apenas no custo
+          const fallbackProfit = Math.max(0, 150 - averageCostPerTire); // Assumindo preço médio de R$ 150
+          setAverageProfitPerTire(fallbackProfit);
+          setFinalProductProfit(fallbackProfit);
+          
+          return fallbackProfit;
+        }
+      } catch (error) {
+        console.error("❌ [Dashboard] Erro na fórmula dinâmica:", error);
+        return 0;
+      }
+    };
     
-    // Sempre manter os valores idênticos
-    if (Math.abs(finalProductProfit - averageProfitPerTire) > 0.001) {
-      console.log(`🎯 [Dashboard] CORREÇÃO AUTOMÁTICA: ${finalProductProfit.toFixed(3)} → ${averageProfitPerTire.toFixed(3)}`);
-      setFinalProductProfit(averageProfitPerTire);
-    }
-  }, [averageProfitPerTire]);
+    // Calcular imediatamente quando custo mudar
+    const dynamicProfit = calculateDynamicProfit();
+    
+    console.log(`✅ [Dashboard] FÓRMULA EFICAZ EXECUTADA: R$ ${dynamicProfit.toFixed(3)}`);
+  }, [averageCostPerTire]); // Reagir sempre que o custo mudar
 
   // Debug log para mostrar que a fórmula está funcionando
   useEffect(() => {
