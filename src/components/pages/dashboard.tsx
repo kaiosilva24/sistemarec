@@ -1007,15 +1007,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
         colorClass: "#F59E0B",
         iconColorClass: "text-neon-orange",
       },
-      {
-        id: "resale-product-value",
-        title: "Valor Total de Produtos Revenda",
-        value: formatCurrency(metrics.resaleProductValue),
-        subtitle: "valor em produtos de revenda",
-        icon: DollarSign,
-        colorClass: "#10B981",
-        iconColorClass: "text-neon-green",
-      },
+      
     ],
     [metrics, profitPercentage],
   );
