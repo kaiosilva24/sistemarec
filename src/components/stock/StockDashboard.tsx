@@ -534,6 +534,7 @@ const StockDashboard = ({
   const { materials, isLoading: materialsLoading } = useMaterials();
   const { products, isLoading: productsLoading } = useProducts();
   const { stockItems, isLoading: stockLoading } = useStockItems();
+  const { resaleProducts, isLoading: resaleProductsLoading } = useResaleProducts();
 
   const { updateStockItem } = useStockItems();
   const { averageCostPerTire, synchronizedCostData } =
@@ -701,12 +702,18 @@ const StockDashboard = ({
       })),
     );
 
-    // Separar produtos finais
+    // Separar produtos finais e de revenda
     const finalProductIds = getAllProducts().map((p) => p.id);
+    const resaleProductIds = resaleProducts.map((p) => p.id);
 
     console.log("🔍 [StockDashboard] IDs dos produtos cadastrados:", {
       finalProductIds,
       finalProductNames: getAllProducts().map((p) => ({
+        id: p.id,
+        name: p.name,
+      })),
+      resaleProductIds,
+      resaleProductNames: resaleProducts.map((p) => ({
         id: p.id,
         name: p.name,
       })),
@@ -716,9 +723,22 @@ const StockDashboard = ({
       finalProductIds.includes(item.item_id),
     );
 
+    const resaleProductStockItems = productStockItems.filter((item) =>
+      resaleProductIds.includes(item.item_id),
+    );
+
     console.log(
       `🏭 [StockDashboard] Produtos finais em estoque: ${finalProductStockItems.length}`,
       finalProductStockItems.map((item) => ({
+        name: item.item_name,
+        quantity: item.quantity,
+        value: item.total_value,
+      })),
+    );
+
+    console.log(
+      `🛒 [StockDashboard] Produtos de revenda em estoque: ${resaleProductStockItems.length}`,
+      resaleProductStockItems.map((item) => ({
         name: item.item_name,
         quantity: item.quantity,
         value: item.total_value,
@@ -826,9 +846,13 @@ const StockDashboard = ({
       (item) =>
         item.min_level && item.min_level > 0 && item.quantity <= item.min_level,
     ).length;
+    const resaleProductLowStock = resaleProductStockItems.filter(
+      (item) =>
+        item.min_level && item.min_level > 0 && item.quantity <= item.min_level,
+    ).length;
 
     console.log(
-      `⚠️ [StockDashboard] Estoque baixo - Matéria-prima: ${materialLowStock}, Finais: ${finalProductLowStock}`,
+      `⚠️ [StockDashboard] Estoque baixo - Matéria-prima: ${materialLowStock}, Finais: ${finalProductLowStock}, Revenda: ${resaleProductLowStock}`,
     );
 
     // Usar custo médio por pneu sincronizado do TireCostManager, com fallback para cálculo local
@@ -866,9 +890,10 @@ const StockDashboard = ({
       // Estoque baixo
       materialLowStock,
       finalProductLowStock,
+      resaleProductLowStock,
       // Totais gerais
       totalLowStock:
-        materialLowStock + finalProductLowStock,
+        materialLowStock + finalProductLowStock + resaleProductLowStock,
       // Material types metrics
       totalMaterialsRegistered,
       materialTypesInStock,
@@ -1154,7 +1179,8 @@ const StockDashboard = ({
                   </p>
                   <p className="text-xs text-tire-400 mt-1">
                     MP: {metrics.materialLowStock} | Finais:{" "}
-                    {metrics.finalProductLowStock}
+                    {metrics.finalProductLowStock} | Revenda:{" "}
+                    {metrics.resaleProductLowStock}
                   </p>
                 </div>
                 <div className="text-red-400">
@@ -1198,7 +1224,8 @@ const StockDashboard = ({
               isLoading={
                 materialsLoading ||
                 productsLoading ||
-                stockLoading
+                stockLoading ||
+                resaleProductsLoading
               }
               materials={materials}
               products={getAllProducts()}
@@ -1227,7 +1254,7 @@ const StockDashboard = ({
           <TabsContent value="resale-products">
             <ResaleProductsStock
               isLoading={
-                productsLoading || stockLoading
+                resaleProductsLoading || stockLoading
               }
             />
           </TabsContent>
