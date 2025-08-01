@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -76,7 +75,7 @@ const ResaleProductsStock = ({ isLoading = false }: ResaleProductsStockProps) =>
       const stockItem = resaleStockItems.find(
         item => item.item_id === product.id
       );
-      
+
       const quantity = stockItem?.quantity || 0;
       const minLevel = stockItem?.min_level || 0;
       const totalValue = stockItem?.total_value || 0;
@@ -101,7 +100,7 @@ const ResaleProductsStock = ({ isLoading = false }: ResaleProductsStockProps) =>
     const matchesSearch = 
       product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (product.supplier_name && product.supplier_name.toLowerCase().includes(searchTerm.toLowerCase()));
-    
+
     const matchesStatus = 
       filterStatus === "all" || 
       (filterStatus === "low" && product.status === "low") ||
@@ -131,13 +130,13 @@ const ResaleProductsStock = ({ isLoading = false }: ResaleProductsStockProps) =>
         // Update existing stock
         const currentQuantity = product.quantity;
         const currentUnitCost = product.unitCost;
-        
+
         let newQuantity = currentQuantity;
         let newUnitCost = currentUnitCost;
 
         if (stockOperation === "add") {
           newQuantity = currentQuantity + quantityValue;
-          
+
           // Calculate weighted average cost if adding with a price
           if (priceValue > 0) {
             const currentTotalValue = currentQuantity * currentUnitCost;
@@ -515,6 +514,8 @@ const ResaleProductsStock = ({ isLoading = false }: ResaleProductsStockProps) =>
                 <Label>Nível Mínimo</Label>
                 <Input
                   type="number"
+                  min="0"
+                  step="1"
                   value={minLevel}
                   onChange={(e) => setMinLevel(e.target.value)}
                   className="bg-factory-700/50 border-tire-600/30 text-white"
