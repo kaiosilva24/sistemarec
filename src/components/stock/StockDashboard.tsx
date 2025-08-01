@@ -538,6 +538,7 @@ const StockDashboard = ({
   const { updateStockItem } = useStockItems();
   const { averageCostPerTire, synchronizedCostData } =
     useCostCalculationOptions();
+  const { resaleProducts } = useResaleProducts();
 
   const handleStockUpdate = async (
     itemId: string,
@@ -817,6 +818,21 @@ const StockDashboard = ({
       },
     );
 
+    // Separar produtos de revenda
+    const resaleProductIds = resaleProducts.map((p) => p.id);
+    const resaleProductStockItems = productStockItems.filter((item) =>
+      resaleProductIds.includes(item.item_id),
+    );
+
+    console.log(
+      `🛒 [StockDashboard] Produtos de revenda em estoque: ${resaleProductStockItems.length}`,
+      resaleProductStockItems.map((item) => ({
+        name: item.item_name,
+        quantity: item.quantity,
+        value: item.total_value,
+      })),
+    );
+
     // Itens com estoque baixo por categoria
     const materialLowStock = materialStockItems.filter(
       (item) =>
@@ -826,9 +842,13 @@ const StockDashboard = ({
       (item) =>
         item.min_level && item.min_level > 0 && item.quantity <= item.min_level,
     ).length;
+    const resaleLowStock = resaleProductStockItems.filter(
+      (item) =>
+        item.min_level && item.min_level > 0 && item.quantity <= item.min_level,
+    ).length;
 
     console.log(
-      `⚠️ [StockDashboard] Estoque baixo - Matéria-prima: ${materialLowStock}, Finais: ${finalProductLowStock}`,
+      `⚠️ [StockDashboard] Estoque baixo - Matéria-prima: ${materialLowStock}, Finais: ${finalProductLowStock}, Revenda: ${resaleLowStock}`,
     );
 
     // Usar custo médio por pneu sincronizado do TireCostManager, com fallback para cálculo local
@@ -866,9 +886,10 @@ const StockDashboard = ({
       // Estoque baixo
       materialLowStock,
       finalProductLowStock,
+      resaleLowStock,
       // Totais gerais
       totalLowStock:
-        materialLowStock + finalProductLowStock,
+        materialLowStock + finalProductLowStock + resaleLowStock,
       // Material types metrics
       totalMaterialsRegistered,
       materialTypesInStock,
@@ -1112,7 +1133,64 @@ const StockDashboard = ({
           </div>
         </div>
 
-        
+        {/* Summary Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          <Card className="bg-factory-800/50 border-tire-600/30 shadow-lg hover:shadow-xl transition-all duration-200">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-tire-300 text-sm">Valor Total do Estoque</p>
+                  <p className="text-3xl font-bold text-neon-green">
+                    {new Intl.NumberFormat("pt-BR", {
+                      style: "currency",
+                      currency: "BRL",
+                      minimumFractionDigits: 0,
+                      maximumFractionDigits: 0,
+                    }).format(
+                      metrics.materialTotalValue + metrics.finalProductTotalValue
+                    )}
+                  </p>
+                  <p className="text-xs text-tire-400 mt-1">
+                    MP: {new Intl.NumberFormat("pt-BR", {
+                      style: "currency",
+                      currency: "BRL",
+                      minimumFractionDigits: 0,
+                      maximumFractionDigits: 0,
+                    }).format(metrics.materialTotalValue)} | 
+                    Finais: {new Intl.NumberFormat("pt-BR", {
+                      style: "currency",
+                      currency: "BRL",
+                      minimumFractionDigits: 0,
+                      maximumFractionDigits: 0,
+                    }).format(metrics.finalProductTotalValue)}
+                  </p>
+                </div>
+                <div className="text-neon-green">
+                  <span className="text-3xl">💎</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-factory-800/50 border-tire-600/30 shadow-lg hover:shadow-xl transition-all duration-200">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-tire-300 text-sm">Alertas de Estoque Baixo</p>
+                  <p className="text-3xl font-bold text-red-400">
+                    {metrics.totalLowStock}
+                  </p>
+                  <p className="text-xs text-tire-400 mt-1">
+                    MP: {metrics.materialLowStock} | Finais: {metrics.finalProductLowStock}
+                  </p>
+                </div>
+                <div className="text-red-400">
+                  <span className="text-3xl">⚠️</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-4 bg-factory-800/50 border border-tire-600/30">
