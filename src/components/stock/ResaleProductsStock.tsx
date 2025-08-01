@@ -25,6 +25,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { useResaleProducts } from "@/hooks/useDataPersistence";
+import { supabase } from "../../../supabase/supabase";
 
 interface ResaleProductsStockProps {
   isLoading?: boolean;
@@ -52,17 +53,19 @@ interface AddStockDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-// Interface para dados salvos em arquivo
+// Interface para dados salvos no Supabase
 interface ResaleProductStockData {
-  productId: string;
-  productName: string;
+  id?: string;
+  resale_product_id: string;
+  product_name: string;
   unit: string;
   quantity: number;
-  purchasePrice: number;
-  salePrice: number;
-  totalValue: number;
-  profitMargin: number;
-  lastUpdated: string;
+  purchase_price: number;
+  sale_price: number;
+  total_value: number;
+  profit_margin: number;
+  created_at?: string;
+  updated_at?: string;
 }
 
 const AddStockDialog: React.FC<AddStockDialogProps> = ({ 
@@ -180,96 +183,139 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
   const [productAnalysis, setProductAnalysis] = useState<ResaleProductAnalysis[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [stockData, setStockData] = useState<ResaleProductStockData[]>([]);
 
-  // Chave para localStorage
-  const STORAGE_KEY = "resale_products_stock_data";
-
-  // Carregar dados do arquivo/localStorage
-  const loadStockData = (): ResaleProductStockData[] => {
+  // Carregar dados do Supabase
+  const loadStockData = async (): Promise<ResaleProductStockData[]> => {
     try {
-      const savedData = localStorage.getItem(STORAGE_KEY);
-      if (savedData) {
-        return JSON.parse(savedData);
+      const { data, error } = await supabase
+        .from('resale_products_stock')
+        .select('*');
+
+      if (error) {
+        console.error("❌ Erro ao carregar dados do estoque:", error);
+        return [];
       }
+
+      console.log("✅ Dados do estoque carregados do Supabase:", data?.length || 0);
+      return data || [];
     } catch (error) {
       console.error("❌ Erro ao carregar dados do estoque:", error);
+      return [];
     }
-    return [];
   };
 
-  // Salvar dados no arquivo/localStorage
-  const saveStockData = (data: ResaleProductStockData[]) => {
+  // Salvar dados no Supabase
+  const saveStockData = async (productData: Omit<ResaleProductStockData, 'id' | 'created_at' | 'updated_at'>) => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data, null, 2));
-      console.log("✅ Dados do estoque salvos com sucesso!");
-      
-      // Criar arquivo para download
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `estoque_produtos_revenda_${new Date().toISOString().split('T')[0]}.json`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      const { data: existingData, error: checkError } = await supabase
+        .from('resale_products_stock')
+        .select('id')
+        .eq('resale_product_id', productData.resale_product_id)
+        .single();
+
+      if (existingData) {
+        // Atualizar registro existente
+        const { data, error } = await supabase
+          .from('resale_products_stock')
+          .update({
+            ...productData,
+            updated_at: new Date().toISOString()
+          })
+          .eq('resale_product_id', productData.resale_product_id)
+          .select()
+          .single();
+
+        if (error) {
+          console.error("❌ Erro ao atualizar estoque:", error);
+          return null;
+        }
+
+        console.log("✅ Estoque atualizado no Supabase:", data);
+        return data;
+      } else {
+        // Criar novo registro
+        const { data, error } = await supabase
+          .from('resale_products_stock')
+          .insert({
+            ...productData,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .select()
+          .single();
+
+        if (error) {
+          console.error("❌ Erro ao salvar estoque:", error);
+          return null;
+        }
+
+        console.log("✅ Estoque salvo no Supabase:", data);
+        return data;
+      }
     } catch (error) {
       console.error("❌ Erro ao salvar dados do estoque:", error);
+      return null;
     }
   };
 
   useEffect(() => {
-    if (!resaleProducts.length || productsLoading) return;
+    const loadData = async () => {
+      if (!resaleProducts.length || productsLoading) return;
 
-    console.log('🔄 [ResaleProductsStock] Carregando dados dos produtos de revenda...');
+      console.log('🔄 [ResaleProductsStock] Carregando dados dos produtos de revenda...');
 
-    // Carregar dados salvos
-    const savedStockData = loadStockData();
+      // Carregar dados salvos do Supabase
+      const savedStockData = await loadStockData();
+      setStockData(savedStockData);
 
-    const analysis = resaleProducts
-      .filter(product => !product.archived)
-      .map(product => {
-        // Buscar dados salvos para este produto
-        const savedData = savedStockData.find(data => data.productId === product.id);
+      const analysis = resaleProducts
+        .filter(product => !product.archived)
+        .map(product => {
+          // Buscar dados salvos para este produto
+          const savedData = savedStockData.find(data => data.resale_product_id === product.id);
 
-        const quantity = savedData?.quantity || 0;
-        const purchasePrice = savedData?.purchasePrice || product.purchase_price || 0;
-        const salePrice = savedData?.salePrice || product.sale_price || 0;
-        const totalValue = savedData?.totalValue || (quantity * purchasePrice);
-        const profitMargin = salePrice > 0 ? 
-          ((salePrice - purchasePrice) / salePrice * 100) : 0;
+          const quantity = savedData?.quantity || 0;
+          const purchasePrice = savedData?.purchase_price || product.purchase_price || 0;
+          const salePrice = savedData?.sale_price || product.sale_price || 0;
+          const totalValue = savedData?.total_value || (quantity * purchasePrice);
+          const profitMargin = salePrice > 0 ? 
+            ((salePrice - purchasePrice) / salePrice * 100) : 0;
 
-        console.log(`📦 [ResaleProductsStock] Produto carregado: ${product.name}`, {
-          quantity,
-          purchasePrice,
-          salePrice,
-          totalValue,
-          profitMargin: profitMargin.toFixed(2) + '%',
-          hasLocalData: !!savedData
+          console.log(`📦 [ResaleProductsStock] Produto carregado: ${product.name}`, {
+            quantity,
+            purchasePrice,
+            salePrice,
+            totalValue,
+            profitMargin: profitMargin.toFixed(2) + '%',
+            hasSupabaseData: !!savedData
+          });
+
+          return {
+            productId: product.id,
+            productName: product.name,
+            unit: product.unit,
+            quantity,
+            editableQuantity: quantity,
+            purchasePrice,
+            editablePurchasePrice: purchasePrice,
+            salePrice,
+            editableSalePrice: salePrice,
+            totalValue,
+            profitMargin,
+            isEditing: false
+          };
         });
 
-        return {
-          productId: product.id,
-          productName: product.name,
-          unit: product.unit,
-          quantity,
-          editableQuantity: quantity,
-          purchasePrice,
-          editablePurchasePrice: purchasePrice,
-          salePrice,
-          editableSalePrice: salePrice,
-          totalValue,
-          profitMargin,
-          isEditing: false
-        };
+      setProductAnalysis(analysis);
+      console.log('✅ [ResaleProductsStock] Análise de produtos concluída:', {
+        totalProducts: analysis.length,
+        productsWithStock: analysis.filter(p => p.quantity > 0).length,
+        totalValue: analysis.reduce((sum, p) => sum + p.totalValue, 0)
       });
+    };
 
-    setProductAnalysis(analysis);
-    console.log('✅ [ResaleProductsStock] Análise de produtos concluída:', {
-      totalProducts: analysis.length,
-      productsWithStock: analysis.filter(p => p.quantity > 0).length,
-      totalValue: analysis.reduce((sum, p) => sum + p.totalValue, 0)
-    });
+    loadData();
   }, [resaleProducts, productsLoading]);
 
   const formatCurrency = (value: number) => {
@@ -349,23 +395,48 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
 
     setIsSaving(true);
     try {
-      // Atualizar no estado local
-      setProductAnalysis(prev => 
-        prev.map(p => 
-          p.productId === productId 
-            ? {
-                ...p,
-                quantity: quantity,
-                editableQuantity: quantity,
-                purchasePrice: unitCost,
-                editablePurchasePrice: unitCost,
-                totalValue: quantity * unitCost
-              }
-            : p
-        )
-      );
+      const totalValue = quantity * unitCost;
+      const profitMargin = product.sale_price > 0 ? 
+        ((product.sale_price - unitCost) / product.sale_price * 100) : 0;
 
-      console.log(`✅ Estoque definido: ${product.name} - ${quantity} unidades com custo ${unitCost}`);
+      // Salvar no Supabase
+      const savedData = await saveStockData({
+        resale_product_id: productId,
+        product_name: product.name,
+        unit: product.unit,
+        quantity: quantity,
+        purchase_price: unitCost,
+        sale_price: product.sale_price,
+        total_value: totalValue,
+        profit_margin: profitMargin
+      });
+
+      if (savedData) {
+        // Atualizar no estado local
+        setProductAnalysis(prev => 
+          prev.map(p => 
+            p.productId === productId 
+              ? {
+                  ...p,
+                  quantity: quantity,
+                  editableQuantity: quantity,
+                  purchasePrice: unitCost,
+                  editablePurchasePrice: unitCost,
+                  salePrice: product.sale_price,
+                  editableSalePrice: product.sale_price,
+                  totalValue: totalValue,
+                  profitMargin: profitMargin
+                }
+              : p
+          )
+        );
+
+        // Atualizar dados do estoque
+        const updatedStockData = await loadStockData();
+        setStockData(updatedStockData);
+
+        console.log(`✅ Estoque definido: ${product.name} - ${quantity} unidades com custo ${unitCost}`);
+      }
     } catch (error) {
       console.error("Erro ao definir estoque:", error);
     } finally {
@@ -379,30 +450,53 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
 
     setIsSaving(true);
     try {
+      const totalValue = product.editableQuantity * product.editablePurchasePrice;
+      const profitMargin = product.editableSalePrice > 0 ? 
+        ((product.editableSalePrice - product.editablePurchasePrice) / product.editableSalePrice * 100) : 0;
+
       // Atualizar produto de revenda
       await updateResaleProduct(productId, {
         purchase_price: product.editablePurchasePrice,
         sale_price: product.editableSalePrice,
-        profit_margin: product.profitMargin
+        profit_margin: profitMargin
       });
 
-      // Atualizar estado local
-      setProductAnalysis(prev => 
-        prev.map(p => 
-          p.productId === productId 
-            ? { 
-                ...p, 
-                quantity: product.editableQuantity,
-                purchasePrice: product.editablePurchasePrice,
-                salePrice: product.editableSalePrice,
-                totalValue: product.editableQuantity * product.editablePurchasePrice,
-                isEditing: false 
-              }
-            : p
-        )
-      );
+      // Salvar no Supabase
+      const savedData = await saveStockData({
+        resale_product_id: productId,
+        product_name: product.productName,
+        unit: product.unit,
+        quantity: product.editableQuantity,
+        purchase_price: product.editablePurchasePrice,
+        sale_price: product.editableSalePrice,
+        total_value: totalValue,
+        profit_margin: profitMargin
+      });
 
-      console.log(`✅ [ResaleProductsStock] Alterações salvas para: ${product.productName}`);
+      if (savedData) {
+        // Atualizar estado local
+        setProductAnalysis(prev => 
+          prev.map(p => 
+            p.productId === productId 
+              ? { 
+                  ...p, 
+                  quantity: product.editableQuantity,
+                  purchasePrice: product.editablePurchasePrice,
+                  salePrice: product.editableSalePrice,
+                  totalValue: totalValue,
+                  profitMargin: profitMargin,
+                  isEditing: false 
+                }
+              : p
+          )
+        );
+
+        // Atualizar dados do estoque
+        const updatedStockData = await loadStockData();
+        setStockData(updatedStockData);
+
+        console.log(`✅ [ResaleProductsStock] Alterações salvas para: ${product.productName}`);
+      }
     } catch (error) {
       console.error(`❌ [ResaleProductsStock] Erro ao salvar alterações para ${product.productName}:`, error);
     } finally {
@@ -410,64 +504,82 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
     }
   };
 
-  const handleSaveAllToFile = () => {
-    const dataToSave: ResaleProductStockData[] = productAnalysis.map(product => ({
-      productId: product.productId,
-      productName: product.productName,
-      unit: product.unit,
-      quantity: product.quantity,
-      purchasePrice: product.purchasePrice,
-      salePrice: product.salePrice,
-      totalValue: product.totalValue,
-      profitMargin: product.profitMargin,
-      lastUpdated: new Date().toISOString()
-    }));
+  const handleExportData = async () => {
+    try {
+      const currentStockData = await loadStockData();
+      const exportData = {
+        exportedAt: new Date().toISOString(),
+        version: "1.0",
+        products: currentStockData,
+        summary: {
+          totalProducts: currentStockData.length,
+          productsInStock: currentStockData.filter(p => p.quantity > 0).length,
+          totalValue: currentStockData.reduce((sum, p) => sum + p.total_value, 0)
+        }
+      };
 
-    saveStockData(dataToSave);
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], { 
+        type: 'application/json' 
+      });
+      
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `estoque_produtos_revenda_${new Date().toISOString().split('T')[0]}.json`;
+      
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      console.log("✅ Dados exportados com sucesso!");
+    } catch (error) {
+      console.error("❌ Erro ao exportar dados:", error);
+    }
   };
 
-  const handleLoadFromFile = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  const handleSyncData = async () => {
+    setIsSaving(true);
+    try {
+      const updatedStockData = await loadStockData();
+      setStockData(updatedStockData);
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const data: ResaleProductStockData[] = JSON.parse(e.target?.result as string);
-        
-        // Atualizar estado com dados carregados
-        setProductAnalysis(prev => 
-          prev.map(product => {
-            const loadedData = data.find(d => d.productId === product.productId);
-            if (loadedData) {
-              return {
-                ...product,
-                quantity: loadedData.quantity,
-                editableQuantity: loadedData.quantity,
-                purchasePrice: loadedData.purchasePrice,
-                editablePurchasePrice: loadedData.purchasePrice,
-                salePrice: loadedData.salePrice,
-                editableSalePrice: loadedData.salePrice,
-                totalValue: loadedData.totalValue,
-                profitMargin: loadedData.profitMargin
-              };
-            }
-            return product;
-          })
-        );
+      // Atualizar análise de produtos
+      const analysis = resaleProducts
+        .filter(product => !product.archived)
+        .map(product => {
+          const savedData = updatedStockData.find(data => data.resale_product_id === product.id);
 
-        // Salvar no localStorage
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(data, null, 2));
-        console.log("✅ Dados carregados do arquivo com sucesso!");
-      } catch (error) {
-        console.error("❌ Erro ao carregar arquivo:", error);
-        alert("Erro ao carregar arquivo. Verifique se o formato está correto.");
-      }
-    };
-    reader.readAsText(file);
-    
-    // Limpar input
-    event.target.value = '';
+          const quantity = savedData?.quantity || 0;
+          const purchasePrice = savedData?.purchase_price || product.purchase_price || 0;
+          const salePrice = savedData?.sale_price || product.sale_price || 0;
+          const totalValue = savedData?.total_value || (quantity * purchasePrice);
+          const profitMargin = salePrice > 0 ? 
+            ((salePrice - purchasePrice) / salePrice * 100) : 0;
+
+          return {
+            productId: product.id,
+            productName: product.name,
+            unit: product.unit,
+            quantity,
+            editableQuantity: quantity,
+            purchasePrice,
+            editablePurchasePrice: purchasePrice,
+            salePrice,
+            editableSalePrice: salePrice,
+            totalValue,
+            profitMargin,
+            isEditing: false
+          };
+        });
+
+      setProductAnalysis(analysis);
+      console.log("✅ Dados sincronizados com o Supabase!");
+    } catch (error) {
+      console.error("❌ Erro ao sincronizar dados:", error);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const calculateTotals = () => {
@@ -514,7 +626,7 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
                 <span className="text-neon-blue text-sm">({productAnalysis.length} produtos)</span>
               </CardTitle>
               <p className="text-tire-300 text-sm mt-1">
-                Sistema independente de estoque salvo em arquivo JSON - Não utiliza banco de dados
+                Sistema de estoque salvo no Supabase - Dados persistentes no banco de dados
               </p>
             </div>
             <div className="flex gap-2">
@@ -526,27 +638,20 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
                 Definir Estoque
               </Button>
               <Button
-                onClick={handleSaveAllToFile}
+                onClick={handleExportData}
                 className="bg-neon-blue hover:bg-neon-blue/80 text-white"
               >
                 <Download className="h-4 w-4 mr-2" />
-                Baixar Arquivo
+                Exportar Dados
               </Button>
-              <label className="cursor-pointer">
-                <Button
-                  type="button"
-                  className="bg-neon-purple hover:bg-neon-purple/80 text-white"
-                >
-                  <Upload className="h-4 w-4 mr-2" />
-                  Carregar Arquivo
-                </Button>
-                <input
-                  type="file"
-                  accept=".json"
-                  onChange={handleLoadFromFile}
-                  className="hidden"
-                />
-              </label>
+              <Button
+                onClick={handleSyncData}
+                disabled={isSaving}
+                className="bg-neon-purple hover:bg-neon-purple/80 text-white"
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                {isSaving ? "Sincronizando..." : "Sincronizar"}
+              </Button>
             </div>
           </div>
         </CardHeader>
@@ -692,7 +797,7 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
         <CardHeader>
           <CardTitle className="text-tire-200 text-lg flex items-center gap-2">
             <TrendingUp className="h-5 w-5 text-neon-purple" />
-            Resumo dos Produtos de Revenda (Arquivo Local)
+            Resumo dos Produtos de Revenda (Supabase)
             {isSaving && (
               <span className="text-neon-orange text-sm animate-pulse ml-2">
                 (Salvando...)
