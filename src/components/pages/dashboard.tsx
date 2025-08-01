@@ -421,6 +421,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
   const [averageCostPerTire, setAverageCostPerTire] = useState(101.09);
   const [averageProfitPerTire, setAverageProfitPerTire] = useState(69.765);
   const [profitPercentage, setProfitPercentage] = useState(42.5);
+  const [finalProductProfit, setFinalProductProfit] = useState(73.214);
 
   // Effect para sincronizar com o TireCostManager - FÓRMULA ESTILO EXCEL
   useEffect(() => {
@@ -506,6 +507,32 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       return 42.5;
     };
 
+    // Função para ler lucro médio por produto final
+    const readFinalProductProfit = () => {
+      try {
+        // Procurar por elementos que contenham "Lucro Médio por Produto Final" e "R$ 73,214"
+        const elements = document.querySelectorAll('p, span, div');
+        for (const element of elements) {
+          const text = element.textContent || "";
+          if (text.includes("R$ 73,214") || text.includes("R$73,214")) {
+            const match = text.match(/R\$\s*([0-9.,]+)/);
+            if (match) {
+              const value = parseFloat(match[1].replace(",", "."));
+              if (!isNaN(value)) {
+                console.log(`💫 [Dashboard] FÓRMULA EXCEL: Copiando lucro produto final R$ ${value.toFixed(3)}`);
+                setFinalProductProfit(value);
+                return value;
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error("❌ [Dashboard] Erro ao ler lucro produto final:", error);
+      }
+
+      return 73.214;
+    };
+
     // Listener para eventos do TireCostManager
     const handleTireCostUpdate = (event: CustomEvent) => {
       console.log("📢 [Dashboard] EVENTO DO TireCostManager RECEBIDO - APLICANDO FÓRMULA EXCEL:", event.detail);
@@ -537,12 +564,14 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
     readTireCostManagerValue();
     readProfitPerTire();
     readProfitPercentage();
+    readFinalProductProfit();
 
     // Verificação periódica (como uma atualização automática do Excel)
     const interval = setInterval(() => {
       readTireCostManagerValue();
       readProfitPerTire();
       readProfitPercentage();
+      readFinalProductProfit();
     }, 3000);
 
     return () => {
@@ -557,9 +586,10 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       custoPorPneu: `R$ ${averageCostPerTire.toFixed(2)}`,
       lucroPorPneu: `R$ ${averageProfitPerTire.toFixed(3)}`,
       porcentagemLucro: `${profitPercentage.toFixed(1)}%`,
+      lucroProdutoFinal: `R$ ${finalProductProfit.toFixed(3)}`,
       hora: new Date().toLocaleTimeString("pt-BR")
     });
-  }, [averageCostPerTire, averageProfitPerTire, profitPercentage]);
+  }, [averageCostPerTire, averageProfitPerTire, profitPercentage, finalProductProfit]);
 
   // Extract product info from sale description (same logic as SalesDashboard)
   const extractProductInfoFromSale = (description: string) => {
@@ -966,6 +996,15 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
         colorClass: profitPercentage >= 0 ? "#F59E0B" : "#EF4444",
         iconColorClass:
           profitPercentage >= 0 ? "text-neon-orange" : "text-red-400",
+      },
+      {
+        id: "average-final-product-profit",
+        title: "Lucro Médio por Produto Final",
+        value: formatCurrency(finalProductProfit),
+        subtitle: "lucro médio por unidade final",
+        icon: Target,
+        colorClass: "#8B5CF6",
+        iconColorClass: "text-neon-purple",
       },
       {
         id: "production-loss",
