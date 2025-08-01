@@ -1936,6 +1936,10 @@ export const useCostCalculationOptions = () => {
     };
   }, [costOptions, synchronizedCostData]);
 
+  // Get stock items and resale products using the corresponding hooks FIRST
+  const { stockItems } = useStockItems();
+  const { resaleProducts } = useResaleProducts();
+
   // Calculate resale products balance from stock items - SINCRONIZADO COM VALOR TOTAL
   const calculateResaleProductsBalance = useCallback(() => {
     const resaleStockItems = stockItems.filter(
@@ -1979,11 +1983,26 @@ export const useCostCalculationOptions = () => {
     return currentBalance;
   }, [calculateResaleProductsBalance]);
 
-  // Get stock items and resale products using the corresponding hooks
-  const { stockItems } = useStockItems();
-  const { resaleProducts } = useResaleProducts();
+  // Calculate dashboard metrics using synchronized values
+  const dashboardMetrics = useMemo(() => {
+    // Separate final products and resale products (baseado na lógica do StockDashboard)
+    const finalProductIds = [];
+    const resaleProductIds = resaleProducts
+      .filter((p) => !p.archived)
+      .map((p) => p.id);
 
-  // Calculate metrics - USANDO VALORES SINCRONIZADOS
+    const productStockItems = stockItems.filter(
+      (item) => item.item_type === "product",
+    );
+
+    const finalProductStockItems = productStockItems.filter((item) =>
+      finalProductIds.includes(item.item_id),
+    );
+    const resaleProductStockItems = productStockItems.filter((item) =>
+      resaleProductIds.includes(item.item_id),
+    );
+
+    // Calculate metrics - USANDO VALORES SINCRONIZADOS
     const finalProductQuantity = finalProductStockItems.reduce((sum, item) => sum + item.quantity, 0);
     const resaleProductQuantity = resaleProductStockItems.reduce((sum, item) => sum + item.quantity, 0);
     const finalProductValue = finalProductStockItems.reduce((sum, item) => sum + (item.total_value || 0), 0);
@@ -1997,6 +2016,14 @@ export const useCostCalculationOptions = () => {
       resaleStockItemsCount: resaleProductStockItems.length,
       estaSincronizado: true
     });
+
+    return {
+      finalProductQuantity,
+      resaleProductQuantity,
+      finalProductValue,
+      resaleProductValue,
+    };
+  }, [stockItems, resaleProducts, calculateResaleProductsBalance]);
   
 
   return {
@@ -2011,17 +2038,7 @@ export const useCostCalculationOptions = () => {
     isDividingByProduction: costOptions.divideByProduction,
     
 // Dashboard metrics
-    dashboardMetrics: {
-      cash_balance: cashBalance,
-      raw_materials_count: rawMaterialsCount,
-      low_stock_items: lowStockItemsCount,
-      finished_tires_count: finalProductQuantity,
-      purchase_sale_items: resaleProductQuantity,
-      production_losses: totalProductionLosses,
-      raw_material_balance: rawMaterialBalance,
-      resale_product_value: resaleProductValue, // VALOR SINCRONIZADO COM ESTOQUE
-      final_product_value: finalProductValue,
-    },
+    dashboardMetrics: dashboardMetrics,
 
     // Funções de sincronização
     calculateResaleProductsBalance,
