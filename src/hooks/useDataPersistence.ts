@@ -565,7 +565,7 @@ export const useStockItems = () => {
         updates[key as keyof StockItem] !== undefined &&
         updates[key as keyof StockItem] !== null
       ) {
-        cleanUpdates[key] = updates[key as keyof StockItem];
+        cleanUpdates[key] = updates[key] as any;
       }
     });
 
@@ -1948,3 +1948,40 @@ export const useCostCalculationOptions = () => {
     isDividingByProduction: costOptions.divideByProduction,
   };
 };
+
+// Calculate resale products balance from stock items - SINCRONIZADO COM VALOR TOTAL
+  const calculateResaleProductsBalance = useCallback(() => {
+    const resaleStockItems = stockItems.filter(
+      (item) => 
+        item.item_type === "product" && 
+        resaleProducts.some(rp => rp.id === item.item_id && !rp.archived)
+    );
+
+    // SEMPRE usar o total_value diretamente dos itens de estoque
+    const totalValue = resaleStockItems.reduce((sum, item) => {
+      const itemTotalValue = item.total_value || 0;
+      console.log(`💰 [useDataPersistence] Item ${item.item_name}: total_value = R$ ${itemTotalValue.toFixed(2)}`);
+      return sum + itemTotalValue;
+    }, 0);
+
+    console.log("📦 [useDataPersistence] SALDO PRODUTOS REVENDA SINCRONIZADO:", {
+      resaleStockItemsCount: resaleStockItems.length,
+      totalValueSincronizado: totalValue,
+      items: resaleStockItems.map(item => ({
+        name: item.item_name,
+        quantity: item.quantity,
+        unitCost: item.unit_cost,
+        totalValue: item.total_value,
+        averageValue: item.quantity > 0 ? (item.total_value || 0) / item.quantity : 0
+      }))
+    });
+
+    return totalValue;
+  }, [stockItems, resaleProducts]);
+
+  // Calculate metrics - USANDO VALORES SINCRONIZADOS
+    const finalProductQuantity = finalProductStockItems.reduce((sum, item) => sum + item.quantity, 0);
+    const resaleProductQuantity = resaleProductStockItems.reduce((sum, item) => sum + item.quantity, 0);
+    const finalProductValue = finalProductStockItems.reduce((sum, item) => sum + (item.total_value || 0), 0);
+    // VALOR SINCRONIZADO: sempre usar total_value dos itens de estoque
+    const resaleProductValue = calculateResaleProductsBalance();
