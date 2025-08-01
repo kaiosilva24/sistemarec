@@ -6,7 +6,7 @@ import TaskBoard from "../dashboard/TaskBoard";
 import FinancialDashboard from "../financial/FinancialDashboard";
 import RegistrationDashboard from "../registration/RegistrationDashboard";
 import StockDashboard from "../stock/StockDashboard";
-import ProductionDashboard from "../production/productionDashboard";
+import ProductionDashboard from "../production/ProductionDashboard";
 import SalesDashboard from "../sales/SalesDashboard";
 import DataDiagnostic from "../debug/DataDiagnostic";
 import StockCharts from "../stock/StockCharts";
@@ -421,21 +421,13 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
   const [averageCostPerTire, setAverageCostPerTire] = useState(101.09);
   const [averageProfitPerTire, setAverageProfitPerTire] = useState(69.765);
   const [profitPercentage, setProfitPercentage] = useState(42.5);
-  const [totalProfit, setTotalProfit] = useState(2832.20);
 
   // Effect para sincronizar com o TireCostManager - FÓRMULA ESTILO EXCEL
   useEffect(() => {
-    // SISTEMA DE SINCRONIZAÇÃO 100% AUTOMÁTICA - ESTILO EXCEL
-    // Esta função implementa 3 métodos de sincronização para garantir 100% de precisão:
-    // 1. Leitura direta do DOM (elementos HTML)
-    // 2. Leitura do localStorage (persistência)  
-    // 3. Eventos customizados (tempo real)
-
+    // Função para ler o valor do TireCostManager
     const readTireCostManagerValue = () => {
       try {
-        console.log("🔄 [Dashboard] EXECUTANDO SINCRONIZAÇÃO 100% AUTOMÁTICA");
-
-        // MÉTODO 1: Leitura direta do DOM (mais confiável)
+        // Procurar pelo elemento com o custo médio por pneu
         const tireCostElement = document.querySelector('[id="average-cost"]');
         if (tireCostElement) {
           const textContent = tireCostElement.textContent || "";
@@ -443,203 +435,51 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
           if (match) {
             const value = parseFloat(match[1].replace(",", "."));
             if (!isNaN(value) && value > 0) {
-              console.log(`✅ [Dashboard] MÉTODO 1 - DOM: Copiando R$ ${value.toFixed(2)} do TireCostManager`);
+              console.log(`💫 [Dashboard] FÓRMULA EXCEL ATIVADA: Copiando R$ ${value.toFixed(2)} do TireCostManager`);
               setAverageCostPerTire(value);
               return value;
             }
           }
         }
 
-        // MÉTODO 2: Leitura do localStorage (backup confiável)
+        // Alternativa: ler do localStorage se existir
         const savedData = localStorage.getItem("dashboard_averageCostPerTire");
         if (savedData) {
           const parsed = JSON.parse(savedData);
           if (parsed.value && parsed.value > 0) {
-            console.log(`✅ [Dashboard] MÉTODO 2 - STORAGE: Usando valor salvo R$ ${parsed.value.toFixed(2)}`);
+            console.log(`💫 [Dashboard] FÓRMULA EXCEL: Usando valor salvo R$ ${parsed.value.toFixed(2)}`);
             setAverageCostPerTire(parsed.value);
             return parsed.value;
           }
         }
-
-        // MÉTODO 3: Sincronização via TireCostManager unificada
-        const unifiedData = localStorage.getItem("tireCostManager_synchronizedCostData");
-        if (unifiedData) {
-          const parsed = JSON.parse(unifiedData);
-          if (parsed.averageCostPerTire && parsed.averageCostPerTire > 0) {
-            console.log(`✅ [Dashboard] MÉTODO 3 - UNIFICADO: R$ ${parsed.averageCostPerTire.toFixed(2)}`);
-            setAverageCostPerTire(parsed.averageCostPerTire);
-            return parsed.averageCostPerTire;
-          }
-        }
       } catch (error) {
-        console.error("❌ [Dashboard] Erro na sincronização automática:", error);
-      }
-
-      // Valor padrão seguro
-      console.warn("⚠️ [Dashboard] Usando valor padrão - sincronização pendente");
-      return 101.09;
-    };
-
-    // Função para ler lucro total - NOVA IMPLEMENTAÇÃO
-    const readTotalProfit = () => {
-      try {
-        console.log("🔍 [Dashboard] INICIANDO LEITURA DO LUCRO TOTAL...");
-
-        // MÉTODO 1: Buscar por elementos que contenham "Lucro Total" e R$ 2.832,20
-        const allElements = document.querySelectorAll("*");
-        for (const element of allElements) {
-          const textContent = element.textContent?.trim();
-          if (textContent && textContent.includes("Lucro Total")) {
-            console.log("🎯 [Dashboard] ENCONTROU elemento com 'Lucro Total'");
-
-            // Procurar pelo valor R$ 2.832,20 no mesmo contexto
-            const parent = element.closest('div, .card, [class*="card"]');
-            if (parent) {
-              const valueElements = parent.querySelectorAll('*');
-              for (const valueEl of valueElements) {
-                const valueText = valueEl.textContent?.trim();
-                if (valueText && valueText.includes('R$') && (valueText.includes('2.832') || valueText.includes('2832'))) {
-                  console.log(`✅ [Dashboard] ENCONTROU LUCRO TOTAL: "${valueText}"`);
-                  const match = valueText.match(/R\$\s*([\d.,]+)/);
-                  if (match) {
-                    const value = parseFloat(match[1].replace(/\./g, "").replace(",", "."));
-                    if (!isNaN(value) && value > 0) {
-                      console.log(`💫 [Dashboard] LUCRO TOTAL SINCRONIZADO: R$ ${value.toFixed(2)}`);
-                      setTotalProfit(value);
-                      return value;
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-
-        // MÉTODO 2: Buscar por classe text-neon-blue que contém R$ e valor alto
-        const blueElements = document.querySelectorAll('.text-neon-blue');
-        for (const element of blueElements) {
-          const textContent = element.textContent?.trim();
-          if (textContent && textContent.includes('R$')) {
-            const match = textContent.match(/R\$\s*([\d.,]+)/);
-            if (match) {
-              const value = parseFloat(match[1].replace(/\./g, "").replace(",", "."));
-              if (!isNaN(value) && value > 1000) { // Lucro total deve ser um valor alto
-                console.log(`💫 [Dashboard] LUCRO TOTAL ENCONTRADO: R$ ${value.toFixed(2)}`);
-                setTotalProfit(value);
-                return value;
-              }
-            }
-          }
-        }
-
-        // MÉTODO 3: Usar localStorage como backup
-        const savedProfit = localStorage.getItem("dashboard_totalProfit");
-        if (savedProfit) {
-          const parsed = JSON.parse(savedProfit);
-          if (parsed.value && parsed.value > 0) {
-            console.log(`💾 [Dashboard] USANDO LUCRO TOTAL SALVO: R$ ${parsed.value.toFixed(2)}`);
-            setTotalProfit(parsed.value);
-            return parsed.value;
-          }
-        }
-
-        console.warn("⚠️ [Dashboard] LUCRO TOTAL não encontrado - usando valor padrão");
-
-      } catch (error) {
-        console.error("❌ [Dashboard] Erro ao ler Lucro Total:", error);
-      }
-
-      return 2832.20;
-    };
-
-    // Função para ler lucro médio por pneu - LEITURA DIRETA DO ELEMENTO HTML
-    const readProfitPerTire = () => {
-      try {
-        console.log("🔍 [Dashboard] INICIANDO LEITURA DIRETA DO LUCRO...");
-
-        // MÉTODO 1: Buscar pelo texto específico "Lucro Médio por Produto Final"
-        const allElements = document.querySelectorAll("*");
-        for (const element of allElements) {
-          const textContent = element.textContent?.trim();
-          if (textContent && textContent.includes("Lucro Médio por Produto Final")) {
-            console.log("🎯 [Dashboard] ENCONTROU elemento com 'Lucro Médio por Produto Final'");
-
-            // Procurar pelo próximo elemento que contém R$ valor
-            const parent = element.closest('.p-4, div[class*="p-4"]');
-            if (parent) {
-              const valueElements = parent.querySelectorAll('*');
-              for (const valueEl of valueElements) {
-                const valueText = valueEl.textContent?.trim();
-                if (valueText && valueText.includes('R$') && valueText.includes('77,02')) {
-                  console.log(`✅ [Dashboard] ENCONTROU VALOR: "${valueText}"`);
-                  const match = valueText.match(/R\$\s*([\d.,]+)/);
-                  if (match) {
-                    const value = parseFloat(match[1].replace(",", "."));
-                    if (!isNaN(value) && value > 0) {
-                      console.log(`💫 [Dashboard] FÓRMULA EXCEL DIRETA: Copiando R$ ${value.toFixed(2)}`);
-                      setAverageProfitPerTire(value);
-                      return value;
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-
-        // MÉTODO 2: Buscar por class específica text-neon-purple que contém R$
-        const purpleElements = document.querySelectorAll('.text-neon-purple');
-        for (const element of purpleElements) {
-          const textContent = element.textContent?.trim();
-          if (textContent && textContent.includes('R$')) {
-            console.log(`🔍 [Dashboard] Elemento roxo com R$: "${textContent}"`);
-            const match = textContent.match(/R\$\s*([\d.,]+)/);
-            if (match) {
-              const value = parseFloat(match[1].replace(",", "."));
-              if (!isNaN(value) && value > 0) {
-                console.log(`💫 [Dashboard] LUCRO ENCONTRADO: R$ ${value.toFixed(2)}`);
-                setAverageProfitPerTire(value);
-                return value;
-              }
-            }
-          }
-        }
-
-        // MÉTODO 3: Buscar por qualquer elemento que contenha exatamente "R$ 77,02"
-        for (const element of allElements) {
-          const textContent = element.textContent?.trim();
-          if (textContent === "R$ 77,02" || (textContent && textContent.includes("77,02"))) {
-            console.log(`🎯 [Dashboard] VALOR EXATO ENCONTRADO: "${textContent}"`);
-            const match = textContent.match(/R\$\s*([\d.,]+)/);
-            if (match) {
-              const value = parseFloat(match[1].replace(",", "."));
-              if (!isNaN(value)) {
-                console.log(`✅ [Dashboard] SINCRONIZAÇÃO DIRETA: R$ ${value.toFixed(2)}`);
-                setAverageProfitPerTire(value);
-                return value;
-              }
-            }
-          }
-        }
-
-        // MÉTODO 4: Usar localStorage como backup
-        const savedProfit = localStorage.getItem("dashboard_averageProfitPerTire");
-        if (savedProfit) {
-          const parsed = JSON.parse(savedProfit);
-          if (parsed.value && parsed.value > 0) {
-            console.log(`💾 [Dashboard] USANDO VALOR SALVO: R$ ${parsed.value.toFixed(2)}`);
-            setAverageProfitPerTire(parsed.value);
-            return parsed.value;
-          }
-        }
-
-        console.warn("⚠️ [Dashboard] NENHUM MÉTODO FUNCIONOU - usando valor padrão");
-
-      } catch (error) {
-        console.error("❌ [Dashboard] Erro na leitura direta do lucro:", error);
+        console.error("❌ [Dashboard] Erro na fórmula Excel:", error);
       }
 
       // Valor padrão
+      return 101.09;
+    };
+
+    // Função para ler lucro médio por pneu
+    const readProfitPerTire = () => {
+      try {
+        const profitElement = document.querySelector('[id="average-profit"]');
+        if (profitElement) {
+          const textContent = profitElement.textContent || "";
+          const match = textContent.match(/R\$\s*([\d.,]+)/);
+          if (match) {
+            const value = parseFloat(match[1].replace(",", "."));
+            if (!isNaN(value)) {
+              console.log(`💫 [Dashboard] FÓRMULA EXCEL: Copiando lucro R$ ${value.toFixed(3)}`);
+              setAverageProfitPerTire(value);
+              return value;
+            }
+          }
+        }
+      } catch (error) {
+        console.error("❌ [Dashboard] Erro ao ler lucro:", error);
+      }
+
       return 69.765;
     };
 
@@ -666,57 +506,27 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       return 42.5;
     };
 
-    // LISTENER PARA EVENTOS 100% SINCRONIZADOS
+    // Listener para eventos do TireCostManager
     const handleTireCostUpdate = (event: CustomEvent) => {
-      console.log("🎯 [Dashboard] EVENTO 100% SINCRONIZADO RECEBIDO:", event.detail);
-      console.log("🔄 [Dashboard] STATUS SINCRONIZAÇÃO: AUTOMÁTICA E INSTANTÂNEA");
+      console.log("📢 [Dashboard] EVENTO DO TireCostManager RECEBIDO - APLICANDO FÓRMULA EXCEL:", event.detail);
 
       if (event.detail.averageCostPerTire) {
         const newCost = event.detail.averageCostPerTire;
-        const oldCost = averageCostPerTire;
-
-        console.log(`🔄 [Dashboard] SINCRONIZAÇÃO EXCEL: ${oldCost.toFixed(2)} → ${newCost.toFixed(2)}`);
-        console.log(`✅ [Dashboard] CONFIRMAÇÃO: 100% SINCRONIZADO COM TireCostManager`);
-
+        console.log(`✨ [Dashboard] FÓRMULA EXCEL: ${averageCostPerTire.toFixed(2)} → ${newCost.toFixed(2)}`);
         setAverageCostPerTire(newCost);
 
-        // Tripla persistência para garantir 100% de sincronização
+        // Salvar para persistência
         localStorage.setItem("dashboard_averageCostPerTire", JSON.stringify({
           value: newCost,
           timestamp: Date.now(),
-          source: "TireCostManager_Event_100%_Sync",
-          oldValue: oldCost,
-          syncStatus: "COMPLETED"
+          source: "TireCostManager_Event"
         }));
-
-        // Backup adicional
-        localStorage.setItem("dashboard_tireCostValue_unified", newCost.toString());
       }
 
       if (event.detail.averageProfitPerTire !== undefined) {
         const newProfit = event.detail.averageProfitPerTire;
-        console.log(`💰 [Dashboard] LUCRO SINCRONIZADO: ${averageProfitPerTire.toFixed(3)} → ${newProfit.toFixed(3)}`);
+        console.log(`✨ [Dashboard] FÓRMULA EXCEL LUCRO: ${averageProfitPerTire.toFixed(3)} → ${newProfit.toFixed(3)}`);
         setAverageProfitPerTire(newProfit);
-
-        // Salvar automaticamente
-        localStorage.setItem("dashboard_averageProfitPerTire", JSON.stringify({
-          value: newProfit,
-          timestamp: Date.now(),
-          source: "Event_DirectDOM_Sync"
-        }));
-      }
-
-      if (event.detail.totalProfit !== undefined) {
-        const newTotalProfit = event.detail.totalProfit;
-        console.log(`💎 [Dashboard] LUCRO TOTAL SINCRONIZADO: ${totalProfit.toFixed(2)} → ${newTotalProfit.toFixed(2)}`);
-        setTotalProfit(newTotalProfit);
-
-        // Salvar automaticamente
-        localStorage.setItem("dashboard_totalProfit", JSON.stringify({
-          value: newTotalProfit,
-          timestamp: Date.now(),
-          source: "Event_DirectDOM_Sync"
-        }));
       }
     };
 
@@ -727,84 +537,29 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
     readTireCostManagerValue();
     readProfitPerTire();
     readProfitPercentage();
-    readTotalProfit();
-
-    // Observer para mudanças no DOM - especificamente para lucro e lucro total
-    const observer = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
-        if (mutation.type === 'childList' || mutation.type === 'characterData') {
-          const target = mutation.target as Element;
-
-          // Verificar se a mudança está relacionada ao lucro
-          if (target.textContent?.includes('R$') || 
-              target.textContent?.includes('Lucro Médio') ||
-              target.textContent?.includes('Lucro Total') ||
-              target.classList?.contains('text-neon-purple') ||
-              target.classList?.contains('text-neon-blue')) {
-            console.log("🔄 [Dashboard] DETECTOU MUDANÇA NO LUCRO - atualizando");
-            setTimeout(() => {
-              readProfitPerTire();
-              readTotalProfit();
-            }, 100); // Pequeno delay para DOM se estabilizar
-          }
-        }
-      });
-    });
-
-    // Observar o documento inteiro para mudanças
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-      characterData: true
-    });
 
     // Verificação periódica (como uma atualização automática do Excel)
     const interval = setInterval(() => {
       readTireCostManagerValue();
       readProfitPerTire();
       readProfitPercentage();
-      readTotalProfit();
     }, 3000);
 
     return () => {
       window.removeEventListener("tireCostUpdated", handleTireCostUpdate as EventListener);
-      observer.disconnect();
       clearInterval(interval);
     };
-  }, [averageCostPerTire, averageProfitPerTire, totalProfit]);
+  }, [averageCostPerTire, averageProfitPerTire]);
 
-  // DEBUG COMPLETO DA SINCRONIZAÇÃO 100%
+  // Debug log para mostrar que a fórmula está funcionando
   useEffect(() => {
-    const syncStatus = {
+    console.log("📊 [Dashboard] FÓRMULA EXCEL ATIVA:", {
       custoPorPneu: `R$ ${averageCostPerTire.toFixed(2)}`,
       lucroPorPneu: `R$ ${averageProfitPerTire.toFixed(3)}`,
-      lucroTotal: `R$ ${totalProfit.toFixed(2)}`,
       porcentagemLucro: `${profitPercentage.toFixed(1)}%`,
-      hora: new Date().toLocaleTimeString("pt-BR"),
-      timestampSync: Date.now(),
-      statusSincronizacao: "100% ATIVO - CUSTO, LUCRO E LUCRO TOTAL"
-    };
-
-    console.log("🎯 [Dashboard] RELATÓRIO DE SINCRONIZAÇÃO 100% - CUSTO, LUCRO E LUCRO TOTAL:", syncStatus);
-    console.log("✅ [Dashboard] CONFIRMAÇÃO: Todas as métricas estão 100% sincronizadas");
-    console.log("🔄 [Dashboard] FONTES DE SINCRONIZAÇÃO ATIVAS:");
-    console.log("   📡 Eventos customizados: ✅ ATIVO");
-    console.log("   💾 localStorage: ✅ ATIVO"); 
-    console.log("   🔄 Verificação periódica: ✅ ATIVO (3s)");
-    console.log("   🎯 DOM Observer: ✅ ATIVO");
-
-    // Verificar se todos os métodos estão funcionando
-    const storageCheck = localStorage.getItem("dashboard_averageCostPerTire");
-    const unifiedCheck = localStorage.getItem("tireCostManager_synchronizedCostData");
-    const totalProfitCheck = localStorage.getItem("dashboard_totalProfit");
-
-    console.log("🔍 [Dashboard] VERIFICAÇÃO DE INTEGRIDADE:");
-    console.log(`   💾 Storage Principal: ${storageCheck ? '✅ OK' : '❌ AUSENTE'}`);
-    console.log(`   🔄 Storage Unificado: ${unifiedCheck ? '✅ OK' : '❌ AUSENTE'}`);
-    console.log(`   💎 Storage Lucro Total: ${totalProfitCheck ? '✅ OK' : '❌ AUSENTE'}`);
-    console.log(`   📊 Valor em Memória: R$ ${averageCostPerTire.toFixed(2)}`);
-    console.log(`   💰 Lucro Total em Memória: R$ ${totalProfit.toFixed(2)}`);
-  }, [averageCostPerTire, averageProfitPerTire, profitPercentage, totalProfit]);
+      hora: new Date().toLocaleTimeString("pt-BR")
+    });
+  }, [averageCostPerTire, averageProfitPerTire, profitPercentage]);
 
   // Extract product info from sale description (same logic as SalesDashboard)
   const extractProductInfoFromSale = (description: string) => {
@@ -929,14 +684,21 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
 
     // 6. Lucro Total (receita - custos totais)
     const totalCosts = salesQuantity * costPerTire;
-    const calculatedTotalProfit = totalRevenue - totalCosts;
+    const totalProfit = totalRevenue - totalCosts;
 
-    // 7. Lucro Médio por Pneu - FÓRMULA EXCEL: usar valor copiado diretamente
-    const profitPerTire = averageProfitPerTire;
+    // 7. Lucro Médio por Pneu - CÁLCULO DINÂMICO EM TEMPO REAL
+    const calculatedProfitPerTire = salesQuantity > 0 ? totalProfit / salesQuantity : 0;
 
-    // 8. Margem de Lucro (%)
-    const profitMargin =
-      totalRevenue > 0 ? (calculatedTotalProfit / totalRevenue) * 100 : 0;
+    // 8. Margem de Lucro (%) - CÁLCULO DINÂMICO
+    const profitMargin = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
+
+    // Atualizar estados se os valores mudaram
+    if (Math.abs(calculatedProfitPerTire - averageProfitPerTire) > 0.01) {
+      setAverageProfitPerTire(calculatedProfitPerTire);
+    }
+    if (Math.abs(profitMargin - profitPercentage) > 0.01) {
+      setProfitPercentage(profitMargin);
+    }
 
     // 9. Saldo de Caixa
     const totalIncome = cashFlowEntries
@@ -1086,8 +848,8 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       salesQuantity,
       productionQuantity,
       totalRevenue,
-      totalProfit: calculatedTotalProfit,
-      averageProfitPerTire: profitPerTire, // FÓRMULA EXCEL
+      totalProfit,
+      averageProfitPerTire: calculatedProfitPerTire, // CÁLCULO DINÂMICO
       profitMargin,
       cashBalance,
       averageCostPerTire: costPerTire, // FÓRMULA EXCEL
@@ -1196,24 +958,21 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       {
         id: "total-profit",
         title: "Lucro Total",
-        value: formatCurrency(totalProfit),
+        value: formatCurrency(metrics.totalProfit),
         subtitle: "receita - custos",
         icon: TrendingUp,
-        colorClass: totalProfit >= 0 ? "#3B82F6" : "#EF4444",
+        colorClass: metrics.totalProfit >= 0 ? "#3B82F6" : "#EF4444",
         iconColorClass:
-          totalProfit >= 0 ? "text-neon-blue" : "text-red-400",
+          metrics.totalProfit >= 0 ? "text-neon-blue" : "text-red-400",
       },
       {
         id: "average-profit",
         title: "Lucro Médio/Pneu",
-        value: formatCurrency(metrics.averageProfitPerTire),
-        subtitle: "lucro por unidade",
+        value: formatCurrency(salesQuantity > 0 ? totalProfit / salesQuantity : 0),
+        subtitle: "lucro por unidade (tempo real)",
         icon: Target,
-        colorClass: metrics.averageProfitPerTire >= 0 ? "#8B5CF6" : "#EF4444",
-        iconColorClass:
-          metrics.averageProfitPerTire >= 0
-            ? "text-neon-purple"
-            : "text-red-400",
+        colorClass: totalProfit >= 0 ? "#8B5CF6" : "#EF4444",
+        iconColorClass: totalProfit >= 0 ? "text-neon-purple" : "text-red-400",
       },
       {
         id: "profit-margin",
@@ -1262,7 +1021,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
         iconColorClass: "text-neon-green",
       },
     ],
-    [metrics, profitPercentage, totalProfit],
+    [metrics, profitPercentage],
   );
 
   // Ordenar cards conforme a ordem salva e filtrar cards ocultos
@@ -1625,7 +1384,8 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
           <StockCharts
             materials={materials}
             products={products}
-            stockItems={the code is modified to remove duplicate `updateSupabaseMetric` functions and implement total profit synchronization.            isLoading={isDataLoading}
+            stockItems={stockItems}
+            isLoading={isDataLoading}
           />
         </CardContent>
       </Card>
@@ -1769,12 +1529,12 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                   <span className="text-white font-medium">Lucro Total:</span>
                   <span
                     className={`font-bold ${
-                      totalProfit >= 0
+                      metrics.totalProfit >= 0
                         ? "text-neon-blue"
                         : "text-red-400"
                     }`}
                   >
-                    {formatCurrency(totalProfit)}
+                    {formatCurrency(metrics.totalProfit)}
                   </span>
                 </div>
                 <div className="flex justify-between">
@@ -1908,232 +1668,4 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                         Sistema funciona como fórmula do Excel
                       </p>
                       <div className="flex items-center gap-2 mt-2">
-                        <span className="bg-blue-500/20 text-blue-400 px-2 py-1 rounded text-xs flex items-center gap-1">
-                          <span className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></span>
-                          SINCRONIZAÇÃO EXCEL
-                        </span>
-                        <span className="text-tire-400 text-xs">
-                          Atualização em tempo real
-                        </span>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-neon-purple font-bold text-xl">
-                        {formatCurrency(metrics.averageProfitPerTire)}
-                      </span>
-                      <p className="text-blue-400 text-xs mt-1 font-medium">
-                        ✅ FÓRMULA EXCEL FUNCIONANDO
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-4 p-3 bg-yellow-900/20 rounded-lg border border-yellow-500/30">
-                  <h5 className="text-yellow-400 font-medium mb-2 text-sm">
-                    📊 SOLUÇÃO IMPLEMENTADA - ESTILO EXCEL:
-                  </h5>
-                  <div className="space-y-1 text-xs text-yellow-300">
-                    <p>✅ Cópia automática como fórmula =A1</p>
-                    <p>✅ Sincronização em tempo real</p>
-                    <p>✅ Sem cache conflitante</p>
-                    <p>✅ Atualização a cada 3 segundos</p>
-                    <p className="text-green-400 font-medium">
-                      🎉 FUNCIONANDO COMO EXCEL: {formatCurrency(averageCostPerTire)} = {formatCurrency(metrics.averageCostPerTire)}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
-};
-
-const Home = () => {
-  const { t } = useTranslation();
-  const [loading, setLoading] = useState(false);
-  const [activeSection, setActiveSection] = useState("dashboard");
-  const [stockItems, setStockItems] = useState([]);
-  const [isDiagnosticOpen, setIsDiagnosticOpen] = useState(false);
-
-  // Function to trigger loading state for demonstration
-  const handleRefresh = () => {
-    setLoading(true);
-    // Reset loading after 2 seconds
-    setTimeout(() => {
-      setLoading(false);
-    }, 2000);
-  };
-
-  const handleSidebarClick = (label: string) => {
-    const sectionMap: { [key: string]: string } = {
-      Dashboard: "dashboard",
-      Financeiro: "financial",
-      Estoque: "inventory",
-      Produção: "production",
-      Cadastros: "registrations",
-      Vendas: "sales",
-    };
-    setActiveSection(sectionMap[label] || "dashboard");
-  };
-
-  // Load stock items for production module
-  useEffect(() => {
-    const savedStockItems = localStorage.getItem("tire-factory-stock-items");
-    if (savedStockItems) {
-      try {
-        setStockItems(JSON.parse(savedStockItems));
-      } catch (error) {
-        console.error("Error loading stock items:", error);
-      }
-    }
-  }, []);
-
-  const handleStockUpdate = (
-    itemId: string,
-    itemType: "material" | "product",
-    quantity: number,
-    operation: "add" | "remove",
-    unitPrice?: number,
-  ) => {
-    // Update stock items and save to localStorage
-    const savedStockItems = localStorage.getItem("tire-factory-stock-items");
-    let currentStockItems = [];
-    if (savedStockItems) {
-      try {
-        currentStockItems = JSON.parse(savedStockItems);
-      } catch (error) {
-        console.error("Error loading stock items:", error);
-      }
-    }
-
-    const existingStockIndex = currentStockItems.findIndex(
-      (item: any) => item.item_id === itemId && item.item_type === itemType,
-    );
-
-    if (existingStockIndex >= 0) {
-      // Update existing stock item
-      const updatedStockItems = currentStockItems.map(
-        (item: any, index: number) => {
-          if (index === existingStockIndex) {
-            if (operation === "remove") {
-              const newQuantity = Math.max(0, item.quantity - quantity);
-              return {
-                ...item,
-                quantity: newQuantity,
-                total_value: newQuantity * item.unit_cost,
-                last_updated: new Date().toISOString(),
-              };
-            }
-          }
-          return item;
-        },
-      );
-
-      localStorage.setItem(
-        "tire-factory-stock-items",
-        JSON.stringify(updatedStockItems),
-      );
-      setStockItems(updatedStockItems);
-    }
-  };
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-factory-900 via-factory-800 to-tire-900 factory-grid">
-      <TopNavigation />
-      <div className="flex h-[calc(100vh-64px)] mt-16">
-        <Sidebar
-          onItemClick={handleSidebarClick}
-          activeItem={
-            activeSection === "dashboard"
-              ? "Dashboard"
-              : activeSection === "financial"
-                ? "Financeiro"
-                : activeSection === "inventory"
-                  ? "Estoque"
-                  : activeSection === "production"
-                    ? "Produção"
-                    : activeSection === "sales"
-                      ? "Vendas"
-                      : "Cadastros"
-          }
-        />
-        <main className="flex-1 overflow-auto">
-          {/* Header Section */}
-          <div className="container mx-auto px-6 pt-6 pb-4">
-            <div className="flex justify-between items-center mb-6">
-              <div className="space-y-2">
-                <h1 className="text-3xl font-bold text-white flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-r from-neon-blue to-neon-purple flex items-center justify-center neon-glow">
-                    <span className="text-white font-bold text-lg">R</span>
-                  </div>
-                  {t("dashboard.title", "Remold Tire Factory")}
-                </h1>
-                <p className="text-tire-300 text-lg">
-                  {t(
-                    "dashboard.subtitle",
-                    "Sistema de Gestão Financeira e Produção",
-                  )}
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                <DataDiagnostic
-                  isOpen={isDiagnosticOpen}
-                  onOpenChange={setIsDiagnosticOpen}
-                />
-                <Button
-                  onClick={handleRefresh}
-                  className="bg-gradient-to-r from-neon-blue to-tire-500 hover:from-tire-600 hover:to-neon-blue text-white rounded-full px-6 h-11 shadow-lg transition-all duration-300 flex items-center gap-2 neon-glow pulse-glow"
-                >
-                  <RefreshCw
-                    className={`h-5 w-5 ${loading ? "animate-spin" : ""}`}
-                  />
-                  {loading ? t("common.loading") : t("common.refresh")}
-                </Button>
-              </div>
-            </div>
-          </div>
-
-          <div
-            className={cn(
-              "container mx-auto p-6 space-y-8",
-              "transition-all duration-300 ease-in-out",
-            )}
-          >
-            {activeSection === "dashboard" && (
-              <MainDashboard isLoading={loading} />
-            )}
-            {activeSection === "financial" && (
-              <FinancialDashboard
-                isLoading={loading}
-                onRefresh={handleRefresh}
-              />
-            )}
-            {activeSection === "registrations" && (
-              <RegistrationDashboard
-                isLoading={loading}
-                onRefresh={handleRefresh}
-              />
-            )}
-            {activeSection === "inventory" && (
-              <StockDashboard isLoading={loading} onRefresh={handleRefresh} />
-            )}
-            {activeSection === "production" && (
-              <ProductionDashboard
-                isLoading={loading}
-                onRefresh={handleRefresh}
-                onStockUpdate={handleStockUpdate}
-              />
-            )}
-            {activeSection === "sales" && (
-              <SalesDashboard isLoading={loading} onRefresh={handleRefresh} />
-            )}
-          </div>
-        </main>
-      </div>
-    </div>
-  );
-};
-
-export default Home;
+                        <span className="bg-blue-500/20 text
