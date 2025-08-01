@@ -687,7 +687,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
     const totalProfit = totalRevenue - totalCosts;
 
     // 7. Lucro Médio por Pneu - FÓRMULA EXCEL: usar valor copiado diretamente
-    const profitPerTire = averageProfitPerTire;
+    const averageProfitPerTireCalculated = averageProfitPerTire;
 
     // 8. Margem de Lucro (%)
     const profitMargin =
