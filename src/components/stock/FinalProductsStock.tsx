@@ -4,7 +4,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Package, Calculator, Save, Edit3 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Package, Calculator, Save, Edit3, Search } from "lucide-react";
 import { useStockItems, useProducts } from "@/hooks/useDataPersistence";
 
 interface FinalProductsStockProps {
@@ -31,6 +38,8 @@ const FinalProductsStock: React.FC<FinalProductsStockProps> = ({ isLoading = fal
   const { products, isLoading: productsLoading } = useProducts();
   const [productAnalysis, setProductAnalysis] = useState<ProductAnalysis[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterType, setFilterType] = useState<"all" | "in-stock" | "out-of-stock">("all");
 
   // Função para extrair as medidas do nome do produto
   const extractMeasures = (productName: string): string => {
@@ -184,8 +193,22 @@ const FinalProductsStock: React.FC<FinalProductsStockProps> = ({ isLoading = fal
   };
 
   const calculateGrandTotal = () => {
-    return productAnalysis.reduce((total, product) => total + product.totalValue, 0);
+    return filteredProductAnalysis.reduce((total, product) => total + product.totalValue, 0);
   };
+
+  // Apply search and filter logic
+  const filteredProductAnalysis = productAnalysis.filter(product => {
+    const matchesSearch = 
+      product.productName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      product.measures.toLowerCase().includes(searchTerm.toLowerCase());
+
+    const matchesFilter = 
+      filterType === "all" || 
+      (filterType === "in-stock" && product.quantity > 0) ||
+      (filterType === "out-of-stock" && product.quantity === 0);
+
+    return matchesSearch && matchesFilter;
+  });
 
   if (isLoading || stockLoading || productsLoading) {
     return (
@@ -223,26 +246,62 @@ const FinalProductsStock: React.FC<FinalProductsStockProps> = ({ isLoading = fal
         </div>
       </div>
 
+      {/* Search and Filters */}
+      <div className="flex flex-wrap items-center gap-4 mb-6 p-4 bg-factory-800/30 rounded-lg border border-tire-600/20">
+        <div className="flex-1 min-w-64">
+          <div className="relative">
+            <Search className="absolute left-3 top-3 h-4 w-4 text-tire-400" />
+            <Input
+              placeholder="Buscar produtos por nome ou medida..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 bg-factory-700/50 border-tire-600/30 text-white"
+            />
+          </div>
+        </div>
+
+        <Select value={filterType} onValueChange={setFilterType}>
+          <SelectTrigger className="w-48 bg-factory-700/50 border-tire-600/30 text-white">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent className="bg-factory-800 border-tire-600/30">
+            <SelectItem value="all" className="text-white hover:bg-tire-700/50">
+              Todos os Produtos
+            </SelectItem>
+            <SelectItem value="in-stock" className="text-white hover:bg-tire-700/50">
+              Com Estoque
+            </SelectItem>
+            <SelectItem value="out-of-stock" className="text-white hover:bg-tire-700/50">
+              Sem Estoque
+            </SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
       {/* Métricas de Resumo */}
       {productAnalysis.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
           <div className="bg-factory-800/50 border border-tire-600/30 rounded-lg p-4">
             <p className="text-tire-400 text-sm">Total de Tipos</p>
-            <p className="text-2xl font-bold text-white">{productAnalysis.length}</p>
+            <p className="text-2xl font-bold text-white">{filteredProductAnalysis.length}</p>
+            <p className="text-xs text-tire-400 mt-1">
+              {productAnalysis.length !== filteredProductAnalysis.length && 
+                `de ${productAnalysis.length} total`}
+            </p>
           </div>
           
           <div className="bg-factory-800/50 border border-tire-600/30 rounded-lg p-4">
             <p className="text-tire-400 text-sm">Quantidade Total</p>
             <p className="text-2xl font-bold text-neon-cyan">
-              {productAnalysis.reduce((total, product) => total + product.quantity, 0)} unidades
+              {filteredProductAnalysis.reduce((total, product) => total + product.quantity, 0)} unidades
             </p>
           </div>
           
           <div className="bg-factory-800/50 border border-tire-600/30 rounded-lg p-4">
             <p className="text-tire-400 text-sm">Custo Médio por Pneu</p>
             <p className="text-2xl font-bold text-neon-orange">
-              {formatCurrency(productAnalysis.length > 0 
-                ? productAnalysis.reduce((sum, p) => sum + p.costPerTire, 0) / productAnalysis.length 
+              {formatCurrency(filteredProductAnalysis.length > 0 
+                ? filteredProductAnalysis.reduce((sum, p) => sum + p.costPerTire, 0) / filteredProductAnalysis.length 
                 : 0
               )}
             </p>
@@ -259,13 +318,29 @@ const FinalProductsStock: React.FC<FinalProductsStockProps> = ({ isLoading = fal
 
       {/* Lista de Produtos */}
       <div className="space-y-4">
-        {productAnalysis.length === 0 ? (
+        {filteredProductAnalysis.length === 0 ? (
           <div className="text-center py-12 bg-factory-800/30 rounded-lg border border-tire-600/20">
             <Package className="h-16 w-16 text-tire-500 mx-auto mb-4" />
-            <p className="text-tire-400 text-lg">Nenhum produto final em estoque</p>
+            <p className="text-tire-400 text-lg">
+              {searchTerm || filterType !== "all"
+                ? "Nenhum produto encontrado com os filtros aplicados"
+                : "Nenhum produto final em estoque"}
+            </p>
+            {(searchTerm || filterType !== "all") && (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setSearchTerm("");
+                  setFilterType("all");
+                }}
+                className="mt-4 bg-factory-700/50 border-tire-600/30 text-tire-300 hover:text-white hover:bg-tire-700/50"
+              >
+                Limpar Filtros
+              </Button>
+            )}
           </div>
         ) : (
-          productAnalysis.map((product) => (
+          filteredProductAnalysis.map((product) => (
             <div
               key={product.productId}
               className="p-6 bg-factory-800/50 border border-tire-600/30 rounded-lg hover:bg-factory-800/70 transition-all duration-200"
