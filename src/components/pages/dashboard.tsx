@@ -461,24 +461,61 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       return 101.09;
     };
 
-    // Função para ler lucro médio por pneu
+    // Função para ler lucro médio por pneu - FÓRMULA EXCEL MELHORADA
     const readProfitPerTire = () => {
       try {
+        // 1. Primeiro, tentar ler do elemento com ID específico
         const profitElement = document.querySelector('[id="average-profit"]');
         if (profitElement) {
           const textContent = profitElement.textContent || "";
           const match = textContent.match(/R\$\s*([\d.,]+)/);
           if (match) {
             const value = parseFloat(match[1].replace(",", "."));
-            if (!isNaN(value)) {
-              console.log(`💫 [Dashboard] FÓRMULA EXCEL: Copiando lucro R$ ${value.toFixed(3)}`);
+            if (!isNaN(value) && value > 0) {
+              console.log(`💫 [Dashboard] FÓRMULA EXCEL LUCRO: Copiando do elemento ID R$ ${value.toFixed(3)}`);
               setAverageProfitPerTire(value);
               return value;
             }
           }
         }
+
+        // 2. Alternativa: procurar por texto "Lucro Médio por Pneu" no DOM
+        const elements = document.querySelectorAll('p, span, div');
+        for (const element of elements) {
+          const text = element.textContent || "";
+          if (text.includes("Lucro Médio por Pneu") || text.includes("lucro por unidade")) {
+            // Procurar o valor monetário no elemento ou em elementos próximos
+            const parent = element.parentElement;
+            if (parent) {
+              const siblingElements = parent.querySelectorAll('p, span, div');
+              for (const sibling of siblingElements) {
+                const siblingText = sibling.textContent || "";
+                const match = siblingText.match(/R\$\s*([0-9.,]+)/);
+                if (match) {
+                  const value = parseFloat(match[1].replace(",", "."));
+                  if (!isNaN(value) && value > 0 && value < 1000) { // Filter reasonable values
+                    console.log(`💫 [Dashboard] FÓRMULA EXCEL LUCRO: Encontrado no DOM R$ ${value.toFixed(3)}`);
+                    setAverageProfitPerTire(value);
+                    return value;
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        // 3. Ler do localStorage se existir
+        const savedData = localStorage.getItem("dashboard_averageProfitPerTire");
+        if (savedData) {
+          const parsed = JSON.parse(savedData);
+          if (parsed.value && parsed.value > 0) {
+            console.log(`💫 [Dashboard] FÓRMULA EXCEL LUCRO: Usando valor salvo R$ ${parsed.value.toFixed(3)}`);
+            setAverageProfitPerTire(parsed.value);
+            return parsed.value;
+          }
+        }
       } catch (error) {
-        console.error("❌ [Dashboard] Erro ao ler lucro:", error);
+        console.error("❌ [Dashboard] Erro na fórmula Excel do lucro:", error);
       }
 
       return 69.765;
@@ -571,13 +608,13 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       return 73.214;
     };
 
-    // Listener para eventos do TireCostManager
+    // Listener para eventos do TireCostManager - MELHORADO PARA LUCRO
     const handleTireCostUpdate = (event: CustomEvent) => {
       console.log("📢 [Dashboard] EVENTO DO TireCostManager RECEBIDO - APLICANDO FÓRMULA EXCEL:", event.detail);
 
       if (event.detail.averageCostPerTire) {
         const newCost = event.detail.averageCostPerTire;
-        console.log(`✨ [Dashboard] FÓRMULA EXCEL: ${averageCostPerTire.toFixed(2)} → ${newCost.toFixed(2)}`);
+        console.log(`✨ [Dashboard] FÓRMULA EXCEL CUSTO: ${averageCostPerTire.toFixed(2)} → ${newCost.toFixed(2)}`);
         setAverageCostPerTire(newCost);
 
         // 🔥 NOVO: RECALCULAR LUCRO AUTOMATICAMENTE QUANDO CUSTO MUDA
@@ -591,10 +628,18 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
         }));
       }
 
+      // 🔥 NOVO: SINCRONIZAÇÃO DIRETA DO LUCRO POR PNEU
       if (event.detail.averageProfitPerTire !== undefined) {
         const newProfit = event.detail.averageProfitPerTire;
-        console.log(`✨ [Dashboard] FÓRMULA EXCEL LUCRO: ${averageProfitPerTire.toFixed(3)} → ${newProfit.toFixed(3)}`);
+        console.log(`✨ [Dashboard] FÓRMULA EXCEL LUCRO DIRETO: ${averageProfitPerTire.toFixed(3)} → ${newProfit.toFixed(3)}`);
         setAverageProfitPerTire(newProfit);
+        
+        // Salvar para persistência
+        localStorage.setItem("dashboard_averageProfitPerTire", JSON.stringify({
+          value: newProfit,
+          timestamp: Date.now(),
+          source: "TireCostManager_Event_LUCRO"
+        }));
       }
     };
 
@@ -607,12 +652,23 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
     readProfitPercentage();
     readFinalProductProfit();
 
-    // Verificação periódica (como uma atualização automática do Excel)
+    // Verificação periódica MELHORADA (como uma atualização automática do Excel)
     const interval = setInterval(() => {
-      readTireCostManagerValue();
-      readProfitPerTire();
+      // Sempre ler o custo primeiro
+      const currentCost = readTireCostManagerValue();
+      
+      // Depois ler o lucro diretamente
+      const currentProfit = readProfitPerTire();
+      
+      // E outras métricas
       readProfitPercentage();
       readFinalProductProfit();
+      
+      console.log(`🔄 [Dashboard] FÓRMULA EXCEL SINCRONIZAÇÃO:`, {
+        custo: `R$ ${currentCost.toFixed(2)}`,
+        lucro: `R$ ${currentProfit.toFixed(3)}`,
+        hora: new Date().toLocaleTimeString("pt-BR")
+      });
     }, 3000);
 
     return () => {
