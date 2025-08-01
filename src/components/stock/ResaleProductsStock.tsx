@@ -120,16 +120,43 @@ const ResaleProductsStock = ({ isLoading = false }: ResaleProductsStockProps) =>
     }
 
     const product = resaleProductsWithStock.find(p => p.id === selectedProduct);
-    if (!product) return;
+    if (!product) {
+      toast({
+        title: "Erro",
+        description: "Produto não encontrado.",
+        variant: "destructive",
+      });
+      return;
+    }
 
-    const quantityValue = parseFloat(quantity);
-    const priceValue = parseFloat(unitPrice) || 0;
+    // Validação e conversão de dados
+    const quantityValue = Math.round(Math.abs(parseFloat(quantity) || 0));
+    const priceValue = Math.abs(parseFloat(unitPrice) || 0);
+
+    if (quantityValue <= 0) {
+      toast({
+        title: "Erro",
+        description: "A quantidade deve ser maior que zero.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Verificar se há estoque suficiente para remoção
+    if (stockOperation === "remove" && quantityValue > product.quantity) {
+      toast({
+        title: "Erro",
+        description: `Estoque insuficiente. Disponível: ${product.quantity} ${product.unit}`,
+        variant: "destructive",
+      });
+      return;
+    }
 
     try {
       if (product.stockId) {
         // Update existing stock
-        const currentQuantity = product.quantity;
-        const currentUnitCost = product.unitCost;
+        const currentQuantity = Math.round(product.quantity || 0);
+        const currentUnitCost = Math.abs(product.unitCost || 0);
 
         let newQuantity = currentQuantity;
         let newUnitCost = currentUnitCost;
@@ -141,39 +168,59 @@ const ResaleProductsStock = ({ isLoading = false }: ResaleProductsStockProps) =>
           if (priceValue > 0) {
             const currentTotalValue = currentQuantity * currentUnitCost;
             const newTotalValue = quantityValue * priceValue;
-            newUnitCost = (currentTotalValue + newTotalValue) / newQuantity;
+            newUnitCost = newQuantity > 0 ? (currentTotalValue + newTotalValue) / newQuantity : 0;
           }
         } else {
           newQuantity = Math.max(0, currentQuantity - quantityValue);
         }
 
-        await updateStockItem(product.stockId, {
-          quantity: newQuantity,
-          unit_cost: newUnitCost,
-          total_value: newQuantity * newUnitCost,
+        const updateData = {
+          quantity: Math.round(newQuantity),
+          unit_cost: Math.round(newUnitCost * 100) / 100, // Arredondar para 2 casas decimais
+          total_value: Math.round(newQuantity * newUnitCost * 100) / 100,
           last_updated: new Date().toISOString(),
+        };
+
+        console.log("Atualizando estoque:", {
+          stockId: product.stockId,
+          productName: product.name,
+          operation: stockOperation,
+          quantityValue,
+          currentQuantity,
+          newQuantity: updateData.quantity,
+          updateData
         });
+
+        await updateStockItem(product.stockId, updateData);
       } else {
         // Create new stock entry
-        const newUnitCost = priceValue > 0 ? priceValue : product.purchase_price || 0;
+        const newUnitCost = priceValue > 0 ? priceValue : (product.purchase_price || 0);
         const newQuantity = stockOperation === "add" ? quantityValue : 0;
 
-        await createStockItem({
+        const newStockData = {
           item_id: product.id,
-          item_type: "product",
+          item_type: "product" as const,
           item_name: product.name,
-          quantity: newQuantity,
-          unit_cost: newUnitCost,
-          total_value: newQuantity * newUnitCost,
+          quantity: Math.round(newQuantity),
+          unit_cost: Math.round(newUnitCost * 100) / 100,
+          total_value: Math.round(newQuantity * newUnitCost * 100) / 100,
           min_level: 0,
           unit: product.unit || "un",
           last_updated: new Date().toISOString(),
+        };
+
+        console.log("Criando novo estoque:", {
+          productName: product.name,
+          operation: stockOperation,
+          newStockData
         });
+
+        await createStockItem(newStockData);
       }
 
       toast({
         title: "Estoque atualizado",
-        description: `${stockOperation === "add" ? "Adicionado" : "Removido"} ${quantity} ${product.unit} de ${product.name}`,
+        description: `${stockOperation === "add" ? "Adicionado" : "Removido"} ${quantityValue} ${product.unit} de ${product.name}`,
       });
 
       setShowStockDialog(false);
@@ -181,10 +228,29 @@ const ResaleProductsStock = ({ isLoading = false }: ResaleProductsStockProps) =>
       setQuantity("");
       setUnitPrice("");
     } catch (error) {
-      console.error("Erro ao atualizar estoque:", error);
+      console.error("Erro detalhado ao atualizar estoque:", {
+        error,
+        productId: selectedProduct,
+        operation: stockOperation,
+        quantity: quantityValue,
+        price: priceValue
+      });
+      
+      let errorMessage = "Não foi possível atualizar o estoque.";
+      
+      if (error instanceof Error) {
+        if (error.message.includes("duplicate")) {
+          errorMessage = "Item já existe no estoque.";
+        } else if (error.message.includes("foreign key")) {
+          errorMessage = "Produto não encontrado.";
+        } else if (error.message.includes("permission")) {
+          errorMessage = "Sem permissão para atualizar estoque.";
+        }
+      }
+
       toast({
         title: "Erro",
-        description: "Não foi possível atualizar o estoque.",
+        description: errorMessage,
         variant: "destructive",
       });
     }
@@ -434,8 +500,16 @@ const ResaleProductsStock = ({ isLoading = false }: ResaleProductsStockProps) =>
                   <Label>Quantidade</Label>
                   <Input
                     type="number"
+                    min="1"
+                    step="1"
                     value={quantity}
-                    onChange={(e) => setQuantity(e.target.value)}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      // Only allow positive integers
+                      if (value === '' || (/^\d+$/.test(value) && parseInt(value) > 0)) {
+                        setQuantity(value);
+                      }
+                    }}
                     className="bg-factory-700/50 border-tire-600/30 text-white"
                     placeholder="0"
                   />
@@ -448,8 +522,15 @@ const ResaleProductsStock = ({ isLoading = false }: ResaleProductsStockProps) =>
                   <Input
                     type="number"
                     step="0.01"
+                    min="0"
                     value={unitPrice}
-                    onChange={(e) => setUnitPrice(e.target.value)}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      // Allow empty, decimal numbers >= 0
+                      if (value === '' || (/^\d*\.?\d*$/.test(value) && parseFloat(value) >= 0)) {
+                        setUnitPrice(value);
+                      }
+                    }}
                     className="bg-factory-700/50 border-tire-600/30 text-white"
                     placeholder="0.00"
                   />
