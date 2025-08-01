@@ -184,7 +184,7 @@ const RawMaterialStock = ({
   const metrics = calculateMaterialMetrics();
 
   return (
-    <div className="w-full max-w-6xl mx-auto p-6 bg-factory-900/90 backdrop-blur-md rounded-2xl border border-tire-700/30">
+    <div className="w-full max-w-7xl mx-auto p-6 bg-factory-900/90 backdrop-blur-md rounded-2xl border border-tire-700/30">
       <div className="mb-6">
         <h3 className="text-xl font-semibold text-white flex items-center gap-3">
           <Package className="h-5 w-5 text-neon-blue" />
