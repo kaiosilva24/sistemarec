@@ -1188,7 +1188,13 @@ const StockDashboard = ({
                       currency: "BRL",
                       minimumFractionDigits: 0,
                       maximumFractionDigits: 0,
-                    }).format(metrics.finalProductTotalValue)}
+                    }).format(metrics.finalProductTotalValue)} | 
+                    Revenda: {new Intl.NumberFormat("pt-BR", {
+                      style: "currency",
+                      currency: "BRL",
+                      minimumFractionDigits: 0,
+                      maximumFractionDigits: 0,
+                    }).format(metrics.resaleProductTotalValue)}
                   </p>
                 </div>
                 <div className="text-neon-green">
