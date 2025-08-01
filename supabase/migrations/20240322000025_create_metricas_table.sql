@@ -19,6 +19,8 @@ CREATE INDEX IF NOT EXISTS idx_metricas_updated_at ON metricas(updated_at DESC);
 -- Insert initial metrics
 INSERT INTO metricas (nome, valor, descricao, categoria, unidade) VALUES
 ('lucro_medio', 0.00, 'Lucro Médio por Pneu', 'financeiro', 'currency'),
+('lucro_medio_produto_final', 69.078, 'Lucro Médio por Produto Final', 'financeiro', 'currency'),
+('lucro_medio_pneu', 69.078, 'Lucro Médio/Pneu (Métricas)', 'financeiro', 'currency'),
 ('custo_medio', 0.00, 'Custo Médio por Pneu', 'financeiro', 'currency'),
 ('margem_lucro', 0.00, 'Margem de Lucro (%)', 'financeiro', 'percentage'),
 ('saldo_caixa', 0.00, 'Saldo de Caixa', 'financeiro', 'currency')

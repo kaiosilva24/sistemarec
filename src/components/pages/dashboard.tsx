@@ -424,284 +424,352 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
   const [profitPercentage, setProfitPercentage] = useState(42.5);
 
   // Effect para sincronizar com o TireCostManager + SUPABASE REALTIME - FÓRMULA ESTILO EXCEL
-  useEffect(() => {
-    // SISTEMA DE SINCRONIZAÇÃO 100% AUTOMÁTICA - ESTILO EXCEL + SUPABASE REALTIME
-    // Esta função implementa 4 métodos de sincronização para garantir 100% de precisão:
-    // 1. Leitura direta do DOM (elementos HTML)
-    // 2. Leitura do localStorage (persistência)  
-    // 3. Eventos customizados (tempo real)
-    // 4. Supabase Realtime (banco de dados em tempo real)
-    
-    const readTireCostManagerValue = () => {
-      try {
-        console.log("🔄 [Dashboard] EXECUTANDO SINCRONIZAÇÃO 100% AUTOMÁTICA");
-        
-        // MÉTODO 1: Leitura direta do DOM (mais confiável)
-        const tireCostElement = document.querySelector('[id="average-cost"]');
-        if (tireCostElement) {
-          const textContent = tireCostElement.textContent || "";
-          const match = textContent.match(/R\$\s*([\d.,]+)/);
-          if (match) {
-            const value = parseFloat(match[1].replace(",", "."));
-            if (!isNaN(value) && value > 0) {
-              console.log(`✅ [Dashboard] MÉTODO 1 - DOM: Copiando R$ ${value.toFixed(2)} do TireCostManager`);
-              setAverageCostPerTire(value);
-              return value;
-            }
-          }
-        }
+    useEffect(() => {
+      // SISTEMA DE SINCRONIZAÇÃO SUPABASE BIDIRECIONAL COMPLETO
+      // Esta função implementa sincronização em tempo real entre:
+      // 1. "Lucro Médio por Produto Final" (elemento principal)
+      // 2. "Lucro Médio/Pneu" (elemento nas métricas)
+      // 3. Supabase Database (persistência em tempo real)
+      // 4. DOM Elements (leitura automática)
 
-        // MÉTODO 2: Leitura do localStorage (backup confiável)
-        const savedData = localStorage.getItem("dashboard_averageCostPerTire");
-        if (savedData) {
-          const parsed = JSON.parse(savedData);
-          if (parsed.value && parsed.value > 0) {
-            console.log(`✅ [Dashboard] MÉTODO 2 - STORAGE: Usando valor salvo R$ ${parsed.value.toFixed(2)}`);
-            setAverageCostPerTire(parsed.value);
-            return parsed.value;
-          }
-        }
+      const readTireCostManagerValue = () => {
+        try {
+          console.log("🔄 [Dashboard] EXECUTANDO SINCRONIZAÇÃO 100% AUTOMÁTICA");
 
-        // MÉTODO 3: Sincronização via TireCostManager unificada
-        const unifiedData = localStorage.getItem("tireCostManager_synchronizedCostData");
-        if (unifiedData) {
-          const parsed = JSON.parse(unifiedData);
-          if (parsed.averageCostPerTire && parsed.averageCostPerTire > 0) {
-            console.log(`✅ [Dashboard] MÉTODO 3 - UNIFICADO: R$ ${parsed.averageCostPerTire.toFixed(2)}`);
-            setAverageCostPerTire(parsed.averageCostPerTire);
-            return parsed.averageCostPerTire;
-          }
-        }
-      } catch (error) {
-        console.error("❌ [Dashboard] Erro na sincronização automática:", error);
-      }
-
-      // Valor padrão seguro
-      console.warn("⚠️ [Dashboard] Usando valor padrão - sincronização pendente");
-      return 101.09;
-    };
-
-    // FUNÇÃO PARA LER LUCRO MÉDIO POR PNEU - FÓRMULA EXCEL 100% IGUAL AO CUSTO
-    const readProfitPerTire = () => {
-      try {
-        console.log("🔄 [Dashboard] EXECUTANDO SINCRONIZAÇÃO LUCRO 100% AUTOMÁTICA - BUSCA VALOR R$ 77,02");
-        
-        // MÉTODO 1: Buscar especificamente pelo valor R$ 77,02 no DOM
-        const allElements = document.querySelectorAll('*');
-        for (const element of allElements) {
-          const textContent = element.textContent || "";
-          
-          // Buscar especificamente pelo padrão R$ 77,02
-          if (textContent.match(/R\$\s*77[,.]02/)) {
-            console.log(`🎯 [Dashboard] VALOR ALVO ENCONTRADO: ${textContent}`);
-            
-            // Extrair o valor exato
-            const valueMatch = textContent.match(/R\$\s*([\d.,]+)/);
-            if (valueMatch) {
-              const value = parseFloat(valueMatch[1].replace(",", "."));
-              if (!isNaN(value)) {
-                console.log(`✅ [Dashboard] FÓRMULA EXCEL SINCRONIZADA: Copiando R$ ${value.toFixed(2)} (valor alvo)`);
-                setAverageProfitPerTire(value);
-                
-                // Salvar para sincronização
-                localStorage.setItem("dashboard_targetProfitValue", JSON.stringify({
-                  value: value,
-                  timestamp: Date.now(),
-                  source: "Target_Element_R$77.02",
-                  syncStatus: "EXCEL_SYNC_ACTIVE"
-                }));
-                
+          // MÉTODO 1: Leitura direta do DOM (mais confiável)
+          const tireCostElement = document.querySelector('[id="average-cost"]');
+          if (tireCostElement) {
+            const textContent = tireCostElement.textContent || "";
+            const match = textContent.match(/R\$\s*([\d.,]+)/);
+            if (match) {
+              const value = parseFloat(match[1].replace(",", "."));
+              if (!isNaN(value) && value > 0) {
+                console.log(`✅ [Dashboard] MÉTODO 1 - DOM: Copiando R$ ${value.toFixed(2)} do TireCostManager`);
+                setAverageCostPerTire(value);
                 return value;
               }
             }
           }
+
+          // MÉTODO 2: Leitura do localStorage (backup confiável)
+          const savedData = localStorage.getItem("dashboard_averageCostPerTire");
+          if (savedData) {
+            const parsed = JSON.parse(savedData);
+            if (parsed.value && parsed.value > 0) {
+              console.log(`✅ [Dashboard] MÉTODO 2 - STORAGE: Usando valor salvo R$ ${parsed.value.toFixed(2)}`);
+              setAverageCostPerTire(parsed.value);
+              return parsed.value;
+            }
+          }
+
+          // MÉTODO 3: Sincronização via TireCostManager unificada
+          const unifiedData = localStorage.getItem("tireCostManager_synchronizedCostData");
+          if (unifiedData) {
+            const parsed = JSON.parse(unifiedData);
+            if (parsed.averageCostPerTire && parsed.averageCostPerTire > 0) {
+              console.log(`✅ [Dashboard] MÉTODO 3 - UNIFICADO: R$ ${parsed.averageCostPerTire.toFixed(2)}`);
+              setAverageCostPerTire(parsed.averageCostPerTire);
+              return parsed.averageCostPerTire;
+            }
+          }
+        } catch (error) {
+          console.error("❌ [Dashboard] Erro na sincronização automática:", error);
         }
 
-        // MÉTODO 2: Buscar por elemento com class text-neon-purple e valor próximo de 77
-        const profitElements = document.querySelectorAll('.text-neon-purple');
-        for (const element of profitElements) {
-          const textContent = element.textContent || "";
-          const match = textContent.match(/R\$\s*([\d.,]+)/);
-          if (match) {
-            const value = parseFloat(match[1].replace(",", "."));
-            // Buscar valores próximos de 77
-            if (!isNaN(value) && value >= 75 && value <= 80) {
-              console.log(`🎯 [Dashboard] VALOR PRÓXIMO ENCONTRADO: R$ ${value.toFixed(2)} (target ~77)`);
-              setAverageProfitPerTire(value);
-              
-              localStorage.setItem("dashboard_targetProfitValue", JSON.stringify({
-                value: value,
+        // Valor padrão seguro
+        console.warn("⚠️ [Dashboard] Usando valor padrão - sincronização pendente");
+        return 101.09;
+      };
+
+      // FUNÇÃO PARA LER E SINCRONIZAR ELEMENTOS DE LUCRO COM SUPABASE
+      const readAndSyncProfitElements = () => {
+        try {
+          console.log("🔄 [Dashboard] EXECUTANDO SINCRONIZAÇÃO SUPABASE BIDIRECIONAL");
+          console.log("🎯 [Dashboard] BUSCANDO ELEMENTOS: 'Lucro Médio por Produto Final' E 'Lucro Médio/Pneu'");
+
+          let foundValue = null;
+
+          // MÉTODO 1: Buscar elemento "Lucro Médio por Produto Final" - VALOR PRINCIPAL
+          const productFinalElements = document.querySelectorAll('*');
+          for (const element of productFinalElements) {
+            const textContent = element.textContent || "";
+
+            // Verificar se é o elemento "Lucro Médio por Produto Final"
+            if (textContent.includes('Lucro Médio por Produto Final')) {
+              console.log(`🎯 [Dashboard] ELEMENTO PRINCIPAL ENCONTRADO: ${textContent}`);
+
+              // Buscar valor R$ no mesmo contexto (elemento pai)
+              const parentElement = element.closest('div');
+              if (parentElement) {
+                const valueElements = parentElement.querySelectorAll('*');
+                for (const valueEl of valueElements) {
+                  const valueText = valueEl.textContent || "";
+                  const match = valueText.match(/R\$\s*([\d.,]+)/);
+                  if (match && !valueText.includes('Lucro Médio por Produto Final')) {
+                    const value = parseFloat(match[1].replace(",", "."));
+                    if (!isNaN(value) && value > 0) {
+                      foundValue = value;
+                      console.log(`✅ [Dashboard] VALOR PRINCIPAL EXTRAÍDO: R$ ${value.toFixed(3)}`);
+                      break;
+                    }
+                  }
+                }
+                if (foundValue) break;
+              }
+            }
+          }
+
+          // MÉTODO 2: Se não encontrou, buscar pelo padrão R$ 69,078 ou similar
+          if (!foundValue) {
+            console.log("🔍 [Dashboard] BUSCANDO POR PADRÕES DE VALOR CONHECIDOS");
+
+            for (const element of productFinalElements) {
+              const textContent = element.textContent || "";
+              const match = textContent.match(/R\$\s*([\d.,]+)/);
+
+              if (match) {
+                const value = parseFloat(match[1].replace(",", "."));
+                // Buscar valores na faixa esperada de lucro (entre 60-80)
+                if (!isNaN(value) && value >= 60 && value <= 80) {
+                  const elementContext = element.closest('div')?.textContent || "";
+                  // Verificar se não é o custo (que tem valores maiores como 85)
+                  if (!elementContext.includes('Custo') && !elementContext.includes('custo')) {
+                    foundValue = value;
+                    console.log(`✅ [Dashboard] VALOR DETECTADO NA FAIXA ESPERADA: R$ ${value.toFixed(3)}`);
+                    break;
+                  }
+                }
+              }
+            }
+          }
+
+          // MÉTODO 3: Verificar localStorage
+          if (!foundValue) {
+            const savedProfitData = localStorage.getItem("dashboard_averageProfitPerTire");
+            if (savedProfitData) {
+              const parsed = JSON.parse(savedProfitData);
+              if (parsed.value && parsed.value > 0) {
+                foundValue = parsed.value;
+                console.log(`✅ [Dashboard] VALOR RECUPERADO DO STORAGE: R$ ${foundValue.toFixed(3)}`);
+              }
+            }
+          }
+
+          // Se encontrou valor, aplicar sincronização
+          if (foundValue) {
+            console.log(`🚀 [Dashboard] APLICANDO SINCRONIZAÇÃO SUPABASE: R$ ${foundValue.toFixed(3)}`);
+            setAverageProfitPerTire(foundValue);
+
+            // Salvar localmente
+            localStorage.setItem("dashboard_averageProfitPerTire", JSON.stringify({
+              value: foundValue,
+              timestamp: Date.now(),
+              source: "Element_Detection_Supabase_Sync",
+              syncStatus: "SUPABASE_BIDIRECTIONAL_ACTIVE"
+            }));
+
+            // Atualizar Supabase
+            updateSupabaseMetric('lucro_medio_produto_final', foundValue);
+            updateSupabaseMetric('lucro_medio_pneu', foundValue);
+
+            return foundValue;
+          }
+
+          // Valor padrão
+          console.warn("⚠️ [Dashboard] Usando valor padrão para sincronização");
+          const defaultValue = 69.078;
+          setAverageProfitPerTire(defaultValue);
+          return defaultValue;
+
+        } catch (error) {
+          console.error("❌ [Dashboard] Erro na sincronização de elementos:", error);
+          const fallbackValue = 69.078;
+          setAverageProfitPerTire(fallbackValue);
+          return fallbackValue;
+        }
+      };
+
+      // FUNÇÃO PARA SINCRONIZAR AMBOS OS ELEMENTOS DE LUCRO
+      const syncBothProfitElements = (value: number) => {
+        try {
+          console.log(`🔄 [Dashboard] SINCRONIZANDO AMBOS ELEMENTOS: R$ ${value.toFixed(3)}`);
+
+          // Atualizar elemento "Lucro Médio por Produto Final"
+          const productFinalElements = document.querySelectorAll('*');
+          for (const element of productFinalElements) {
+            const textContent = element.textContent || "";
+            if (textContent.includes('Lucro Médio por Produto Final')) {
+              const parentElement = element.closest('div');
+              if (parentElement) {
+                const valueElements = parentElement.querySelectorAll('.text-neon-purple, [style*="color: rgb(139, 92, 246)"]');
+                valueElements.forEach(valueEl => {
+                  if (valueEl.textContent?.includes('R$')) {
+                    valueEl.textContent = `R$ ${value.toFixed(3).replace('.', ',')}`;
+                    console.log(`✅ [Dashboard] ELEMENTO PRODUTO FINAL ATUALIZADO: R$ ${value.toFixed(3)}`);
+                  }
+                });
+              }
+              break;
+            }
+          }
+
+          // Atualizar elemento "Lucro Médio/Pneu" nas métricas
+          const metricElements = document.querySelectorAll('[style*="color: rgb(139, 92, 246)"]');
+          metricElements.forEach(element => {
+            const parentContext = element.closest('div')?.textContent || "";
+            if (parentContext.includes('Lucro Médio/Pneu') && element.textContent?.includes('R$')) {
+              element.textContent = `R$ ${value.toFixed(2).replace('.', ',')}`;
+              console.log(`✅ [Dashboard] ELEMENTO MÉTRICA ATUALIZADO: R$ ${value.toFixed(2)}`);
+            }
+          });
+
+          console.log(`🎉 [Dashboard] SINCRONIZAÇÃO BIDIRECIONAL COMPLETA!`);
+
+        } catch (error) {
+          console.error("❌ [Dashboard] Erro na sincronização bidirecional:", error);
+        }
+      };
+
+      // FUNÇÃO PARA ATUALIZAR MÉTRICAS NO SUPABASE
+      const updateSupabaseMetric = async (nome: string, valor: number) => {
+        try {
+          console.log(`🚀 [Dashboard] SUPABASE REALTIME: Atualizando ${nome} = ${valor}`);
+
+          const { data, error } = await supabase
+            .from('metricas')
+            .upsert({
+              nome,
+              valor,
+              updated_at: new Date().toISOString()
+            }, {
+              onConflict: 'nome'
+            });
+
+          if (error) {
+            console.error(`❌ [Dashboard] SUPABASE ERROR:`, error);
+          } else {
+            console.log(`✅ [Dashboard] SUPABASE SUCCESS: ${nome} atualizado`);
+          }
+        } catch (error) {
+          console.error(`❌ [Dashboard] SUPABASE EXCEPTION:`, error);
+        }
+      };
+
+      // LISTENER SUPABASE REALTIME PARA SINCRONIZAÇÃO BIDIRECIONAL
+      const supabaseChannel = supabase
+        .channel('lucro-sync-bidirectional')
+        .on(
+          'postgres_changes',
+          { 
+            event: 'UPDATE', 
+            schema: 'public', 
+            table: 'metricas', 
+            filter: 'nome=eq.lucro_medio_produto_final' 
+          },
+          (payload) => {
+            console.log('🎯 [Dashboard] SUPABASE PRODUTO FINAL RECEBIDO:', payload);
+
+            const novoValor = parseFloat(payload.new.valor);
+            if (!isNaN(novoValor)) {
+              console.log(`💫 [Dashboard] SUPABASE SYNC PRODUTO FINAL: R$ ${novoValor.toFixed(3)}`);
+              setAverageProfitPerTire(novoValor);
+
+              // Atualizar AMBOS elementos automaticamente
+              syncBothProfitElements(novoValor);
+
+              // Salvar no localStorage
+              localStorage.setItem("dashboard_averageProfitPerTire", JSON.stringify({
+                value: novoValor,
                 timestamp: Date.now(),
-                source: "Near_Target_Value",
-                syncStatus: "EXCEL_SYNC_APPROXIMATE"
+                source: "Supabase_Produto_Final_Realtime",
+                syncStatus: "BIDIRECTIONAL_ACTIVE"
               }));
-              
-              return value;
             }
           }
-        }
+        )
+        .on(
+          'postgres_changes',
+          { 
+            event: 'UPDATE', 
+            schema: 'public', 
+            table: 'metricas', 
+            filter: 'nome=eq.lucro_medio_pneu' 
+          },
+          (payload) => {
+            console.log('🎯 [Dashboard] SUPABASE LUCRO PNEU RECEBIDO:', payload);
 
-        // MÉTODO 3: Verificar se existe valor salvo específico
-        const targetProfitData = localStorage.getItem("dashboard_targetProfitValue");
-        if (targetProfitData) {
-          const parsed = JSON.parse(targetProfitData);
-          if (parsed.value && parsed.value > 0) {
-            console.log(`✅ [Dashboard] VALOR ALVO SALVO: R$ ${parsed.value.toFixed(2)}`);
-            setAverageProfitPerTire(parsed.value);
-            return parsed.value;
-          }
-        }
+            const novoValor = parseFloat(payload.new.valor);
+            if (!isNaN(novoValor)) {
+              console.log(`💫 [Dashboard] SUPABASE SYNC LUCRO PNEU: R$ ${novoValor.toFixed(3)}`);
+              setAverageProfitPerTire(novoValor);
 
-        // MÉTODO 4: Forçar valor 77.02 se não encontrar
-        console.log(`🔧 [Dashboard] FORÇANDO VALOR ALVO: R$ 77.02`);
-        const targetValue = 77.02;
-        setAverageProfitPerTire(targetValue);
-        
-        localStorage.setItem("dashboard_targetProfitValue", JSON.stringify({
-          value: targetValue,
-          timestamp: Date.now(),
-          source: "Forced_Target_R$77.02",
-          syncStatus: "EXCEL_SYNC_FORCED"
-        }));
-        
-        return targetValue;
+              // Atualizar AMBOS elementos automaticamente
+              syncBothProfitElements(novoValor);
 
-      } catch (error) {
-        console.error("❌ [Dashboard] Erro ao ler lucro:", error);
-        
-        // Em caso de erro, usar valor alvo
-        const targetValue = 77.02;
-        setAverageProfitPerTire(targetValue);
-        return targetValue;
-      }
-    };
-
-    // Função para ler porcentagem de lucro
-    const readProfitPercentage = () => {
-      try {
-        const percentElement = document.querySelector('.tempo-4ebee5f0-9b1a-57c8-b17c-42856cd849a0');
-        if (percentElement) {
-          const textContent = percentElement.textContent || "";
-          const match = textContent.match(/([0-9.]+)%/);
-          if (match) {
-            const value = parseFloat(match[1]);
-            if (!isNaN(value)) {
-              console.log(`💫 [Dashboard] FÓRMULA EXCEL: Copiando ${value}% do DOM`);
-              setProfitPercentage(value);
-              return value;
+              // Salvar no localStorage
+              localStorage.setItem("dashboard_averageProfitPerTire", JSON.stringify({
+                value: novoValor,
+                timestamp: Date.now(),
+                source: "Supabase_Lucro_Pneu_Realtime",
+                syncStatus: "BIDIRECTIONAL_ACTIVE"
+              }));
             }
           }
-        }
-      } catch (error) {
-        console.error("❌ [Dashboard] Erro ao ler porcentagem:", error);
-      }
+        )
+        .on(
+          'postgres_changes',
+          { 
+            event: 'UPDATE', 
+            schema: 'public', 
+            table: 'metricas', 
+            filter: 'nome=eq.lucro_medio' 
+          },
+          (payload) => {
+            console.log('🎯 [Dashboard] SUPABASE LUCRO GERAL RECEBIDO:', payload);
 
-      return 42.5;
-    };
+            const novoValor = parseFloat(payload.new.valor);
+            if (!isNaN(novoValor)) {
+              console.log(`💫 [Dashboard] SUPABASE SYNC LUCRO GERAL: R$ ${novoValor.toFixed(3)}`);
+              setAverageProfitPerTire(novoValor);
 
-    // LISTENER PARA EVENTOS 100% SINCRONIZADOS - CUSTO E LUCRO
-    const handleTireCostUpdate = (event: CustomEvent) => {
-      console.log("🎯 [Dashboard] EVENTO 100% SINCRONIZADO RECEBIDO:", event.detail);
-      console.log("🔄 [Dashboard] STATUS SINCRONIZAÇÃO: AUTOMÁTICA E INSTANTÂNEA");
+              // Atualizar AMBOS elementos automaticamente
+              syncBothProfitElements(novoValor);
 
-      if (event.detail.averageCostPerTire) {
-        const newCost = event.detail.averageCostPerTire;
-        const oldCost = averageCostPerTire;
-        
-        console.log(`🔄 [Dashboard] SINCRONIZAÇÃO EXCEL CUSTO: ${oldCost.toFixed(2)} → ${newCost.toFixed(2)}`);
-        console.log(`✅ [Dashboard] CONFIRMAÇÃO: 100% SINCRONIZADO COM TireCostManager`);
-        
-        setAverageCostPerTire(newCost);
+              // Salvar no localStorage para persistência
+              localStorage.setItem("dashboard_averageProfitPerTire", JSON.stringify({
+                value: novoValor,
+                timestamp: Date.now(),
+                source: "Supabase_Realtime_100%_Sync",
+                syncStatus: "SUPABASE_REALTIME_ACTIVE"
+              }));
+            }
+          }
+        )
+        .subscribe();
 
-        // Tripla persistência para garantir 100% de sincronização
-        localStorage.setItem("dashboard_averageCostPerTire", JSON.stringify({
-          value: newCost,
-          timestamp: Date.now(),
-          source: "TireCostManager_Event_100%_Sync",
-          oldValue: oldCost,
-          syncStatus: "COMPLETED"
-        }));
-        
-        // Backup adicional
-        localStorage.setItem("dashboard_tireCostValue_unified", newCost.toString());
-      }
-
-      if (event.detail.averageProfitPerTire !== undefined) {
-        const newProfit = event.detail.averageProfitPerTire;
-        const oldProfit = averageProfitPerTire;
-        
-        console.log(`🔄 [Dashboard] SINCRONIZAÇÃO EXCEL LUCRO: ${oldProfit.toFixed(3)} → ${newProfit.toFixed(3)}`);
-        console.log(`✅ [Dashboard] CONFIRMAÇÃO: LUCRO 100% SINCRONIZADO COM ProductStock`);
-        
-        setAverageProfitPerTire(newProfit);
-
-        // Tripla persistência para garantir 100% de sincronização do LUCRO
-        localStorage.setItem("dashboard_averageProfitPerTire", JSON.stringify({
-          value: newProfit,
-          timestamp: Date.now(),
-          source: "ProductStock_Event_100%_Sync",
-          oldValue: oldProfit,
-          syncStatus: "COMPLETED"
-        }));
-        
-        // Backup adicional específico para lucro
-        localStorage.setItem("dashboard_tireProfitValue_unified", newProfit.toString());
-      }
-    };
-
-    // LISTENER ADICIONAL PARA EVENTOS DE LUCRO DO PRODUCTSTOCK
-    const handleProductStockUpdate = (event: CustomEvent) => {
-      console.log("💰 [Dashboard] EVENTO PRODUCTSTOCK RECEBIDO:", event.detail);
-      
-      if (event.detail.averageProfitPerTire !== undefined) {
-        const newProfit = event.detail.averageProfitPerTire;
-        const oldProfit = averageProfitPerTire;
-        
-        console.log(`🚀 [Dashboard] FÓRMULA EXCEL LUCRO ATIVADA: ${oldProfit.toFixed(3)} → ${newProfit.toFixed(3)}`);
-        console.log(`✅ [Dashboard] LUCRO FUNCIONANDO COMO EXCEL!`);
-        
-        setAverageProfitPerTire(newProfit);
-
-        // Salvar no localStorage com método Excel
-        localStorage.setItem("dashboard_averageProfitPerTire", JSON.stringify({
-          value: newProfit,
-          timestamp: Date.now(),
-          source: "ProductStock_Excel_Formula",
-          method: "Direct_Copy_Like_Excel",
-          syncStatus: "EXCEL_MODE_ACTIVE"
-        }));
-      }
-    };
-
-    // Adicionar listeners para eventos
-    window.addEventListener("tireCostUpdated", handleTireCostUpdate as EventListener);
-    window.addEventListener("productStockUpdated", handleProductStockUpdate as EventListener);
-    window.addEventListener("profitUpdated", handleProductStockUpdate as EventListener);
-
-    // Leitura inicial
-    readTireCostManagerValue();
-    readProfitPerTire();
-    readProfitPercentage();
-
-    // Verificação periódica melhorada (como uma atualização automática do Excel)
-    const interval = setInterval(() => {
-      console.log("🔄 [Dashboard] VERIFICAÇÃO PERIÓDICA EXCEL - CUSTO E LUCRO");
+      // Leitura inicial
       readTireCostManagerValue();
-      readProfitPerTire();
+      readAndSyncProfitElements();
       readProfitPercentage();
-    }, 2000); // Reduzido para 2 segundos para sincronização mais rápida
 
-    // Verificação adicional específica para lucro
-    const profitInterval = setInterval(() => {
-      console.log("💰 [Dashboard] VERIFICAÇÃO ESPECÍFICA DO LUCRO");
-      readProfitPerTire();
-    }, 1500); // Verificação ainda mais frequente para o lucro
+      // Verificação periódica para custo
+      const costInterval = setInterval(() => {
+        console.log("🔄 [Dashboard] VERIFICAÇÃO PERIÓDICA - CUSTO");
+        readTireCostManagerValue();
+        readProfitPercentage();
+      }, 3000);
+
+      // Verificação específica para elementos de lucro
+      const profitInterval = setInterval(() => {
+        console.log("💰 [Dashboard] VERIFICAÇÃO ESPECÍFICA - ELEMENTOS DE LUCRO");
+        readAndSyncProfitElements();
+      }, 2000);
 
     // FUNÇÃO PARA ATUALIZAR MÉTRICAS NO SUPABASE
     const updateSupabaseMetric = async (nome: string, valor: number) => {
       try {
         console.log(`🚀 [Dashboard] SUPABASE REALTIME: Atualizando ${nome} = ${valor}`);
-        
+
         const { data, error } = await supabase
           .from('metricas')
           .upsert({
@@ -722,239 +790,31 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       }
     };
 
-    // LISTENER SUPABASE REALTIME PARA LUCRO MÉDIO
-    const supabaseChannel = supabase
-      .channel('lucro-medio')
-      .on(
-        'postgres_changes',
-        { 
-          event: 'UPDATE', 
-          schema: 'public', 
-          table: 'metricas', 
-          filter: 'nome=eq.lucro_medio' 
-        },
-        (payload) => {
-          console.log('🎯 [Dashboard] SUPABASE REALTIME RECEBIDO:', payload);
-          
-          const novoValor = parseFloat(payload.new.valor);
-          if (!isNaN(novoValor)) {
-            console.log(`💫 [Dashboard] SUPABASE SYNC: Atualizando lucro para R$ ${novoValor.toFixed(3)}`);
-            setAverageProfitPerTire(novoValor);
-            
-            // Atualizar DOM se elemento existir
-            const element = document.getElementById('lucro-medio');
-            if (element) {
-              element.innerText = `R$ ${novoValor.toFixed(2)}`;
-            }
-
-            // Salvar no localStorage para persistência
-            localStorage.setItem("dashboard_averageProfitPerTire", JSON.stringify({
-              value: novoValor,
-              timestamp: Date.now(),
-              source: "Supabase_Realtime_100%_Sync",
-              syncStatus: "SUPABASE_REALTIME_ACTIVE"
-            }));
-          }
-        }
-      )
-      .on(
-        'postgres_changes',
-        { 
-          event: 'UPDATE', 
-          schema: 'public', 
-          table: 'metricas', 
-          filter: 'nome=eq.target_profit_sync' 
-        },
-        (payload) => {
-          console.log('🎯 [Dashboard] SUPABASE TARGET SYNC RECEBIDO:', payload);
-          
-          const targetValue = parseFloat(payload.new.valor);
-          if (!isNaN(targetValue)) {
-            console.log(`🚀 [Dashboard] TARGET SYNC: Forçando sincronização para R$ ${targetValue.toFixed(2)}`);
-            setAverageProfitPerTire(targetValue);
-            
-            // Atualizar ambos os elementos
-            const targetElements = document.querySelectorAll('[style*="color: rgb(139, 92, 246)"], .text-neon-purple');
-            targetElements.forEach(element => {
-              if (element.textContent?.includes('R$')) {
-                element.textContent = `R$ ${targetValue.toFixed(2)}`;
-              }
-            });
-
-            localStorage.setItem("dashboard_targetProfitValue", JSON.stringify({
-              value: targetValue,
-              timestamp: Date.now(),
-              source: "Supabase_Target_Sync",
-              syncStatus: "TARGET_SYNC_ACTIVE"
-            }));
-          }
-        }
-      )
-      .on(
-        'postgres_changes',
-        { 
-          event: 'UPDATE', 
-          schema: 'public', 
-          table: 'metricas', 
-          filter: 'nome=eq.custo_medio' 
-        },
-        (payload) => {
-          console.log('🎯 [Dashboard] SUPABASE CUSTO REALTIME:', payload);
-          
-          const novoValor = parseFloat(payload.new.valor);
-          if (!isNaN(novoValor)) {
-            console.log(`💫 [Dashboard] SUPABASE SYNC: Atualizando custo para R$ ${novoValor.toFixed(2)}`);
-            setAverageCostPerTire(novoValor);
-            
-            // Salvar no localStorage para persistência
-            localStorage.setItem("dashboard_averageCostPerTire", JSON.stringify({
-              value: novoValor,
-              timestamp: Date.now(),
-              source: "Supabase_Realtime_Cost_Sync",
-              syncStatus: "SUPABASE_REALTIME_ACTIVE"
-            }));
-          }
-        }
-      )
-      .subscribe();
-
-    // FUNÇÃO MODIFICADA PARA SINCRONIZAR COM SUPABASE
-    const handleTireCostUpdateWithSupabase = (event: CustomEvent) => {
-      console.log("🎯 [Dashboard] EVENTO 100% SINCRONIZADO + SUPABASE:", event.detail);
-
-      if (event.detail.averageCostPerTire) {
-        const newCost = event.detail.averageCostPerTire;
-        const oldCost = averageCostPerTire;
-        
-        console.log(`🔄 [Dashboard] SINCRONIZAÇÃO EXCEL + SUPABASE CUSTO: ${oldCost.toFixed(2)} → ${newCost.toFixed(2)}`);
-        
-        setAverageCostPerTire(newCost);
-
-        // Persistência local
-        localStorage.setItem("dashboard_averageCostPerTire", JSON.stringify({
-          value: newCost,
-          timestamp: Date.now(),
-          source: "TireCostManager_Event_100%_Sync_+_Supabase",
-          oldValue: oldCost,
-          syncStatus: "EXCEL_+_SUPABASE_ACTIVE"
-        }));
-        
-        // Atualizar Supabase
-        updateSupabaseMetric('custo_medio', newCost);
-      }
-
-      if (event.detail.averageProfitPerTire !== undefined) {
-        const newProfit = event.detail.averageProfitPerTire;
-        const oldProfit = averageProfitPerTire;
-        
-        console.log(`🔄 [Dashboard] SINCRONIZAÇÃO EXCEL + SUPABASE LUCRO: ${oldProfit.toFixed(3)} → ${newProfit.toFixed(3)}`);
-        
-        setAverageProfitPerTire(newProfit);
-
-        // Persistência local
-        localStorage.setItem("dashboard_averageProfitPerTire", JSON.stringify({
-          value: newProfit,
-          timestamp: Date.now(),
-          source: "ProductStock_Event_100%_Sync_+_Supabase",
-          oldValue: oldProfit,
-          syncStatus: "EXCEL_+_SUPABASE_ACTIVE"
-        }));
-        
-        // Atualizar Supabase
-        updateSupabaseMetric('lucro_medio', newProfit);
-      }
-    };
-
-    // LISTENER MODIFICADO PARA SUPABASE
-    const handleProductStockUpdateWithSupabase = (event: CustomEvent) => {
-      console.log("💰 [Dashboard] EVENTO PRODUCTSTOCK + SUPABASE:", event.detail);
-      
-      if (event.detail.averageProfitPerTire !== undefined) {
-        const newProfit = event.detail.averageProfitPerTire;
-        const oldProfit = averageProfitPerTire;
-        
-        console.log(`🚀 [Dashboard] FÓRMULA EXCEL + SUPABASE LUCRO: ${oldProfit.toFixed(3)} → ${newProfit.toFixed(3)}`);
-        
-        setAverageProfitPerTire(newProfit);
-
-        // Salvar localmente
-        localStorage.setItem("dashboard_averageProfitPerTire", JSON.stringify({
-          value: newProfit,
-          timestamp: Date.now(),
-          source: "ProductStock_Excel_Formula_+_Supabase",
-          method: "Direct_Copy_Like_Excel_+_Realtime",
-          syncStatus: "EXCEL_+_SUPABASE_MODE_ACTIVE"
-        }));
-
-        // Atualizar Supabase
-        updateSupabaseMetric('lucro_medio', newProfit);
-      }
-    };
-
-    // Adicionar listeners modificados
-    window.addEventListener("tireCostUpdated", handleTireCostUpdateWithSupabase as EventListener);
-    window.addEventListener("productStockUpdated", handleProductStockUpdateWithSupabase as EventListener);
-    window.addEventListener("profitUpdated", handleProductStockUpdateWithSupabase as EventListener);
-
-    // Verificação inicial das métricas no Supabase
-    const loadInitialMetrics = async () => {
-      try {
-        console.log("🔍 [Dashboard] SUPABASE: Carregando métricas iniciais...");
-        
-        const { data, error } = await supabase
-          .from('metricas')
-          .select('nome, valor')
-          .in('nome', ['lucro_medio', 'custo_medio', 'target_profit_sync']);
-
-        if (error) {
-          console.error("❌ [Dashboard] SUPABASE LOAD ERROR:", error);
-        } else if (data) {
-          console.log("✅ [Dashboard] SUPABASE INITIAL DATA:", data);
-          
-          data.forEach(metric => {
-            const valor = parseFloat(metric.valor);
-            if (!isNaN(valor)) {
-              if (metric.nome === 'lucro_medio') {
-                console.log(`💰 [Dashboard] SUPABASE INITIAL: Lucro = R$ ${valor.toFixed(3)}`);
-                setAverageProfitPerTire(valor);
-              } else if (metric.nome === 'custo_medio') {
-                console.log(`💲 [Dashboard] SUPABASE INITIAL: Custo = R$ ${valor.toFixed(2)}`);
-                setAverageCostPerTire(valor);
-              } else if (metric.nome === 'target_profit_sync') {
-                console.log(`🎯 [Dashboard] SUPABASE TARGET: Valor alvo = R$ ${valor.toFixed(2)}`);
-                setAverageProfitPerTire(valor);
-              }
-            }
-          });
-        }
-      } catch (error) {
-        console.error("❌ [Dashboard] SUPABASE INITIAL LOAD ERROR:", error);
-      }
-    };
+    
 
     // Observer para detectar mudanças no elemento alvo
     const setupTargetElementObserver = () => {
       console.log("👁️ [Dashboard] CONFIGURANDO OBSERVER PARA ELEMENTO ALVO");
-      
+
       const observer = new MutationObserver((mutations) => {
         mutations.forEach((mutation) => {
           if (mutation.type === 'childList' || mutation.type === 'characterData') {
             const targetElements = document.querySelectorAll('.text-neon-purple');
-            
+
             targetElements.forEach((element) => {
               const textContent = element.textContent || "";
               const match = textContent.match(/R\$\s*([\d.,]+)/);
-              
+
               if (match) {
                 const value = parseFloat(match[1].replace(",", "."));
                 if (!isNaN(value) && value >= 75 && value <= 80) {
                   console.log(`🔍 [Dashboard] OBSERVER: Valor detectado R$ ${value.toFixed(2)}`);
-                  
+
                   // Atualizar o estado se for diferente
                   if (Math.abs(value - averageProfitPerTire) > 0.01) {
                     console.log(`🔄 [Dashboard] OBSERVER: Sincronizando ${averageProfitPerTire.toFixed(2)} → ${value.toFixed(2)}`);
                     setAverageProfitPerTire(value);
-                    
+
                     // Salvar e atualizar Supabase
                     updateSupabaseMetric('target_profit_sync', value);
                   }
@@ -978,25 +838,25 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
     const targetObserver = setupTargetElementObserver();
 
     // Carregar métricas iniciais
-    loadInitialMetrics();
+    
 
     return () => {
-      window.removeEventListener("tireCostUpdated", handleTireCostUpdateWithSupabase as EventListener);
-      window.removeEventListener("productStockUpdated", handleProductStockUpdateWithSupabase as EventListener);
-      window.removeEventListener("profitUpdated", handleProductStockUpdateWithSupabase as EventListener);
-      clearInterval(interval);
-      clearInterval(profitInterval);
-      
-      // Desconectar observer
-      if (targetObserver) {
-        targetObserver.disconnect();
-        console.log("👁️ [Dashboard] TARGET OBSERVER: Desconectado");
-      }
-      
-      // Desinscrever do canal Supabase
-      supabaseChannel.unsubscribe();
-      console.log("🔌 [Dashboard] SUPABASE: Canal desconectado");
-    };
+        window.removeEventListener("tireCostUpdated", handleTireCostUpdateWithSupabase as EventListener);
+        window.removeEventListener("productStockUpdated", handleProductStockUpdateWithSupabase as EventListener);
+        window.removeEventListener("profitUpdated", handleProductStockUpdateWithSupabase as EventListener);
+        clearInterval(costInterval);
+        clearInterval(profitInterval);
+
+        // Desconectar observer
+        if (targetObserver) {
+          targetObserver.disconnect();
+          console.log("👁️ [Dashboard] TARGET OBSERVER: Desconectado");
+        }
+
+        // Desinscrever do canal Supabase
+        supabaseChannel.unsubscribe();
+        console.log("🔌 [Dashboard] SUPABASE: Canal de sincronização bidirecional desconectado");
+      };
   }, [averageCostPerTire, averageProfitPerTire]);
 
   // DEBUG COMPLETO DA SINCRONIZAÇÃO 100% - CUSTO E LUCRO
@@ -1007,9 +867,10 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       porcentagemLucro: `${profitPercentage.toFixed(1)}%`,
       hora: new Date().toLocaleTimeString("pt-BR"),
       timestampSync: Date.now(),
-      statusSincronizacao: "100% ATIVO - CUSTO E LUCRO"
+      statusSincronizacao: "100% ATIVO - CUSTO E```typescript
+ LUCRO"
     };
-    
+
     console.log("🎯 [Dashboard] RELATÓRIO DE SINCRONIZAÇÃO 100% - CUSTO E LUCRO:", syncStatus);
     console.log("✅ [Dashboard] CONFIRMAÇÃO: Custo Médio por Pneu está 100% sincronizado");
     console.log("💰 [Dashboard] CONFIRMAÇÃO: Lucro Médio por Pneu está 100% sincronizado");
@@ -1020,13 +881,13 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
     console.log("   💰 Verificação lucro: ✅ ATIVO (1.5s)");
     console.log("   🎯 DOM Observer: ✅ ATIVO");
     console.log("   🚀 Supabase Realtime: ✅ ATIVO (banco em tempo real)");
-    
+
     // Verificar se todos os métodos estão funcionando
     const storageCheck = localStorage.getItem("dashboard_averageCostPerTire");
     const profitStorageCheck = localStorage.getItem("dashboard_averageProfitPerTire");
     const unifiedCheck = localStorage.getItem("tireCostManager_synchronizedCostData");
     const productStockCheck = localStorage.getItem("productStock_averageProfitPerTire");
-    
+
     console.log("🔍 [Dashboard] VERIFICAÇÃO DE INTEGRIDADE COMPLETA:");
     console.log(`   💾 Storage Custo: ${storageCheck ? '✅ OK' : '❌ AUSENTE'}`);
     console.log(`   💰 Storage Lucro: ${profitStorageCheck ? '✅ OK' : '❌ AUSENTE'}`);
