@@ -59,6 +59,7 @@ import { CSS } from "@dnd-kit/utilities";
 import RawMaterialStock from "./RawMaterialStock";
 import ProductStock from "./ProductStock";
 import FinalProductsStock from "./FinalProductsStock";
+import ResaleProductsStock from "./ResaleProductsStock";
 import StockCharts from "./StockCharts";
 import {
   useMaterials,
@@ -1213,10 +1214,10 @@ const StockDashboard = ({
               Produtos Finais
             </TabsTrigger>
              <TabsTrigger
-              value="charts"
+              value="resale-products"
               className="text-tire-300 data-[state=active]:text-white data-[state=active]:bg-neon-blue/20"
             >
-              Gráficos
+              Produtos Revenda
             </TabsTrigger>
           </TabsList>
 
@@ -1251,17 +1252,11 @@ const StockDashboard = ({
               }
             />
           </TabsContent>
-            <TabsContent value="charts">
-            <StockCharts
+          <TabsContent value="resale-products">
+            <ResaleProductsStock
               isLoading={
-                materialsLoading ||
-                productsLoading ||
-                stockLoading
+                productsLoading || stockLoading
               }
-              materials={materials}
-              products={getAllProducts()}
-              stockItems={stockItems}
-              productType="all"
             />
           </TabsContent>
         </Tabs>
