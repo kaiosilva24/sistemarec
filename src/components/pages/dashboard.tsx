@@ -416,7 +416,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
   };
 
   // SOLUÇÃO SIMPLES ESTILO EXCEL: O valor que está no "Custo Médio por Pneu" é copiado diretamente para "Métricas Principais"
-  
+
   // Estados para valores sincronizados
   const [averageCostPerTire, setAverageCostPerTire] = useState(101.09);
   const [averageProfitPerTire, setAverageProfitPerTire] = useState(69.765);
@@ -455,7 +455,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       } catch (error) {
         console.error("❌ [Dashboard] Erro na fórmula Excel:", error);
       }
-      
+
       // Valor padrão
       return 101.09;
     };
@@ -479,7 +479,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       } catch (error) {
         console.error("❌ [Dashboard] Erro ao ler lucro:", error);
       }
-      
+
       return 69.765;
     };
 
@@ -502,19 +502,19 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       } catch (error) {
         console.error("❌ [Dashboard] Erro ao ler porcentagem:", error);
       }
-      
+
       return 42.5;
     };
 
     // Listener para eventos do TireCostManager
     const handleTireCostUpdate = (event: CustomEvent) => {
       console.log("📢 [Dashboard] EVENTO DO TireCostManager RECEBIDO - APLICANDO FÓRMULA EXCEL:", event.detail);
-      
+
       if (event.detail.averageCostPerTire) {
         const newCost = event.detail.averageCostPerTire;
         console.log(`✨ [Dashboard] FÓRMULA EXCEL: ${averageCostPerTire.toFixed(2)} → ${newCost.toFixed(2)}`);
         setAverageCostPerTire(newCost);
-        
+
         // Salvar para persistência
         localStorage.setItem("dashboard_averageCostPerTire", JSON.stringify({
           value: newCost,
@@ -522,7 +522,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
           source: "TireCostManager_Event"
         }));
       }
-      
+
       if (event.detail.averageProfitPerTire !== undefined) {
         const newProfit = event.detail.averageProfitPerTire;
         console.log(`✨ [Dashboard] FÓRMULA EXCEL LUCRO: ${averageProfitPerTire.toFixed(3)} → ${newProfit.toFixed(3)}`);
@@ -1006,6 +1006,15 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
         icon: BarChart3,
         colorClass: "#F59E0B",
         iconColorClass: "text-neon-orange",
+      },
+      {
+        id: "resale-product-value",
+        title: "Valor Total de Produtos Revenda",
+        value: formatCurrency(metrics.resaleProductValue),
+        subtitle: "valor em produtos de revenda",
+        icon: DollarSign,
+        colorClass: "#10B981",
+        iconColorClass: "text-neon-green",
       },
     ],
     [metrics, profitPercentage],
