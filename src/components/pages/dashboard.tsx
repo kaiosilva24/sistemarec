@@ -419,7 +419,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
 
   // Estados para valores sincronizados
   const [averageCostPerTire, setAverageCostPerTire] = useState(101.09);
-  const [averageProfitPerTire, setAverageProfitPerTire] = useState(69.765);
+  const [averageProfitPerTire, setAverageProfitPerTire] = useState(73.214);
   const [profitPercentage, setProfitPercentage] = useState(42.5);
 
   // Effect para sincronizar com o TireCostManager - FÓRMULA ESTILO EXCEL
@@ -460,19 +460,43 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       return 101.09;
     };
 
-    // Função para ler lucro médio por pneu
+    // Função para ler lucro médio por pneu do PresumedProfitManager
     const readProfitPerTire = () => {
       try {
-        const profitElement = document.querySelector('[id="average-profit"]');
-        if (profitElement) {
-          const textContent = profitElement.textContent || "";
+        // Procurar pelo elemento específico do PresumedProfitManager
+        const profitElements = document.querySelectorAll('.text-neon-purple');
+        
+        for (const element of profitElements) {
+          const textContent = element.textContent || "";
+          // Procurar por valores monetários (R$ seguido de números)
           const match = textContent.match(/R\$\s*([\d.,]+)/);
           if (match) {
-            const value = parseFloat(match[1].replace(",", "."));
-            if (!isNaN(value)) {
-              console.log(`💫 [Dashboard] FÓRMULA EXCEL: Copiando lucro R$ ${value.toFixed(3)}`);
+            const value = parseFloat(match[1].replace(/\./g, '').replace(',', '.'));
+            
+            // Verificar se é um valor de lucro médio (geralmente entre 50-200)
+            if (!isNaN(value) && value > 50 && value < 500) {
+              console.log(`💫 [Dashboard] FÓRMULA EXCEL: Copiando lucro R$ ${value.toFixed(3)} do PresumedProfitManager`);
               setAverageProfitPerTire(value);
               return value;
+            }
+          }
+        }
+
+        // Alternativa: procurar por texto específico "Lucro Médio por Produto Final"
+        const profitCards = document.querySelectorAll('p');
+        for (const card of profitCards) {
+          if (card.textContent?.includes('Lucro Médio por Produto Final')) {
+            const nextElement = card.nextElementSibling;
+            if (nextElement) {
+              const match = nextElement.textContent?.match(/R\$\s*([\d.,]+)/);
+              if (match) {
+                const value = parseFloat(match[1].replace(/\./g, '').replace(',', '.'));
+                if (!isNaN(value) && value > 0) {
+                  console.log(`💫 [Dashboard] FÓRMULA EXCEL: Copiando lucro R$ ${value.toFixed(3)} do card específico`);
+                  setAverageProfitPerTire(value);
+                  return value;
+                }
+              }
             }
           }
         }
@@ -480,7 +504,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
         console.error("❌ [Dashboard] Erro ao ler lucro:", error);
       }
 
-      return 69.765;
+      return 73.214; // Valor atualizado como solicitado
     };
 
     // Função para ler porcentagem de lucro
@@ -687,7 +711,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
     const totalProfit = totalRevenue - totalCosts;
 
     // 7. Lucro Médio por Pneu - FÓRMULA EXCEL: usar valor copiado diretamente
-    const profitPerTire = averageProfitPerTire;
+    // (removida variável duplicada profitPerTire)
 
     // 8. Margem de Lucro (%)
     const profitMargin =
