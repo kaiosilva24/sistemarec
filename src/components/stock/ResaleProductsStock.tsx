@@ -710,7 +710,7 @@ const ResaleProductsStock = ({ isLoading = false }: ResaleProductsStockProps) =>
                     <TableHead className="text-tire-300 text-center">Quantidade</TableHead>
                     <TableHead className="text-tire-300 text-center">Nível Mín.</TableHead>
                     <TableHead className="text-tire-300 text-center">Status</TableHead>
-                    <TableHead className="text-tire-300 text-right">Valor Unit.</TableHead>
+                    <TableHead className="text-tire-300 text-right">Valor Médio</TableHead>
                     <TableHead className="text-tire-300 text-right">Valor Total</TableHead>
                   </TableRow>
                 </TableHeader>
