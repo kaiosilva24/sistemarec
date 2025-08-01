@@ -867,8 +867,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       porcentagemLucro: `${profitPercentage.toFixed(1)}%`,
       hora: new Date().toLocaleTimeString("pt-BR"),
       timestampSync: Date.now(),
-      statusSincronizacao: "100% ATIVO - CUSTO E```typescript
- LUCRO"
+      statusSincronizacao: "100% ATIVO - CUSTO E LUCRO"
     };
 
     console.log("🎯 [Dashboard] RELATÓRIO DE SINCRONIZAÇÃO 100% - CUSTO E LUCRO:", syncStatus);
