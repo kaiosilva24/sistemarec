@@ -985,12 +985,12 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       {
         id: "average-profit",
         title: "Lucro Médio/Pneu",
-        value: formatCurrency(metrics.averageProfitPerTire),
+        value: formatCurrency(averageProfitPerTire),
         subtitle: "lucro por unidade",
         icon: Target,
-        colorClass: metrics.averageProfitPerTire >= 0 ? "#8B5CF6" : "#EF4444",
+        colorClass: averageProfitPerTire >= 0 ? "#8B5CF6" : "#EF4444",
         iconColorClass:
-          metrics.averageProfitPerTire >= 0
+          averageProfitPerTire >= 0
             ? "text-neon-purple"
             : "text-red-400",
       },
