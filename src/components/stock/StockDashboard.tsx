@@ -833,6 +833,31 @@ const StockDashboard = ({
       })),
     );
 
+    // Calcular valor total dos produtos de revenda
+    const resaleProductTotalValue = resaleProductStockItems.reduce((sum, item) => {
+      const unitCost = Number(item.unit_cost) || 0;
+      const quantity = Number(item.quantity) || 0;
+      const calculatedValue = unitCost * quantity;
+      console.log(
+        `💰 Produto Revenda ${item.item_name}: ${quantity} × R$ ${unitCost.toFixed(2)} = R$ ${calculatedValue.toFixed(2)} (stored: R$ ${(item.total_value || 0).toFixed(2)})`,
+      );
+      return sum + calculatedValue;
+    }, 0);
+
+    console.log(`💰 [StockDashboard] TOTAIS CALCULADOS - Valores (RECALCULADOS):`, {
+      materialTotalValue: `R$ ${materialTotalValue.toFixed(2)}`,
+      finalProductTotalValue: `R$ ${finalProductTotalValue.toFixed(2)}`,
+      resaleProductTotalValue: `R$ ${resaleProductTotalValue.toFixed(2)}`,
+      finalProductCalculationMethod:
+        averageCostPerTire > 0
+          ? "Custo médio sincronizado"
+          : "Custo individual dos itens",
+      finalProductSyncedCost:
+        averageCostPerTire > 0
+          ? `${finalProductTotalQuantity} × R$ ${averageCostPerTire.toFixed(2)} = R$ ${finalProductTotalValue.toFixed(2)}`
+          : "N/A",
+    });
+
     // Itens com estoque baixo por categoria
     const materialLowStock = materialStockItems.filter(
       (item) =>
@@ -881,6 +906,7 @@ const StockDashboard = ({
       // Valores
       materialTotalValue,
       finalProductTotalValue,
+      resaleProductTotalValue,
       // Custo médio por pneu dos produtos finais
       finalProductAverageCost,
       // Estoque baixo
@@ -1147,7 +1173,7 @@ const StockDashboard = ({
                       minimumFractionDigits: 0,
                       maximumFractionDigits: 0,
                     }).format(
-                      metrics.materialTotalValue + metrics.finalProductTotalValue
+                      metrics.materialTotalValue + metrics.finalProductTotalValue + metrics.resaleProductTotalValue
                     )}
                   </p>
                   <p className="text-xs text-tire-400 mt-1">
