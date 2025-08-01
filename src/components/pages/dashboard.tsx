@@ -836,6 +836,30 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       }).length,
     });
 
+    // Calculate average profit per tire (matching PresumedProfitManager logic)
+    const salesEntries = cashFlowEntries.filter(
+      (entry) => entry.type === "income" && entry.category === "venda",
+    );
+
+    const totalFinalProductSales = salesEntries
+      .filter((sale) => sale.product_type === "final")
+      .reduce((sum, sale) => sum + Number(sale.quantity), 0);
+
+    const totalFinalProductProfit = salesEntries
+      .filter((sale) => sale.product_type === "final")
+      .reduce((sum: number, sale: any) => {
+        const quantity = Number(sale.quantity) || 0;
+        const unitPrice = Number(sale.unit_price) || 0;
+        const unitCost = Number(sale.unit_cost) || 0;
+        const revenue = quantity * unitPrice;
+        const cost = quantity * unitCost;
+        const profit = revenue - cost;
+        return sum + profit;
+      }, 0);
+
+    const profitPerTire =
+      totalFinalProductSales > 0 ? totalFinalProductProfit / totalFinalProductSales : 0;
+
     const metrics = {
       productStockQuantity,
       salesQuantity,
@@ -1648,8 +1672,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                         {formatCurrency(metrics.averageCostPerTire)}
                       </span>
                       <p className="text-green-400 text-xs mt-1 font-medium">
-                        ✅ VALOR COPIADO AUTOMATICAMENTE
-                      </p>
+                        ✅ VALOR COPIADO AUTOMATICAMENTE                      </p>
                     </div>
                   </div>
                 </div>
