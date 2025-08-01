@@ -452,16 +452,38 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
   };
 
   const calculateTotals = () => {
+    console.log('📊 [ResaleProductsStock] Calculando totais do resumo:', {
+      totalProductAnalysis: productAnalysis.length,
+      productData: productAnalysis.map(p => ({
+        name: p.productName,
+        quantity: p.quantity,
+        totalValue: p.totalValue,
+        profitMargin: p.profitMargin
+      }))
+    });
+
     const totalQuantity = productAnalysis.reduce((total, product) => total + product.quantity, 0);
     const totalValue = productAnalysis.reduce((total, product) => total + product.totalValue, 0);
     const productsInStock = productAnalysis.filter(product => product.quantity > 0).length;
     const averageMargin = productAnalysis.length > 0 ? 
       productAnalysis.reduce((total, product) => total + product.profitMargin, 0) / productAnalysis.length : 0;
 
+    console.log('✅ [ResaleProductsStock] Totais calculados:', {
+      totalQuantity,
+      totalValue,
+      productsInStock,
+      averageMargin: averageMargin.toFixed(2) + '%'
+    });
+
     return { totalQuantity, totalValue, productsInStock, averageMargin };
   };
 
   const { totalQuantity, totalValue, productsInStock, averageMargin } = calculateTotals();
+
+  // Force re-render of totals when productAnalysis changes
+  useEffect(() => {
+    console.log('🔄 [ResaleProductsStock] productAnalysis atualizado, recalculando totais...');
+  }, [productAnalysis]);
 
   if (isLoading || stockLoading || productsLoading) {
     return (
@@ -656,6 +678,11 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
           <CardTitle className="text-tire-200 text-lg flex items-center gap-2">
             <TrendingUp className="h-5 w-5 text-neon-purple" />
             Resumo dos Produtos de Revenda
+            {isSaving && (
+              <span className="text-neon-orange text-sm animate-pulse ml-2">
+                (Salvando...)
+              </span>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -665,21 +692,41 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
               <p className="text-2xl font-bold text-white">{productAnalysis.length}</p>
             </div>
             
-            <div className="text-center p-4 bg-factory-700/30 rounded-lg border border-tire-600/20">
+            <div className={`text-center p-4 rounded-lg border transition-all duration-300 ${
+              productsInStock > 0 
+                ? 'bg-neon-cyan/10 border-neon-cyan/30' 
+                : 'bg-factory-700/30 border-tire-600/20'
+            }`}>
               <p className="text-tire-400 text-sm">Produtos em Estoque</p>
-              <p className="text-2xl font-bold text-neon-cyan">{productsInStock}</p>
+              <p className={`text-2xl font-bold transition-colors duration-300 ${
+                productsInStock > 0 ? 'text-neon-cyan' : 'text-tire-300'
+              }`}>
+                {productsInStock}
+              </p>
             </div>
             
-            <div className="text-center p-4 bg-neon-blue/10 rounded-lg border border-neon-blue/30">
+            <div className={`text-center p-4 rounded-lg border transition-all duration-300 ${
+              totalValue > 0 
+                ? 'bg-neon-blue/10 border-neon-blue/30' 
+                : 'bg-factory-700/30 border-tire-600/20'
+            }`}>
               <p className="text-tire-400 text-sm">Valor Total Investido</p>
-              <p className="text-2xl font-bold text-neon-blue">
+              <p className={`text-2xl font-bold transition-colors duration-300 ${
+                totalValue > 0 ? 'text-neon-blue' : 'text-tire-300'
+              }`}>
                 {formatCurrency(totalValue)}
               </p>
             </div>
 
-            <div className="text-center p-4 bg-neon-purple/10 rounded-lg border border-neon-purple/30">
+            <div className={`text-center p-4 rounded-lg border transition-all duration-300 ${
+              averageMargin > 0 
+                ? 'bg-neon-purple/10 border-neon-purple/30' 
+                : 'bg-factory-700/30 border-tire-600/20'
+            }`}>
               <p className="text-tire-400 text-sm">Margem Média</p>
-              <p className={`text-2xl font-bold ${averageMargin > 0 ? 'text-neon-green' : 'text-red-400'}`}>
+              <p className={`text-2xl font-bold transition-colors duration-300 ${
+                averageMargin > 0 ? 'text-neon-green' : 'text-red-400'
+              }`}>
                 {averageMargin.toFixed(1)}%
               </p>
             </div>
