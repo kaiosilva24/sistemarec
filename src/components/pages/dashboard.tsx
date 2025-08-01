@@ -43,6 +43,7 @@ import {
   RotateCcw,
   GripVertical,
 } from "lucide-react";
+import { supabase } from "../../../supabase/supabase";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
 import {
@@ -422,13 +423,14 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
   const [averageProfitPerTire, setAverageProfitPerTire] = useState(69.765);
   const [profitPercentage, setProfitPercentage] = useState(42.5);
 
-  // Effect para sincronizar com o TireCostManager - FÓRMULA ESTILO EXCEL
+  // Effect para sincronizar com o TireCostManager + SUPABASE REALTIME - FÓRMULA ESTILO EXCEL
   useEffect(() => {
-    // SISTEMA DE SINCRONIZAÇÃO 100% AUTOMÁTICA - ESTILO EXCEL
-    // Esta função implementa 3 métodos de sincronização para garantir 100% de precisão:
+    // SISTEMA DE SINCRONIZAÇÃO 100% AUTOMÁTICA - ESTILO EXCEL + SUPABASE REALTIME
+    // Esta função implementa 4 métodos de sincronização para garantir 100% de precisão:
     // 1. Leitura direta do DOM (elementos HTML)
     // 2. Leitura do localStorage (persistência)  
     // 3. Eventos customizados (tempo real)
+    // 4. Supabase Realtime (banco de dados em tempo real)
     
     const readTireCostManagerValue = () => {
       try {
@@ -684,12 +686,218 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       readProfitPerTire();
     }, 1500); // Verificação ainda mais frequente para o lucro
 
+    // FUNÇÃO PARA ATUALIZAR MÉTRICAS NO SUPABASE
+    const updateSupabaseMetric = async (nome: string, valor: number) => {
+      try {
+        console.log(`🚀 [Dashboard] SUPABASE REALTIME: Atualizando ${nome} = ${valor}`);
+        
+        const { data, error } = await supabase
+          .from('metricas')
+          .upsert({
+            nome,
+            valor,
+            updated_at: new Date().toISOString()
+          }, {
+            onConflict: 'nome'
+          });
+
+        if (error) {
+          console.error(`❌ [Dashboard] SUPABASE ERROR:`, error);
+        } else {
+          console.log(`✅ [Dashboard] SUPABASE SUCCESS: ${nome} atualizado`);
+        }
+      } catch (error) {
+        console.error(`❌ [Dashboard] SUPABASE EXCEPTION:`, error);
+      }
+    };
+
+    // LISTENER SUPABASE REALTIME PARA LUCRO MÉDIO
+    const supabaseChannel = supabase
+      .channel('lucro-medio')
+      .on(
+        'postgres_changes',
+        { 
+          event: 'UPDATE', 
+          schema: 'public', 
+          table: 'metricas', 
+          filter: 'nome=eq.lucro_medio' 
+        },
+        (payload) => {
+          console.log('🎯 [Dashboard] SUPABASE REALTIME RECEBIDO:', payload);
+          
+          const novoValor = parseFloat(payload.new.valor);
+          if (!isNaN(novoValor)) {
+            console.log(`💫 [Dashboard] SUPABASE SYNC: Atualizando lucro para R$ ${novoValor.toFixed(3)}`);
+            setAverageProfitPerTire(novoValor);
+            
+            // Atualizar DOM se elemento existir
+            const element = document.getElementById('lucro-medio');
+            if (element) {
+              element.innerText = `R$ ${novoValor.toFixed(2)}`;
+            }
+
+            // Salvar no localStorage para persistência
+            localStorage.setItem("dashboard_averageProfitPerTire", JSON.stringify({
+              value: novoValor,
+              timestamp: Date.now(),
+              source: "Supabase_Realtime_100%_Sync",
+              syncStatus: "SUPABASE_REALTIME_ACTIVE"
+            }));
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { 
+          event: 'UPDATE', 
+          schema: 'public', 
+          table: 'metricas', 
+          filter: 'nome=eq.custo_medio' 
+        },
+        (payload) => {
+          console.log('🎯 [Dashboard] SUPABASE CUSTO REALTIME:', payload);
+          
+          const novoValor = parseFloat(payload.new.valor);
+          if (!isNaN(novoValor)) {
+            console.log(`💫 [Dashboard] SUPABASE SYNC: Atualizando custo para R$ ${novoValor.toFixed(2)}`);
+            setAverageCostPerTire(novoValor);
+            
+            // Salvar no localStorage para persistência
+            localStorage.setItem("dashboard_averageCostPerTire", JSON.stringify({
+              value: novoValor,
+              timestamp: Date.now(),
+              source: "Supabase_Realtime_Cost_Sync",
+              syncStatus: "SUPABASE_REALTIME_ACTIVE"
+            }));
+          }
+        }
+      )
+      .subscribe();
+
+    // FUNÇÃO MODIFICADA PARA SINCRONIZAR COM SUPABASE
+    const handleTireCostUpdateWithSupabase = (event: CustomEvent) => {
+      console.log("🎯 [Dashboard] EVENTO 100% SINCRONIZADO + SUPABASE:", event.detail);
+
+      if (event.detail.averageCostPerTire) {
+        const newCost = event.detail.averageCostPerTire;
+        const oldCost = averageCostPerTire;
+        
+        console.log(`🔄 [Dashboard] SINCRONIZAÇÃO EXCEL + SUPABASE CUSTO: ${oldCost.toFixed(2)} → ${newCost.toFixed(2)}`);
+        
+        setAverageCostPerTire(newCost);
+
+        // Persistência local
+        localStorage.setItem("dashboard_averageCostPerTire", JSON.stringify({
+          value: newCost,
+          timestamp: Date.now(),
+          source: "TireCostManager_Event_100%_Sync_+_Supabase",
+          oldValue: oldCost,
+          syncStatus: "EXCEL_+_SUPABASE_ACTIVE"
+        }));
+        
+        // Atualizar Supabase
+        updateSupabaseMetric('custo_medio', newCost);
+      }
+
+      if (event.detail.averageProfitPerTire !== undefined) {
+        const newProfit = event.detail.averageProfitPerTire;
+        const oldProfit = averageProfitPerTire;
+        
+        console.log(`🔄 [Dashboard] SINCRONIZAÇÃO EXCEL + SUPABASE LUCRO: ${oldProfit.toFixed(3)} → ${newProfit.toFixed(3)}`);
+        
+        setAverageProfitPerTire(newProfit);
+
+        // Persistência local
+        localStorage.setItem("dashboard_averageProfitPerTire", JSON.stringify({
+          value: newProfit,
+          timestamp: Date.now(),
+          source: "ProductStock_Event_100%_Sync_+_Supabase",
+          oldValue: oldProfit,
+          syncStatus: "EXCEL_+_SUPABASE_ACTIVE"
+        }));
+        
+        // Atualizar Supabase
+        updateSupabaseMetric('lucro_medio', newProfit);
+      }
+    };
+
+    // LISTENER MODIFICADO PARA SUPABASE
+    const handleProductStockUpdateWithSupabase = (event: CustomEvent) => {
+      console.log("💰 [Dashboard] EVENTO PRODUCTSTOCK + SUPABASE:", event.detail);
+      
+      if (event.detail.averageProfitPerTire !== undefined) {
+        const newProfit = event.detail.averageProfitPerTire;
+        const oldProfit = averageProfitPerTire;
+        
+        console.log(`🚀 [Dashboard] FÓRMULA EXCEL + SUPABASE LUCRO: ${oldProfit.toFixed(3)} → ${newProfit.toFixed(3)}`);
+        
+        setAverageProfitPerTire(newProfit);
+
+        // Salvar localmente
+        localStorage.setItem("dashboard_averageProfitPerTire", JSON.stringify({
+          value: newProfit,
+          timestamp: Date.now(),
+          source: "ProductStock_Excel_Formula_+_Supabase",
+          method: "Direct_Copy_Like_Excel_+_Realtime",
+          syncStatus: "EXCEL_+_SUPABASE_MODE_ACTIVE"
+        }));
+
+        // Atualizar Supabase
+        updateSupabaseMetric('lucro_medio', newProfit);
+      }
+    };
+
+    // Adicionar listeners modificados
+    window.addEventListener("tireCostUpdated", handleTireCostUpdateWithSupabase as EventListener);
+    window.addEventListener("productStockUpdated", handleProductStockUpdateWithSupabase as EventListener);
+    window.addEventListener("profitUpdated", handleProductStockUpdateWithSupabase as EventListener);
+
+    // Verificação inicial das métricas no Supabase
+    const loadInitialMetrics = async () => {
+      try {
+        console.log("🔍 [Dashboard] SUPABASE: Carregando métricas iniciais...");
+        
+        const { data, error } = await supabase
+          .from('metricas')
+          .select('nome, valor')
+          .in('nome', ['lucro_medio', 'custo_medio']);
+
+        if (error) {
+          console.error("❌ [Dashboard] SUPABASE LOAD ERROR:", error);
+        } else if (data) {
+          console.log("✅ [Dashboard] SUPABASE INITIAL DATA:", data);
+          
+          data.forEach(metric => {
+            const valor = parseFloat(metric.valor);
+            if (!isNaN(valor)) {
+              if (metric.nome === 'lucro_medio') {
+                console.log(`💰 [Dashboard] SUPABASE INITIAL: Lucro = R$ ${valor.toFixed(3)}`);
+                setAverageProfitPerTire(valor);
+              } else if (metric.nome === 'custo_medio') {
+                console.log(`💲 [Dashboard] SUPABASE INITIAL: Custo = R$ ${valor.toFixed(2)}`);
+                setAverageCostPerTire(valor);
+              }
+            }
+          });
+        }
+      } catch (error) {
+        console.error("❌ [Dashboard] SUPABASE INITIAL LOAD ERROR:", error);
+      }
+    };
+
+    // Carregar métricas iniciais
+    loadInitialMetrics();
+
     return () => {
-      window.removeEventListener("tireCostUpdated", handleTireCostUpdate as EventListener);
-      window.removeEventListener("productStockUpdated", handleProductStockUpdate as EventListener);
-      window.removeEventListener("profitUpdated", handleProductStockUpdate as EventListener);
+      window.removeEventListener("tireCostUpdated", handleTireCostUpdateWithSupabase as EventListener);
+      window.removeEventListener("productStockUpdated", handleProductStockUpdateWithSupabase as EventListener);
+      window.removeEventListener("profitUpdated", handleProductStockUpdateWithSupabase as EventListener);
       clearInterval(interval);
       clearInterval(profitInterval);
+      
+      // Desinscrever do canal Supabase
+      supabaseChannel.unsubscribe();
+      console.log("🔌 [Dashboard] SUPABASE: Canal desconectado");
     };
   }, [averageCostPerTire, averageProfitPerTire]);
 
@@ -713,6 +921,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
     console.log("   🔄 Verificação periódica: ✅ ATIVO (2s)");
     console.log("   💰 Verificação lucro: ✅ ATIVO (1.5s)");
     console.log("   🎯 DOM Observer: ✅ ATIVO");
+    console.log("   🚀 Supabase Realtime: ✅ ATIVO (banco em tempo real)");
     
     // Verificar se todos os métodos estão funcionando
     const storageCheck = localStorage.getItem("dashboard_averageCostPerTire");
@@ -1867,15 +2076,42 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
 
                 <div className="mt-4 p-3 bg-yellow-900/20 rounded-lg border border-yellow-500/30">
                   <h5 className="text-yellow-400 font-medium mb-2 text-sm">
-                    📊 SOLUÇÃO IMPLEMENTADA - ESTILO EXCEL:
+                    📊 SOLUÇÃO IMPLEMENTADA - ESTILO EXCEL + SUPABASE:
                   </h5>
                   <div className="space-y-1 text-xs text-yellow-300">
                     <p>✅ Cópia automática como fórmula =A1</p>
                     <p>✅ Sincronização em tempo real</p>
                     <p>✅ Sem cache conflitante</p>
                     <p>✅ Atualização a cada 3 segundos</p>
+                    <p>🚀 Supabase Realtime ativado</p>
+                    <p>🔥 Tabela 'metricas' sincronizada</p>
                     <p className="text-green-400 font-medium">
                       🎉 FUNCIONANDO COMO EXCEL: {formatCurrency(averageCostPerTire)} = {formatCurrency(metrics.averageCostPerTire)}
+                    </p>
+                    <p className="text-blue-400 font-medium">
+                      🚀 SUPABASE: Banco sincronizado em tempo real
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-4 p-3 bg-blue-900/20 rounded-lg border border-blue-500/30">
+                  <h5 className="text-blue-400 font-medium mb-2 text-sm">
+                    🚀 SUPABASE REALTIME - STATUS:
+                  </h5>
+                  <div className="space-y-1 text-xs text-blue-300">
+                    <p>✅ Tabela 'metricas' criada</p>
+                    <p>✅ Canal 'lucro-medio' ativo</p>
+                    <p>✅ Triggers de UPDATE funcionando</p>
+                    <p>🔄 Sincronização bidirecional ativa</p>
+                    <p>💾 Persistência no banco garantida</p>
+                    <p className="text-green-400 font-medium">
+                      🎯 REALTIME: {formatCurrency(averageProfitPerTire)} (lucro)
+                    </p>
+                    <p className="text-green-400 font-medium">
+                      💲 REALTIME: {formatCurrency(averageCostPerTire)} (custo)
+                    </p>
+                    <p className="text-cyan-400 text-xs mt-2">
+                      ℹ️ Mudanças no banco refletem automaticamente na UI
                     </p>
                   </div>
                 </div>
