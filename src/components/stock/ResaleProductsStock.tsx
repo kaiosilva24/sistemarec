@@ -511,17 +511,23 @@ const ResaleProductsStock = ({ isLoading = false }: ResaleProductsStockProps) =>
               </div>
 
               <div>
-                <Label>Nível Mínimo</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  step="1"
-                  value={minLevel}
-                  onChange={(e) => setMinLevel(e.target.value)}
-                  className="bg-factory-700/50 border-tire-600/30 text-white"
-                  placeholder="0"
-                />
-              </div>
+                  <Label>Nível Mínimo</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={minLevel}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      // Only allow non-negative integers
+                      if (value === '' || (/^\d+$/.test(value) && parseInt(value) >= 0)) {
+                        setMinLevel(value);
+                      }
+                    }}
+                    className="bg-factory-700/50 border-tire-600/30 text-white"
+                    placeholder="0"
+                  />
+                </div>
 
               <div className="flex justify-end gap-2">
                 <Button
