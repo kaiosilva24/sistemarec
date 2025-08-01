@@ -886,8 +886,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
     () => [
       {
         id: "cash-balance",
-        title: "Saldo de Caixa",
-        value: formatCurrency(metrics.cashBalance),
+        title: "Saldo de Caixa",        value: formatCurrency(metrics.cashBalance),
         subtitle: "entradas - saídas",
         icon: DollarSign,
         colorClass: metrics.cashBalance >= 0 ? "#10B981" : "#EF4444",
@@ -957,18 +956,6 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
         colorClass: metrics.totalProfit >= 0 ? "#3B82F6" : "#EF4444",
         iconColorClass:
           metrics.totalProfit >= 0 ? "text-neon-blue" : "text-red-400",
-      },
-      {
-        id: "average-profit",
-        title: "Lucro Médio/Pneu",
-        value: formatCurrency(metrics.averageProfitPerTire),
-        subtitle: "lucro por unidade",
-        icon: Target,
-        colorClass: metrics.averageProfitPerTire >= 0 ? "#8B5CF6" : "#EF4444",
-        iconColorClass:
-          metrics.averageProfitPerTire >= 0
-            ? "text-neon-purple"
-            : "text-red-400",
       },
       {
         id: "profit-margin",
