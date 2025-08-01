@@ -155,13 +155,17 @@ const ResaleProductsStock = ({ isLoading = false }: ResaleProductsStockProps) =>
     }
 
     // Verificar se há estoque suficiente para remoção
-    if (stockOperation === "remove" && quantityValue > product.quantity) {
-      toast({
-        title: "Erro",
-        description: `Estoque insuficiente. Disponível: ${product.quantity} ${product.unit}`,
-        variant: "destructive",
-      });
-      return;
+    if (stockOperation === "remove") {
+      if (!product.stockId || quantityValue > product.quantity) {
+        toast({
+          title: "Erro",
+          description: product.stockId 
+            ? `Estoque insuficiente. Disponível: ${product.quantity} ${product.unit}`
+            : "Não é possível remover estoque de um produto sem estoque registrado",
+          variant: "destructive",
+        });
+        return;
+      }
     }
 
     try {
@@ -216,13 +220,13 @@ const ResaleProductsStock = ({ isLoading = false }: ResaleProductsStockProps) =>
 
         console.log("✅ Estoque atualizado com sucesso");
       } else {
-        // Create new stock entry
-        const newUnitCost = priceValue > 0 ? priceValue : (product.purchase_price || 0);
-        const newQuantity = stockOperation === "add" ? quantityValue : 0;
-
+        // Create new stock entry - só permite adicionar
         if (stockOperation === "remove") {
           throw new Error("Não é possível remover estoque de um produto sem estoque registrado");
         }
+
+        const newUnitCost = priceValue > 0 ? priceValue : (product.purchase_price || 0);
+        const newQuantity = quantityValue; // sempre será "add" aqui
 
         const newStockData = {
           item_id: product.id,
@@ -246,6 +250,11 @@ const ResaleProductsStock = ({ isLoading = false }: ResaleProductsStockProps) =>
 
         console.log("✅ Novo estoque criado com sucesso");
       }
+
+      // Forçar recarregamento dos dados
+      setTimeout(() => {
+        window.location.reload();
+      }, 500);
 
       toast({
         title: "Sucesso!",
