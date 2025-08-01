@@ -12,7 +12,8 @@ import {
   TrendingUp,
   Package,
   Plus,
-  Download
+  Download,
+  Trash2
 } from "lucide-react";
 import {
   Dialog,
@@ -21,6 +22,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useResaleProducts, useStockItems } from "@/hooks/useDataPersistence";
+import { supabase } from "../../../supabase/supabase";
 
 interface ResaleProductsStockProps {
   isLoading?: boolean;
@@ -37,6 +39,7 @@ interface ResaleProductAnalysis {
   totalValue: number;
   profitMargin: number;
   isEditing: boolean;
+  stockItemId?: string;
 }
 
 interface AddStockDialogProps {
@@ -160,33 +163,65 @@ const AddStockDialog: React.FC<AddStockDialogProps> = ({
 
 const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = false }) => {
   const { resaleProducts, isLoading: productsLoading } = useResaleProducts();
-  const { stockItems, isLoading: stockLoading, addStockItem, updateStockItem } = useStockItems();
   const [productAnalysis, setProductAnalysis] = useState<ResaleProductAnalysis[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [stockData, setStockData] = useState<any[]>([]);
+  const [stockLoading, setStockLoading] = useState(true);
+
+  // Carrega dados do estoque de produtos de revenda do Supabase
+  const loadResaleStockData = async () => {
+    try {
+      setStockLoading(true);
+      const { data, error } = await supabase
+        .from('resale_products_stock')
+        .select(`
+          *,
+          resale_products!inner(
+            id,
+            name,
+            unit,
+            purchase_price,
+            sale_price,
+            archived
+          )
+        `)
+        .eq('resale_products.archived', false);
+
+      if (error) {
+        console.error('Erro ao carregar estoque de produtos de revenda:', error);
+        return;
+      }
+
+      console.log('✅ [ResaleProductsStock] Dados carregados do Supabase:', data);
+      setStockData(data || []);
+    } catch (error) {
+      console.error('Erro na consulta do Supabase:', error);
+    } finally {
+      setStockLoading(false);
+    }
+  };
 
   useEffect(() => {
-    if (!stockItems.length || !resaleProducts.length) return;
+    loadResaleStockData();
+  }, []);
 
-    console.log('🔄 [ResaleProductsStock] Carregando dados dos produtos de revenda...');
+  useEffect(() => {
+    if (!stockData.length || !resaleProducts.length) return;
 
-    // Filtrar apenas produtos de revenda em estoque
-    const resaleProductStockItems = stockItems.filter(item => 
-      item.item_type === "resale_product" && 
-      resaleProducts.find(p => p.id === item.item_id && !p.archived)
-    );
+    console.log('🔄 [ResaleProductsStock] Processando dados dos produtos de revenda...');
 
-    const analysis = resaleProductStockItems.map(stockItem => {
-      const product = resaleProducts.find(p => p.id === stockItem.item_id);
+    const analysis = stockData.map(stockItem => {
+      const product = stockItem.resale_products;
       if (!product) return null;
 
       const quantity = stockItem.quantity || 0;
-      const purchasePrice = stockItem.unit_cost || product.purchase_price || 0;
-      const salePrice = product.sale_price || 0;
-      const totalValue = quantity * purchasePrice;
+      const purchasePrice = stockItem.purchase_price || product.purchase_price || 0;
+      const salePrice = stockItem.sale_price || product.sale_price || 0;
+      const totalValue = stockItem.total_value || (quantity * purchasePrice);
       const profitMargin = salePrice > 0 ? ((salePrice - purchasePrice) / salePrice * 100) : 0;
 
-      console.log(`📦 [ResaleProductsStock] Produto carregado: ${product.name}`, {
+      console.log(`📦 [ResaleProductsStock] Produto processado: ${product.name}`, {
         quantity,
         purchasePrice,
         salePrice,
@@ -195,7 +230,7 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
       });
 
       return {
-        productId: stockItem.item_id,
+        productId: stockItem.resale_product_id,
         productName: product.name,
         unit: product.unit,
         quantity,
@@ -204,7 +239,8 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
         salePrice,
         totalValue,
         profitMargin,
-        isEditing: false
+        isEditing: false,
+        stockItemId: stockItem.id
       };
     }).filter(Boolean) as ResaleProductAnalysis[];
 
@@ -214,7 +250,7 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
       productsWithStock: analysis.filter(p => p.quantity > 0).length,
       totalValue: analysis.reduce((sum, p) => sum + p.totalValue, 0)
     });
-  }, [stockItems, resaleProducts]);
+  }, [stockData, resaleProducts]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
@@ -258,31 +294,46 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
     try {
       const totalValue = quantity * unitCost;
 
-      // Verificar se já existe item no estoque
-      const existingStockItem = stockItems.find(item => 
-        item.item_id === productId && item.item_type === "resale_product"
-      );
+      // Verifica se já existe registro para este produto
+      const existingStock = stockData.find(item => item.resale_product_id === productId);
 
-      if (existingStockItem) {
-        // Atualizar item existente
-        await updateStockItem(existingStockItem.id, {
-          quantity: quantity,
-          unit_cost: unitCost,
-          total_value: totalValue
-        });
+      if (existingStock) {
+        // Atualiza registro existente
+        const { error } = await supabase
+          .from('resale_products_stock')
+          .update({
+            quantity: quantity,
+            purchase_price: unitCost,
+            sale_price: product.sale_price,
+            total_value: totalValue,
+            profit_margin: product.sale_price > 0 ? ((product.sale_price - unitCost) / product.sale_price * 100) : 0,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingStock.id);
+
+        if (error) throw error;
       } else {
-        // Criar novo item no estoque
-        await addStockItem({
-          item_id: productId,
-          item_type: "resale_product",
-          item_name: product.name,
-          quantity: quantity,
-          unit_cost: unitCost,
-          total_value: totalValue
-        });
+        // Cria novo registro
+        const { error } = await supabase
+          .from('resale_products_stock')
+          .insert({
+            resale_product_id: productId,
+            product_name: product.name,
+            unit: product.unit,
+            quantity: quantity,
+            purchase_price: unitCost,
+            sale_price: product.sale_price,
+            total_value: totalValue,
+            profit_margin: product.sale_price > 0 ? ((product.sale_price - unitCost) / product.sale_price * 100) : 0
+          });
+
+        if (error) throw error;
       }
 
-      console.log(`✅ Estoque adicionado: ${product.name} - ${quantity} unidades com custo ${unitCost}`);
+      console.log(`✅ Estoque adicionado no Supabase: ${product.name} - ${quantity} unidades com custo ${unitCost}`);
+      
+      // Recarrega os dados
+      await loadResaleStockData();
     } catch (error) {
       console.error("Erro ao adicionar estoque:", error);
     } finally {
@@ -292,40 +343,66 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
 
   const handleSaveQuantity = async (productId: string) => {
     const product = productAnalysis.find(p => p.productId === productId);
-    if (!product) return;
+    if (!product || !product.stockItemId) return;
 
     setIsSaving(true);
     try {
-      const stockItem = stockItems.find(item => 
-        item.item_id === productId && item.item_type === "resale_product"
+      const newTotalValue = product.editableQuantity * product.purchasePrice;
+
+      const { error } = await supabase
+        .from('resale_products_stock')
+        .update({
+          quantity: product.editableQuantity,
+          total_value: newTotalValue,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', product.stockItemId);
+
+      if (error) throw error;
+
+      // Atualiza estado local
+      setProductAnalysis(prev => 
+        prev.map(p => 
+          p.productId === productId 
+            ? { 
+                ...p, 
+                quantity: product.editableQuantity,
+                totalValue: newTotalValue,
+                isEditing: false 
+              }
+            : p
+        )
       );
 
-      if (stockItem) {
-        const newTotalValue = product.editableQuantity * product.purchasePrice;
-
-        await updateStockItem(stockItem.id, {
-          quantity: product.editableQuantity,
-          total_value: newTotalValue
-        });
-
-        // Atualizar estado local
-        setProductAnalysis(prev => 
-          prev.map(p => 
-            p.productId === productId 
-              ? { 
-                  ...p, 
-                  quantity: product.editableQuantity,
-                  totalValue: newTotalValue,
-                  isEditing: false 
-                }
-              : p
-          )
-        );
-
-        console.log(`✅ Quantidade atualizada para ${product.productName}: ${product.editableQuantity} unidades, Valor total: ${formatCurrency(newTotalValue)}`);
-      }
+      console.log(`✅ Quantidade atualizada no Supabase para ${product.productName}: ${product.editableQuantity} unidades`);
     } catch (error) {
       console.error("Erro ao salvar quantidade:", error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleRemoveStock = async (productId: string) => {
+    const product = productAnalysis.find(p => p.productId === productId);
+    if (!product || !product.stockItemId) return;
+
+    if (!confirm(`Deseja remover ${product.productName} do estoque?`)) return;
+
+    setIsSaving(true);
+    try {
+      const { error } = await supabase
+        .from('resale_products_stock')
+        .delete()
+        .eq('id', product.stockItemId);
+
+      if (error) throw error;
+
+      console.log(`✅ Produto removido do estoque: ${product.productName}`);
+      
+      // Recarrega os dados
+      await loadResaleStockData();
+    } catch (error) {
+      console.error("Erro ao remover produto do estoque:", error);
     } finally {
       setIsSaving(false);
     }
@@ -390,13 +467,13 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="text-tire-200 text-lg flex items-center gap-2">
-                <ShoppingCart className="h-5 w-5 text-neon-blue" />
+              <CardTitle className="text-tire-200 text-xl flex items-center gap-2">
+                <ShoppingCart className="h-6 w-6 text-neon-blue" />
                 Produtos para Revenda
-                <span className="text-neon-blue text-sm">({productAnalysis.length} tipos)</span>
+                <span className="text-neon-blue text-base">({productAnalysis.length} tipos)</span>
               </CardTitle>
               <p className="text-tire-300 text-sm mt-1">
-                Controle de estoque e análise de custos por produto de revenda
+                Controle de estoque e análise de custos por produto de revenda integrado ao Supabase
               </p>
             </div>
             <div className="flex gap-2">
@@ -418,35 +495,46 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
           </div>
         </CardHeader>
         <CardContent className="p-6 pt-0">
-          <div className="space-y-3 max-h-96 overflow-y-auto">
+          <div className="space-y-4 max-h-96 overflow-y-auto">
             {productAnalysis.length === 0 ? (
               <div className="text-center py-8">
                 <Package className="h-12 w-12 text-tire-500 mx-auto mb-3" />
-                <p className="text-tire-400">Nenhum produto de revenda em estoque</p>
+                <p className="text-tire-400 text-lg">Nenhum produto de revenda em estoque</p>
+                <p className="text-tire-500 text-sm">Clique em "Adicionar Estoque" para começar</p>
               </div>
             ) : (
               productAnalysis.map((product) => (
                 <div
                   key={product.productId}
-                  className="p-4 rounded-lg border transition-all bg-factory-700/30 border-tire-600/20 hover:bg-factory-700/50"
+                  className="p-5 rounded-lg border transition-all bg-factory-700/30 border-tire-600/20 hover:bg-factory-700/50"
                 >
-                  <div className="flex items-center justify-between mb-3">
-                    <h4 className="text-white font-semibold text-lg flex items-center gap-2">
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="text-white font-bold text-xl flex items-center gap-2">
                       {product.productName}
-                      <span className="text-tire-400 text-sm">({product.unit})</span>
+                      <span className="text-tire-400 text-base font-normal">({product.unit})</span>
                     </h4>
-                    <div className="text-right">
-                      <span className="text-neon-green font-bold text-xl">
-                        {formatCurrency(product.totalValue)}
-                      </span>
-                      <p className="text-tire-400 text-sm">Valor Total</p>
+                    <div className="flex items-center gap-3">
+                      <div className="text-right">
+                        <span className="text-neon-green font-bold text-2xl">
+                          {formatCurrency(product.totalValue)}
+                        </span>
+                        <p className="text-tire-400 text-sm">Valor Total</p>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleRemoveStock(product.productId)}
+                        className="bg-red-900/20 border-red-500/30 text-red-400 hover:bg-red-900/30 hover:text-red-300 h-9 px-3"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
                   </div>
 
                   {/* Seção de Controle de Quantidade */}
-                  <div className="bg-factory-600/20 rounded-lg p-3 mb-3 border border-tire-600/30">
-                    <div className="flex items-center justify-between mb-2">
-                      <Label className="text-tire-300 font-medium text-base flex items-center gap-2">
+                  <div className="bg-factory-600/20 rounded-lg p-4 mb-4 border border-tire-600/30">
+                    <div className="flex items-center justify-between mb-3">
+                      <Label className="text-tire-300 font-semibold text-lg flex items-center gap-2">
                         <Calculator className="h-5 w-5 text-neon-orange" />
                         Controle de Quantidade
                       </Label>
@@ -454,38 +542,38 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
                         size="sm"
                         variant="outline"
                         onClick={() => handleEditToggle(product.productId)}
-                        className="bg-factory-700/50 border-tire-600/30 text-tire-300 hover:text-white h-8 px-3"
+                        className="bg-factory-700/50 border-tire-600/30 text-tire-300 hover:text-white h-9 px-3"
                       >
-                        <Edit3 className="h-3 w-3 mr-1" />
+                        <Edit3 className="h-4 w-4 mr-1" />
                         {product.isEditing ? "Cancelar" : "Editar"}
                       </Button>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                       <div>
-                        <Label className="text-tire-400 text-sm">Quantidade Atual</Label>
+                        <Label className="text-tire-400 text-sm font-medium">Quantidade Atual</Label>
                         {product.isEditing ? (
                           <Input
                             type="text"
                             value={product.editableQuantity.toString()}
                             onChange={(e) => handleQuantityChange(product.productId, e.target.value)}
-                            className="bg-factory-700/50 border-tire-600/30 text-white h-10 text-base"
+                            className="bg-factory-700/50 border-tire-600/30 text-white h-11 text-lg font-semibold"
                           />
                         ) : (
-                          <p className="text-white font-medium text-base">{product.quantity} {product.unit}</p>
+                          <p className="text-white font-bold text-lg mt-1">{product.quantity} {product.unit}</p>
                         )}
                       </div>
 
                       <div>
-                        <Label className="text-tire-400 text-sm">Preço de Compra</Label>
-                        <p className="text-neon-orange font-medium text-base">
+                        <Label className="text-tire-400 text-sm font-medium">Preço de Compra</Label>
+                        <p className="text-neon-orange font-bold text-lg mt-1">
                           {formatCurrency(product.purchasePrice)}
                         </p>
                       </div>
 
                       <div>
-                        <Label className="text-tire-400 text-sm">Preço de Venda</Label>
-                        <p className="text-neon-cyan font-medium text-base">
+                        <Label className="text-tire-400 text-sm font-medium">Preço de Venda</Label>
+                        <p className="text-neon-cyan font-bold text-lg mt-1">
                           {formatCurrency(product.salePrice)}
                         </p>
                       </div>
@@ -496,9 +584,9 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
                             size="sm"
                             onClick={() => handleSaveQuantity(product.productId)}
                             disabled={isSaving}
-                            className="bg-neon-green/20 border-neon-green/50 text-neon-green hover:bg-neon-green/30 h-8 px-3 w-full"
+                            className="bg-neon-green/20 border-neon-green/50 text-neon-green hover:bg-neon-green/30 h-9 px-4 w-full font-semibold"
                           >
-                            <Save className="h-3 w-3 mr-1" />
+                            <Save className="h-4 w-4 mr-1" />
                             {isSaving ? "Salvando..." : "Salvar"}
                           </Button>
                         )}
@@ -507,17 +595,17 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
                   </div>
 
                   {/* Seção de Informações Adicionais */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div className="text-center p-3 bg-factory-600/20 rounded-lg border border-tire-600/30">
-                      <p className="text-tire-400 text-sm">Margem de Lucro</p>
-                      <p className={`font-bold text-lg ${product.profitMargin > 0 ? 'text-neon-green' : 'text-red-400'}`}>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="text-center p-4 bg-factory-600/20 rounded-lg border border-tire-600/30">
+                      <p className="text-tire-400 text-sm font-medium">Margem de Lucro</p>
+                      <p className={`font-bold text-xl ${product.profitMargin > 0 ? 'text-neon-green' : 'text-red-400'}`}>
                         {product.profitMargin.toFixed(1)}%
                       </p>
                     </div>
 
-                    <div className="text-center p-3 bg-factory-600/20 rounded-lg border border-tire-600/30">
-                      <p className="text-tire-400 text-sm">Lucro por Unidade</p>
-                      <p className={`font-bold text-lg ${(product.salePrice - product.purchasePrice) > 0 ? 'text-neon-green' : 'text-red-400'}`}>
+                    <div className="text-center p-4 bg-factory-600/20 rounded-lg border border-tire-600/30">
+                      <p className="text-tire-400 text-sm font-medium">Lucro por Unidade</p>
+                      <p className={`font-bold text-xl ${(product.salePrice - product.purchasePrice) > 0 ? 'text-neon-green' : 'text-red-400'}`}>
                         {formatCurrency(product.salePrice - product.purchasePrice)}
                       </p>
                     </div>
@@ -533,34 +621,34 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
       {productAnalysis.length > 0 && (
         <Card className="bg-factory-800/50 border-tire-600/30">
           <CardHeader>
-            <CardTitle className="text-tire-200 text-lg flex items-center gap-2">
-              <TrendingUp className="h-5 w-5 text-neon-purple" />
+            <CardTitle className="text-tire-200 text-xl flex items-center gap-2">
+              <TrendingUp className="h-6 w-6 text-neon-purple" />
               Resumo Total do Estoque de Revenda
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="text-center p-4 bg-factory-700/30 rounded-lg border border-tire-600/20">
-                <p className="text-tire-400 text-sm">Total de Tipos</p>
+                <p className="text-tire-400 text-sm font-medium">Total de Tipos</p>
                 <p className="text-2xl font-bold text-white">{productAnalysis.length}</p>
               </div>
 
               <div className="text-center p-4 bg-factory-700/30 rounded-lg border border-tire-600/20">
-                <p className="text-tire-400 text-sm">Produtos em Estoque</p>
+                <p className="text-tire-400 text-sm font-medium">Produtos em Estoque</p>
                 <p className="text-2xl font-bold text-neon-cyan">
                   {productAnalysis.filter(p => p.quantity > 0).length}
                 </p>
               </div>
 
               <div className="text-center p-4 bg-factory-700/30 rounded-lg border border-tire-600/20">
-                <p className="text-tire-400 text-sm">Quantidade Total</p>
+                <p className="text-tire-400 text-sm font-medium">Quantidade Total</p>
                 <p className="text-2xl font-bold text-neon-blue">
                   {productAnalysis.reduce((total, product) => total + product.quantity, 0)}
                 </p>
               </div>
 
               <div className="text-center p-4 bg-neon-green/10 rounded-lg border border-neon-green/30">
-                <p className="text-tire-400 text-sm">Valor Total do Estoque</p>
+                <p className="text-tire-400 text-sm font-medium">Valor Total do Estoque</p>
                 <p className="text-2xl font-bold text-neon-green">
                   {formatCurrency(calculateGrandTotal())}
                 </p>
