@@ -879,7 +879,7 @@ const StockDashboard = ({
     return result;
   };
 
-  const metrics = calculateMetrics();
+    const metrics = calculateMetrics();
 
   // Update card values with current metrics
   const updatedCards = cards.map((card) => {
@@ -913,8 +913,7 @@ const StockDashboard = ({
             currency: "BRL",
             minimumFractionDigits: 0,
             maximumFractionDigits: 0,
-          }).format(metrics.finalProductTotalValue),
-        };      default:return card;
+          }).format(metrics.finalProductTotalValue),        };      default:return card;
     }
   });
 
