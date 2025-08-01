@@ -315,8 +315,8 @@ const ResaleProductsStock = ({ isLoading = false }: ResaleProductsStockProps) =>
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-tire-300 text-sm">Em Estoque</p>
-                <p className="text-2xl font-bold text-neon-green">{productsInStock}</p>
-                <p className="text-xs text-tire-400 mt-1">com quantidade > 0</p>
+                <p className="text-2xl font-bold text-neon-green">{totalQuantity}</p>
+                <p className="text-xs text-tire-400 mt-1">quantidade total</p>
               </div>
               <Package2 className="h-8 w-8 text-neon-green" />
             </div>
