@@ -638,64 +638,32 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       return 69.765; // Valor padrão
     };
 
-    // Função para ler lucro médio por produto final - USAR O MESMO VALOR DO LUCRO POR PNEU
+    // Função para ler lucro médio por produto final - FORÇAR VALOR IDÊNTICO AO LUCRO POR PNEU
     const readFinalProductProfit = () => {
       try {
-        // ESTRATÉGIA: Usar o mesmo valor do lucro médio por pneu para consistência
-        const currentProfit = averageProfitPerTire;
+        // 🔥 SOLUÇÃO DEFINITIVA: SEMPRE USAR O MESMO VALOR DO LUCRO POR PNEU
+        console.log(`🔥 [Dashboard] FORÇANDO SINCRONIZAÇÃO TOTAL: Lucro Produto Final = Lucro por Pneu`);
         
-        if (currentProfit > 0) {
-          console.log(`💫 [Dashboard] FÓRMULA EXCEL: Sincronizando lucro produto final com lucro por pneu R$ ${currentProfit.toFixed(3)}`);
-          setFinalProductProfit(currentProfit);
-          return currentProfit;
-        }
-
-        // Alternativa: procurar no localStorage do TireCostManager
-        const synchronizedData = localStorage.getItem("tireCostManager_synchronizedCostData");
-        if (synchronizedData) {
-          const parsed = JSON.parse(synchronizedData);
-          if (parsed.averageCostPerTire > 0) {
-            const currentMetrics = calculateMetrics();
-            if (currentMetrics.salesQuantity > 0) {
-              const averageSellingPrice = currentMetrics.totalRevenue / currentMetrics.salesQuantity;
-              const calculatedProfit = averageSellingPrice - parsed.averageCostPerTire;
-              
-              if (calculatedProfit > 0) {
-                console.log(`💫 [Dashboard] FÓRMULA EXCEL: Calculando lucro produto final R$ ${calculatedProfit.toFixed(3)}`);
-                setFinalProductProfit(calculatedProfit);
-                return calculatedProfit;
-              }
-            }
-          }
-        }
-
-        // Última alternativa: procurar no DOM
-        const elements = document.querySelectorAll('p, span, div');
-        for (const element of elements) {
-          const text = element.textContent || "";
-          if (text.includes("Lucro Médio por Produto Final")) {
-            const parent = element.parentElement;
-            if (parent) {
-              const valueElement = parent.querySelector('.text-neon-purple');
-              if (valueElement) {
-                const match = valueElement.textContent?.match(/R\$\s*([0-9.,]+)/);
-                if (match) {
-                  const value = parseFloat(match[1].replace(",", "."));
-                  if (!isNaN(value) && value > 0) {
-                    console.log(`💫 [Dashboard] FÓRMULA EXCEL: Encontrado no DOM R$ ${value.toFixed(3)}`);
-                    setFinalProductProfit(value);
-                    return value;
-                  }
-                }
-              }
-            }
-          }
-        }
+        // Usar diretamente o valor do lucro por pneu atual
+        const identicalProfit = averageProfitPerTire;
+        
+        console.log(`💫 [Dashboard] FÓRMULA EXCEL IDÊNTICA: R$ ${identicalProfit.toFixed(3)} = R$ ${identicalProfit.toFixed(3)}`);
+        setFinalProductProfit(identicalProfit);
+        
+        // Salvar no localStorage para persistência
+        localStorage.setItem("dashboard_finalProductProfit", JSON.stringify({
+          value: identicalProfit,
+          timestamp: Date.now(),
+          source: "Dashboard_ForcedSync",
+          syncedWithProfitPerTire: true
+        }));
+        
+        return identicalProfit;
       } catch (error) {
-        console.error("❌ [Dashboard] Erro ao ler lucro produto final:", error);
+        console.error("❌ [Dashboard] Erro ao sincronizar lucro produto final:", error);
       }
 
-      return averageProfitPerTire > 0 ? averageProfitPerTire : 69.765;
+      return averageProfitPerTire;
     };
 
     // Listener para eventos do TireCostManager - SINCRONIZAÇÃO COMPLETA
@@ -721,18 +689,28 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
         }));
       }
 
-      // 🔥 SINCRONIZAÇÃO DIRETA DO LUCRO POR PNEU
+      // 🔥 SINCRONIZAÇÃO DIRETA DO LUCRO POR PNEU - FORÇAR VALORES IDÊNTICOS
       if (event.detail.averageProfitPerTire !== undefined) {
         const newProfit = event.detail.averageProfitPerTire;
         console.log(`✨ [Dashboard] FÓRMULA EXCEL LUCRO DIRETO: ${averageProfitPerTire.toFixed(3)} → ${newProfit.toFixed(3)}`);
-        setAverageProfitPerTire(newProfit);
-        setFinalProductProfit(newProfit); // Manter consistência
         
-        // Salvar para persistência
+        // 🔥 APLICAR O MESMO VALOR EM AMBOS OS CAMPOS
+        setAverageProfitPerTire(newProfit);
+        setFinalProductProfit(newProfit); // FORÇAR IDENTIDADE TOTAL
+        
+        console.log(`🎯 [Dashboard] VALORES FORÇADOS PARA SER IDÊNTICOS: Lucro por Pneu = R$ ${newProfit.toFixed(3)}, Produto Final = R$ ${newProfit.toFixed(3)}`);
+        
+        // Salvar ambos valores
         localStorage.setItem("dashboard_averageProfitPerTire", JSON.stringify({
           value: newProfit,
           timestamp: Date.now(),
           source: "TireCostManager_Event_LUCRO"
+        }));
+        
+        localStorage.setItem("dashboard_finalProductProfit", JSON.stringify({
+          value: newProfit,
+          timestamp: Date.now(),
+          source: "TireCostManager_Event_LUCRO_IDENTICAL"
         }));
       }
 
@@ -821,6 +799,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
           });
           
           setAverageProfitPerTire(calculatedProfitPerTire);
+          setFinalProductProfit(calculatedProfitPerTire); // 🔥 FORÇAR IDENTIDADE TOTAL
           
           // Recalcular porcentagem
           if (averageSellingPrice > 0) {
@@ -831,6 +810,17 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       }
     }
   }, [averageCostPerTire]);
+
+  // 🔥 NOVO EFFECT: FORÇAR SINCRONIZAÇÃO TOTAL SEMPRE QUE LUCRO POR PNEU MUDAR
+  useEffect(() => {
+    console.log(`🔥 [Dashboard] FORÇANDO SINCRONIZAÇÃO: Lucro por Pneu mudou para R$ ${averageProfitPerTire.toFixed(3)}`);
+    
+    // Sempre manter os valores idênticos
+    if (Math.abs(finalProductProfit - averageProfitPerTire) > 0.001) {
+      console.log(`🎯 [Dashboard] CORREÇÃO AUTOMÁTICA: ${finalProductProfit.toFixed(3)} → ${averageProfitPerTire.toFixed(3)}`);
+      setFinalProductProfit(averageProfitPerTire);
+    }
+  }, [averageProfitPerTire]);
 
   // Debug log para mostrar que a fórmula está funcionando
   useEffect(() => {
@@ -1252,8 +1242,8 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       {
         id: "average-final-product-profit",
         title: "Lucro Médio por Produto Final",
-        value: formatCurrency(averageProfitPerTire), // USAR O MESMO VALOR DO LUCRO POR PNEU
-        subtitle: `sincronizado c/ TireCostManager - R$ ${averageProfitPerTire.toFixed(2)}`,
+        value: formatCurrency(finalProductProfit), // USAR O VALOR FORÇADO PARA SER IDÊNTICO
+        subtitle: `IDÊNTICO ao lucro por pneu - R$ ${finalProductProfit.toFixed(2)}`,
         icon: Target,
         colorClass: "#8B5CF6",
         iconColorClass: "text-neon-purple",
