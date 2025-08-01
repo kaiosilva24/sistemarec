@@ -91,7 +91,9 @@ const ResaleProductsStock = ({ isLoading = false }: ResaleProductsStockProps) =>
       const quantity = stockItem?.quantity || 0;
       const minLevel = stockItem?.min_level || 0;
       const totalValue = stockItem?.total_value || 0;
-      const unitCost = stockItem?.unit_cost || 0;
+      
+      // Calcular valor médio sempre como total_value / quantity
+      const averageUnitValue = quantity > 0 ? totalValue / quantity : 0;
 
       let status = "normal";
       if (minLevel > 0 && quantity <= minLevel) status = "low";
@@ -102,7 +104,7 @@ const ResaleProductsStock = ({ isLoading = false }: ResaleProductsStockProps) =>
         quantity,
         minLevel,
         totalValue,
-        unitCost,
+        averageUnitValue, // Usar valor médio calculado
         status,
       };
     });
@@ -198,14 +200,20 @@ const ResaleProductsStock = ({ isLoading = false }: ResaleProductsStockProps) =>
         if (stockOperation === "add") {
           newQuantity = currentQuantity + quantityValue;
 
-          // Calculate weighted average cost if adding with a price
+          // Calculate new total value if adding with a price
           if (priceValue > 0) {
-            const currentTotalValue = currentQuantity * currentUnitCost;
-            const newTotalValue = quantityValue * priceValue;
-            newUnitCost = newQuantity > 0 ? (currentTotalValue + newTotalValue) / newQuantity : priceValue;
+            const currentTotalValue = product.totalValue || 0;
+            const addedValue = quantityValue * priceValue;
+            // O unit_cost será recalculado automaticamente pelo total_value / quantity
+            newUnitCost = newQuantity > 0 ? (currentTotalValue + addedValue) / newQuantity : priceValue;
+          } else {
+            // Se não informou preço, manter o custo médio atual
+            newUnitCost = currentUnitCost;
           }
         } else {
           newQuantity = Math.max(0, currentQuantity - quantityValue);
+          // Manter o mesmo custo unitário médio na remoção
+          newUnitCost = currentUnitCost;
         }
 
         const updateData = {
@@ -748,7 +756,7 @@ const ResaleProductsStock = ({ isLoading = false }: ResaleProductsStockProps) =>
                         )}
                       </TableCell>
                       <TableCell className="text-right text-tire-300">
-                        {product.unitCost > 0 ? formatCurrency(product.unitCost) : "-"}
+                        {product.averageUnitValue > 0 ? formatCurrency(product.averageUnitValue) : "-"}
                       </TableCell>
                       <TableCell className="text-right">
                         <span className="text-neon-green font-medium">
