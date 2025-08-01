@@ -1181,7 +1181,7 @@ const StockDashboard = ({
                     {metrics.totalLowStock}
                   </p>
                   <p className="text-xs text-tire-400 mt-1">
-                    MP: {metrics.materialLowStock} | Finais: {metrics.finalProductLowStock}
+                    MP: {metrics.materialLowStock} | Finais: {metrics.finalProductLowStock} | Revenda: {metrics.resaleLowStock}
                   </p>
                 </div>
                 <div className="text-red-400">
