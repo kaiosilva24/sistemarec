@@ -11,8 +11,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Package, Calculator, Save, Edit3, Search } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Package, Calculator, Save, Edit3, Search, Settings, AlertTriangle } from "lucide-react";
 import { useStockItems, useProducts } from "@/hooks/useDataPersistence";
+import { useToast } from "@/components/ui/use-toast";
 
 interface FinalProductsStockProps {
   isLoading?: boolean;
@@ -31,15 +39,21 @@ interface ProductAnalysis {
   editableQuantity: number;
   totalValue: number;
   isEditing: boolean;
+  minLevel: number;
+  stockLevel: "normal" | "low" | "out";
 }
 
 const FinalProductsStock: React.FC<FinalProductsStockProps> = ({ isLoading = false }) => {
-  const { stockItems, isLoading: stockLoading, updateStockItem } = useStockItems();
+  const { stockItems, isLoading: stockLoading, updateStockItem, createStockItem } = useStockItems();
   const { products, isLoading: productsLoading } = useProducts();
   const [productAnalysis, setProductAnalysis] = useState<ProductAnalysis[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterType, setFilterType] = useState<"all" | "in-stock" | "out-of-stock">("all");
+  const [filterType, setFilterType] = useState<"all" | "in-stock" | "out-of-stock" | "low-stock">("all");
+  const [showMinLevelDialog, setShowMinLevelDialog] = useState(false);
+  const [selectedProductForMinLevel, setSelectedProductForMinLevel] = useState("");
+  const [minLevel, setMinLevel] = useState("");
+  const { toast } = useToast();
 
   // Função para extrair as medidas do nome do produto
   const extractMeasures = (productName: string): string => {
@@ -95,6 +109,15 @@ const FinalProductsStock: React.FC<FinalProductsStockProps> = ({ isLoading = fal
       const measures = extractMeasures(product.name);
       const quantity = stockItem.quantity || 0;
       const totalValue = quantity * costPerTire;
+      const minLevel = stockItem.min_level || 0;
+
+      // Determinar status do estoque
+      let stockLevel: "normal" | "low" | "out" = "normal";
+      if (quantity === 0) {
+        stockLevel = "out";
+      } else if (minLevel > 0 && quantity <= minLevel) {
+        stockLevel = "low";
+      }
 
       // Calcular valores baseados no estoque e vendas (mockado por enquanto)
       const totalSold = 0; // TODO: Integrar com dados de vendas
@@ -114,7 +137,9 @@ const FinalProductsStock: React.FC<FinalProductsStockProps> = ({ isLoading = fal
         quantity,
         editableQuantity: quantity,
         totalValue,
-        isEditing: false
+        isEditing: false,
+        minLevel,
+        stockLevel
       };
     }).filter(Boolean) as ProductAnalysis[];
 
@@ -196,6 +221,63 @@ const FinalProductsStock: React.FC<FinalProductsStockProps> = ({ isLoading = fal
     return filteredProductAnalysis.reduce((total, product) => total + product.totalValue, 0);
   };
 
+  const handleSetMinLevel = async () => {
+    if (!selectedProductForMinLevel || !minLevel) {
+      toast({
+        title: "Erro",
+        description: "Selecione um produto e informe o nível mínimo.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const minLevelValue = parseInt(minLevel);
+    const stockItem = stockItems.find(item => 
+      item.item_id === selectedProductForMinLevel && item.item_type === "product"
+    );
+
+    try {
+      if (stockItem) {
+        await updateStockItem(stockItem.id, {
+          min_level: minLevelValue,
+          last_updated: new Date().toISOString(),
+        });
+      } else {
+        // Create stock entry with min level if it doesn't exist
+        const product = products.find(p => p.id === selectedProductForMinLevel);
+        if (product) {
+          await createStockItem({
+            item_id: product.id,
+            item_type: "product",
+            item_name: product.name,
+            quantity: 0,
+            unit_cost: getSpecificCost(product.name),
+            total_value: 0,
+            min_level: minLevelValue,
+            unit: "un",
+            last_updated: new Date().toISOString(),
+          });
+        }
+      }
+
+      toast({
+        title: "Nível mínimo definido",
+        description: `Nível mínimo de ${minLevel} unidades definido com sucesso.`,
+      });
+
+      setShowMinLevelDialog(false);
+      setSelectedProductForMinLevel("");
+      setMinLevel("");
+    } catch (error) {
+      console.error("Erro ao definir nível mínimo:", error);
+      toast({
+        title: "Erro",
+        description: "Erro ao definir nível mínimo. Tente novamente.",
+        variant: "destructive",
+      });
+    }
+  };
+
   // Apply search and filter logic
   const filteredProductAnalysis = productAnalysis.filter(product => {
     const matchesSearch = 
@@ -205,10 +287,14 @@ const FinalProductsStock: React.FC<FinalProductsStockProps> = ({ isLoading = fal
     const matchesFilter = 
       filterType === "all" || 
       (filterType === "in-stock" && product.quantity > 0) ||
-      (filterType === "out-of-stock" && product.quantity === 0);
+      (filterType === "out-of-stock" && product.quantity === 0) ||
+      (filterType === "low-stock" && product.stockLevel === "low");
 
     return matchesSearch && matchesFilter;
   });
+
+  // Calculate low stock count
+  const lowStockCount = productAnalysis.filter(product => product.stockLevel === "low").length;
 
   if (isLoading || stockLoading || productsLoading) {
     return (
@@ -238,11 +324,74 @@ const FinalProductsStock: React.FC<FinalProductsStockProps> = ({ isLoading = fal
               </div>
               Produtos Finais
               <span className="text-neon-green text-sm">({productAnalysis.length} tipos)</span>
+              {lowStockCount > 0 && (
+                <span className="text-red-400 text-sm flex items-center gap-1">
+                  <AlertTriangle className="h-3 w-3" />
+                  {lowStockCount} baixo
+                </span>
+              )}
             </h3>
             <p className="text-tire-300 mt-2">
               Análise de custos e controle de quantidade por tipo de pneu
             </p>
           </div>
+          
+          <Dialog open={showMinLevelDialog} onOpenChange={setShowMinLevelDialog}>
+            <DialogTrigger asChild>
+              <Button
+                variant="outline"
+                className="bg-factory-700/50 border-tire-600/30 text-tire-300 hover:text-white hover:bg-tire-700/50"
+              >
+                <Settings className="h-4 w-4 mr-2" />
+                Nível Mínimo
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="bg-factory-800 border-tire-600/30 text-white">
+              <DialogHeader>
+                <DialogTitle>Definir Nível Mínimo</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label>Produto</Label>
+                  <Select value={selectedProductForMinLevel} onValueChange={setSelectedProductForMinLevel}>
+                    <SelectTrigger className="bg-factory-700/50 border-tire-600/30 text-white">
+                      <SelectValue placeholder="Selecione um produto" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-factory-800 border-tire-600/30">
+                      {productAnalysis.map((product) => (
+                        <SelectItem
+                          key={product.productId}
+                          value={product.productId}
+                          className="text-white hover:bg-tire-700/50"
+                        >
+                          {product.productName} (Min: {product.minLevel})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label>Nível Mínimo</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={minLevel}
+                    onChange={(e) => setMinLevel(e.target.value)}
+                    placeholder="Ex: 5"
+                    className="bg-factory-700/50 border-tire-600/30 text-white"
+                  />
+                </div>
+
+                <Button
+                  onClick={handleSetMinLevel}
+                  className="w-full bg-neon-blue hover:bg-neon-blue/80"
+                >
+                  Salvar Nível Mínimo
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
 
@@ -273,6 +422,9 @@ const FinalProductsStock: React.FC<FinalProductsStockProps> = ({ isLoading = fal
             </SelectItem>
             <SelectItem value="out-of-stock" className="text-white hover:bg-tire-700/50">
               Sem Estoque
+            </SelectItem>
+            <SelectItem value="low-stock" className="text-white hover:bg-tire-700/50">
+              Estoque Baixo
             </SelectItem>
           </SelectContent>
         </Select>
@@ -351,8 +503,26 @@ const FinalProductsStock: React.FC<FinalProductsStockProps> = ({ isLoading = fal
                   <h4 className="text-white font-semibold text-xl flex items-center gap-2">
                     <span className="text-2xl">🏭</span>
                     {product.measures}
+                    {product.stockLevel === "low" && (
+                      <AlertTriangle className="h-4 w-4 text-red-400" />
+                    )}
+                    {product.stockLevel === "out" && (
+                      <span className="text-xs px-2 py-1 rounded bg-red-900/20 text-red-400 border border-red-600/30">
+                        SEM ESTOQUE
+                      </span>
+                    )}
+                    {product.stockLevel === "low" && (
+                      <span className="text-xs px-2 py-1 rounded bg-yellow-900/20 text-yellow-400 border border-yellow-600/30">
+                        ESTOQUE BAIXO
+                      </span>
+                    )}
                   </h4>
                   <p className="text-tire-400 text-sm">{product.productName}</p>
+                  {product.minLevel > 0 && (
+                    <p className="text-tire-500 text-xs">
+                      Nível mínimo: {product.minLevel} unidades
+                    </p>
+                  )}
                 </div>
                 <div className="text-right">
                   <span className="text-neon-green font-bold text-2xl">
@@ -435,6 +605,39 @@ const FinalProductsStock: React.FC<FinalProductsStockProps> = ({ isLoading = fal
           ))
         )}
       </div>
+
+      {/* Low Stock Alert */}
+      {lowStockCount > 0 && (
+        <div className="mt-6 p-4 bg-red-900/20 border border-red-600/30 rounded-lg">
+          <h4 className="text-red-400 text-lg flex items-center gap-2 mb-3">
+            <AlertTriangle className="h-5 w-5" />
+            Alertas de Estoque Baixo ({lowStockCount})
+          </h4>
+          <div className="space-y-2">
+            {productAnalysis
+              .filter(product => product.stockLevel === "low")
+              .map((product) => (
+                <div
+                  key={product.productId}
+                  className="flex items-center justify-between p-3 bg-red-900/10 rounded border border-red-600/20"
+                >
+                  <div>
+                    <span className="text-white font-medium">{product.measures}</span>
+                    <div className="text-sm text-tire-300">{product.productName}</div>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-red-400 font-medium">
+                      {product.quantity} unidades
+                    </span>
+                    <div className="text-xs text-tire-400">
+                      Mín: {product.minLevel} unidades
+                    </div>
+                  </div>
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
