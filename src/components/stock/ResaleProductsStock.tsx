@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,18 +12,15 @@ import {
   TrendingUp,
   Package,
   Plus,
-  Download,
-  Upload
+  Download
 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { useResaleProducts, useStockItems } from "@/hooks/useDataPersistence";
-import { supabase } from "../../../supabase/supabase";
 
 interface ResaleProductsStockProps {
   isLoading?: boolean;
@@ -61,7 +59,9 @@ const AddStockDialog: React.FC<AddStockDialogProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedProductId && quantity && unitCost) {
-      onAddStock(selectedProductId, parseInt(quantity), parseInt(unitCost));
+      const cleanQuantity = parseInt(quantity.replace(/[^\d]/g, '')) || 0;
+      const cleanUnitCost = parseInt(unitCost.replace(/[^\d]/g, '')) || 0;
+      onAddStock(selectedProductId, cleanQuantity, cleanUnitCost);
       setSelectedProductId("");
       setQuantity("");
       setUnitCost("");
