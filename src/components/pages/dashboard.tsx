@@ -686,12 +686,19 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
     const totalCosts = salesQuantity * costPerTire;
     const totalProfit = totalRevenue - totalCosts;
 
-    // 7. Lucro Médio por Pneu - FÓRMULA EXCEL: usar valor copiado diretamente
-    const profitPerTire = averageProfitPerTire;
+    // 7. Lucro Médio por Pneu - CÁLCULO DINÂMICO EM TEMPO REAL
+    const calculatedProfitPerTire = salesQuantity > 0 ? totalProfit / salesQuantity : 0;
 
-    // 8. Margem de Lucro (%)
-    const profitMargin =
-      totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
+    // 8. Margem de Lucro (%) - CÁLCULO DINÂMICO
+    const profitMargin = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
+
+    // Atualizar estados se os valores mudaram
+    if (Math.abs(calculatedProfitPerTire - averageProfitPerTire) > 0.01) {
+      setAverageProfitPerTire(calculatedProfitPerTire);
+    }
+    if (Math.abs(profitMargin - profitPercentage) > 0.01) {
+      setProfitPercentage(profitMargin);
+    }
 
     // 9. Saldo de Caixa
     const totalIncome = cashFlowEntries
@@ -842,7 +849,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       productionQuantity,
       totalRevenue,
       totalProfit,
-      averageProfitPerTire: profitPerTire, // FÓRMULA EXCEL
+      averageProfitPerTire: calculatedProfitPerTire, // CÁLCULO DINÂMICO
       profitMargin,
       cashBalance,
       averageCostPerTire: costPerTire, // FÓRMULA EXCEL
@@ -961,14 +968,11 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       {
         id: "average-profit",
         title: "Lucro Médio/Pneu",
-        value: formatCurrency(metrics.averageProfitPerTire),
-        subtitle: "lucro por unidade",
+        value: formatCurrency(salesQuantity > 0 ? totalProfit / salesQuantity : 0),
+        subtitle: "lucro por unidade (tempo real)",
         icon: Target,
-        colorClass: metrics.averageProfitPerTire >= 0 ? "#8B5CF6" : "#EF4444",
-        iconColorClass:
-          metrics.averageProfitPerTire >= 0
-            ? "text-neon-purple"
-            : "text-red-400",
+        colorClass: totalProfit >= 0 ? "#8B5CF6" : "#EF4444",
+        iconColorClass: totalProfit >= 0 ? "text-neon-purple" : "text-red-400",
       },
       {
         id: "profit-margin",
@@ -1664,232 +1668,4 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                         Sistema funciona como fórmula do Excel
                       </p>
                       <div className="flex items-center gap-2 mt-2">
-                        <span className="bg-blue-500/20 text-blue-400 px-2 py-1 rounded text-xs flex items-center gap-1">
-                          <span className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></span>
-                          SINCRONIZAÇÃO EXCEL
-                        </span>
-                        <span className="text-tire-400 text-xs">
-                          Atualização em tempo real
-                        </span>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-neon-purple font-bold text-xl">
-                        {formatCurrency(metrics.averageProfitPerTire)}
-                      </span>
-                      <p className="text-blue-400 text-xs mt-1 font-medium">
-                        ✅ FÓRMULA EXCEL FUNCIONANDO
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-4 p-3 bg-yellow-900/20 rounded-lg border border-yellow-500/30">
-                  <h5 className="text-yellow-400 font-medium mb-2 text-sm">
-                    📊 SOLUÇÃO IMPLEMENTADA - ESTILO EXCEL:
-                  </h5>
-                  <div className="space-y-1 text-xs text-yellow-300">
-                    <p>✅ Cópia automática como fórmula =A1</p>
-                    <p>✅ Sincronização em tempo real</p>
-                    <p>✅ Sem cache conflitante</p>
-                    <p>✅ Atualização a cada 3 segundos</p>
-                    <p className="text-green-400 font-medium">
-                      🎉 FUNCIONANDO COMO EXCEL: {formatCurrency(averageCostPerTire)} = {formatCurrency(metrics.averageCostPerTire)}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
-};
-
-const Home = () => {
-  const { t } = useTranslation();
-  const [loading, setLoading] = useState(false);
-  const [activeSection, setActiveSection] = useState("dashboard");
-  const [stockItems, setStockItems] = useState([]);
-  const [isDiagnosticOpen, setIsDiagnosticOpen] = useState(false);
-
-  // Function to trigger loading state for demonstration
-  const handleRefresh = () => {
-    setLoading(true);
-    // Reset loading after 2 seconds
-    setTimeout(() => {
-      setLoading(false);
-    }, 2000);
-  };
-
-  const handleSidebarClick = (label: string) => {
-    const sectionMap: { [key: string]: string } = {
-      Dashboard: "dashboard",
-      Financeiro: "financial",
-      Estoque: "inventory",
-      Produção: "production",
-      Cadastros: "registrations",
-      Vendas: "sales",
-    };
-    setActiveSection(sectionMap[label] || "dashboard");
-  };
-
-  // Load stock items for production module
-  useEffect(() => {
-    const savedStockItems = localStorage.getItem("tire-factory-stock-items");
-    if (savedStockItems) {
-      try {
-        setStockItems(JSON.parse(savedStockItems));
-      } catch (error) {
-        console.error("Error loading stock items:", error);
-      }
-    }
-  }, []);
-
-  const handleStockUpdate = (
-    itemId: string,
-    itemType: "material" | "product",
-    quantity: number,
-    operation: "add" | "remove",
-    unitPrice?: number,
-  ) => {
-    // Update stock items and save to localStorage
-    const savedStockItems = localStorage.getItem("tire-factory-stock-items");
-    let currentStockItems = [];
-    if (savedStockItems) {
-      try {
-        currentStockItems = JSON.parse(savedStockItems);
-      } catch (error) {
-        console.error("Error loading stock items:", error);
-      }
-    }
-
-    const existingStockIndex = currentStockItems.findIndex(
-      (item: any) => item.item_id === itemId && item.item_type === itemType,
-    );
-
-    if (existingStockIndex >= 0) {
-      // Update existing stock item
-      const updatedStockItems = currentStockItems.map(
-        (item: any, index: number) => {
-          if (index === existingStockIndex) {
-            if (operation === "remove") {
-              const newQuantity = Math.max(0, item.quantity - quantity);
-              return {
-                ...item,
-                quantity: newQuantity,
-                total_value: newQuantity * item.unit_cost,
-                last_updated: new Date().toISOString(),
-              };
-            }
-          }
-          return item;
-        },
-      );
-
-      localStorage.setItem(
-        "tire-factory-stock-items",
-        JSON.stringify(updatedStockItems),
-      );
-      setStockItems(updatedStockItems);
-    }
-  };
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-factory-900 via-factory-800 to-tire-900 factory-grid">
-      <TopNavigation />
-      <div className="flex h-[calc(100vh-64px)] mt-16">
-        <Sidebar
-          onItemClick={handleSidebarClick}
-          activeItem={
-            activeSection === "dashboard"
-              ? "Dashboard"
-              : activeSection === "financial"
-                ? "Financeiro"
-                : activeSection === "inventory"
-                  ? "Estoque"
-                  : activeSection === "production"
-                    ? "Produção"
-                    : activeSection === "sales"
-                      ? "Vendas"
-                      : "Cadastros"
-          }
-        />
-        <main className="flex-1 overflow-auto">
-          {/* Header Section */}
-          <div className="container mx-auto px-6 pt-6 pb-4">
-            <div className="flex justify-between items-center mb-6">
-              <div className="space-y-2">
-                <h1 className="text-3xl font-bold text-white flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-r from-neon-blue to-neon-purple flex items-center justify-center neon-glow">
-                    <span className="text-white font-bold text-lg">R</span>
-                  </div>
-                  {t("dashboard.title", "Remold Tire Factory")}
-                </h1>
-                <p className="text-tire-300 text-lg">
-                  {t(
-                    "dashboard.subtitle",
-                    "Sistema de Gestão Financeira e Produção",
-                  )}
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                <DataDiagnostic
-                  isOpen={isDiagnosticOpen}
-                  onOpenChange={setIsDiagnosticOpen}
-                />
-                <Button
-                  onClick={handleRefresh}
-                  className="bg-gradient-to-r from-neon-blue to-tire-500 hover:from-tire-600 hover:to-neon-blue text-white rounded-full px-6 h-11 shadow-lg transition-all duration-300 flex items-center gap-2 neon-glow pulse-glow"
-                >
-                  <RefreshCw
-                    className={`h-5 w-5 ${loading ? "animate-spin" : ""}`}
-                  />
-                  {loading ? t("common.loading") : t("common.refresh")}
-                </Button>
-              </div>
-            </div>
-          </div>
-
-          <div
-            className={cn(
-              "container mx-auto p-6 space-y-8",
-              "transition-all duration-300 ease-in-out",
-            )}
-          >
-            {activeSection === "dashboard" && (
-              <MainDashboard isLoading={loading} />
-            )}
-            {activeSection === "financial" && (
-              <FinancialDashboard
-                isLoading={loading}
-                onRefresh={handleRefresh}
-              />
-            )}
-            {activeSection === "registrations" && (
-              <RegistrationDashboard
-                isLoading={loading}
-                onRefresh={handleRefresh}
-              />
-            )}
-            {activeSection === "inventory" && (
-              <StockDashboard isLoading={loading} onRefresh={handleRefresh} />
-            )}
-            {activeSection === "production" && (
-              <ProductionDashboard
-                isLoading={loading}
-                onRefresh={handleRefresh}
-                onStockUpdate={handleStockUpdate}
-              />
-            )}
-            {activeSection === "sales" && (
-              <SalesDashboard isLoading={loading} onRefresh={handleRefresh} />
-            )}
-          </div>
-        </main>
-      </div>
-    </div>
-  );
-};
-
-export default Home;
+                        <span className="bg-blue-500/20 text
