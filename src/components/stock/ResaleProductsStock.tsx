@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,7 +13,9 @@ import {
   Package,
   DollarSign,
   Plus,
-  Minus
+  Minus,
+  Download,
+  Upload
 } from "lucide-react";
 import {
   Dialog,
@@ -21,7 +24,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { useStockItems, useResaleProducts } from "@/hooks/useDataPersistence";
+import { useResaleProducts } from "@/hooks/useDataPersistence";
 
 interface ResaleProductsStockProps {
   isLoading?: boolean;
@@ -47,6 +50,19 @@ interface AddStockDialogProps {
   resaleProducts: any[];
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
+}
+
+// Interface para dados salvos em arquivo
+interface ResaleProductStockData {
+  productId: string;
+  productName: string;
+  unit: string;
+  quantity: number;
+  purchasePrice: number;
+  salePrice: number;
+  totalValue: number;
+  profitMargin: number;
+  lastUpdated: string;
 }
 
 const AddStockDialog: React.FC<AddStockDialogProps> = ({ 
@@ -160,31 +176,66 @@ const AddStockDialog: React.FC<AddStockDialogProps> = ({
 };
 
 const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = false }) => {
-  const { stockItems, isLoading: stockLoading, updateStockItem, addStockItem } = useStockItems();
   const { resaleProducts, updateResaleProduct, isLoading: productsLoading } = useResaleProducts();
   const [productAnalysis, setProductAnalysis] = useState<ResaleProductAnalysis[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
 
+  // Chave para localStorage
+  const STORAGE_KEY = "resale_products_stock_data";
+
+  // Carregar dados do arquivo/localStorage
+  const loadStockData = (): ResaleProductStockData[] => {
+    try {
+      const savedData = localStorage.getItem(STORAGE_KEY);
+      if (savedData) {
+        return JSON.parse(savedData);
+      }
+    } catch (error) {
+      console.error("❌ Erro ao carregar dados do estoque:", error);
+    }
+    return [];
+  };
+
+  // Salvar dados no arquivo/localStorage
+  const saveStockData = (data: ResaleProductStockData[]) => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data, null, 2));
+      console.log("✅ Dados do estoque salvos com sucesso!");
+      
+      // Criar arquivo para download
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `estoque_produtos_revenda_${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("❌ Erro ao salvar dados do estoque:", error);
+    }
+  };
+
   useEffect(() => {
-    if (!resaleProducts.length || stockLoading) return;
+    if (!resaleProducts.length || productsLoading) return;
 
     console.log('🔄 [ResaleProductsStock] Carregando dados dos produtos de revenda...');
 
-    // Carregar dados reais do banco - NÃO zerar mais
+    // Carregar dados salvos
+    const savedStockData = loadStockData();
+
     const analysis = resaleProducts
       .filter(product => !product.archived)
       .map(product => {
-        // Buscar item de estoque correspondente
-        const stockItem = stockItems.find(
-          item => item.item_id === product.id && item.item_type === "resaleProduct"
-        );
+        // Buscar dados salvos para este produto
+        const savedData = savedStockData.find(data => data.productId === product.id);
 
-        // Usar dados reais do banco ou valores padrão se não existir
-        const quantity = stockItem?.quantity || 0;
-        const purchasePrice = stockItem?.unit_cost || product.purchase_price || 0;
-        const salePrice = product.sale_price || 0;
-        const totalValue = stockItem?.total_value || (quantity * purchasePrice);
+        const quantity = savedData?.quantity || 0;
+        const purchasePrice = savedData?.purchasePrice || product.purchase_price || 0;
+        const salePrice = savedData?.salePrice || product.sale_price || 0;
+        const totalValue = savedData?.totalValue || (quantity * purchasePrice);
         const profitMargin = salePrice > 0 ? 
           ((salePrice - purchasePrice) / salePrice * 100) : 0;
 
@@ -194,7 +245,7 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
           salePrice,
           totalValue,
           profitMargin: profitMargin.toFixed(2) + '%',
-          hasStockItem: !!stockItem
+          hasLocalData: !!savedData
         });
 
         return {
@@ -219,28 +270,13 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
       productsWithStock: analysis.filter(p => p.quantity > 0).length,
       totalValue: analysis.reduce((sum, p) => sum + p.totalValue, 0)
     });
-  }, [resaleProducts, stockItems, stockLoading]);
+  }, [resaleProducts, productsLoading]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
       style: "currency",
       currency: "BRL",
     }).format(value);
-  };
-
-  const formatDecimalInput = (value: string): string => {
-    // Remove caracteres não numéricos exceto vírgula e ponto
-    return value.replace(/[^\d.,]/g, '').replace(',', '.');
-  };
-
-  const formatCurrencyInput = (value: string): string => {
-    // Remove caracteres não numéricos exceto vírgula e ponto
-    const cleanValue = value.replace(/[^\d.,]/g, '').replace(',', '.');
-    return cleanValue;
-  };
-
-  const formatDisplayValue = (value: number): string => {
-    return Math.round(value).toLocaleString('pt-BR');
   };
 
   const handleQuantityChange = (productId: string, newQuantity: string) => {
@@ -313,33 +349,21 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
 
     setIsSaving(true);
     try {
-      // NOVO SISTEMA: Sempre criar/substituir com os novos valores
-      // Verificar se já existe estoque
-      const existingStock = stockItems.find(item => 
-        item.item_id === productId && item.item_type === "resaleProduct"
+      // Atualizar no estado local
+      setProductAnalysis(prev => 
+        prev.map(p => 
+          p.productId === productId 
+            ? {
+                ...p,
+                quantity: quantity,
+                editableQuantity: quantity,
+                purchasePrice: unitCost,
+                editablePurchasePrice: unitCost,
+                totalValue: quantity * unitCost
+              }
+            : p
+        )
       );
-
-      if (existingStock) {
-        // Substituir valores existentes pelos novos (não somar)
-        await updateStockItem(existingStock.id, {
-          quantity: quantity,
-          unit_cost: unitCost,
-          total_value: quantity * unitCost,
-          last_updated: new Date().toISOString(),
-        });
-      } else {
-        // Criar novo item de estoque
-        await addStockItem({
-          item_id: productId,
-          item_name: product.name,
-          item_type: "resaleProduct",
-          unit: product.unit,
-          quantity: quantity,
-          unit_cost: unitCost,
-          total_value: quantity * unitCost,
-          last_updated: new Date().toISOString(),
-        });
-      }
 
       console.log(`✅ Estoque definido: ${product.name} - ${quantity} unidades com custo ${unitCost}`);
     } catch (error) {
@@ -355,59 +379,12 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
 
     setIsSaving(true);
     try {
-      // Atualizar estoque
-      const stockItem = stockItems.find(item => 
-        item.item_id === productId && item.item_type === "resaleProduct"
-      );
-
-      if (stockItem) {
-        const newTotalValue = product.editableQuantity * product.editablePurchasePrice;
-
-        await updateStockItem(stockItem.id, {
-          quantity: product.editableQuantity,
-          unit_cost: product.editablePurchasePrice,
-          total_value: newTotalValue,
-          last_updated: new Date().toISOString(),
-        });
-      } else if (product.editableQuantity > 0) {
-        // Criar novo item de estoque se quantidade > 0
-        const resaleProduct = resaleProducts.find(p => p.id === productId);
-        if (resaleProduct) {
-          await addStockItem({
-            item_id: productId,
-            item_name: resaleProduct.name,
-            item_type: "product", // CORRIGIDO: usar "product" para compatibilidade
-            unit: resaleProduct.unit,
-            quantity: product.editableQuantity,
-            unit_cost: product.editablePurchasePrice,
-            total_value: product.editableQuantity * product.editablePurchasePrice,
-            last_updated: new Date().toISOString(),
-          });
-        }
-      }
-
-      // Atualizar produto de revenda com os novos valores
-      console.log(`🔄 [ResaleProductsStock] Atualizando produto de revenda: ${product.productName}`, {
+      // Atualizar produto de revenda
+      await updateResaleProduct(productId, {
         purchase_price: product.editablePurchasePrice,
         sale_price: product.editableSalePrice,
         profit_margin: product.profitMargin
       });
-
-      const updatedProduct = await updateResaleProduct(productId, {
-        purchase_price: product.editablePurchasePrice,
-        sale_price: product.editableSalePrice,
-        profit_margin: product.profitMargin
-      });
-
-      if (updatedProduct) {
-        console.log(`✅ [ResaleProductsStock] Produto de revenda atualizado no banco:`, {
-          id: updatedProduct.id,
-          name: updatedProduct.name,
-          purchase_price: updatedProduct.purchase_price,
-          sale_price: updatedProduct.sale_price,
-          profit_margin: updatedProduct.profit_margin
-        });
-      }
 
       // Atualizar estado local
       setProductAnalysis(prev => 
@@ -425,72 +402,93 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
         )
       );
 
-      console.log(`✅ [ResaleProductsStock] TODAS as alterações salvas com sucesso para: ${product.productName}`, {
-        stockUpdated: !!stockItem || product.editableQuantity > 0,
-        productUpdated: true,
-        finalQuantity: product.editableQuantity,
-        finalPurchasePrice: product.editablePurchasePrice,
-        finalSalePrice: product.editableSalePrice,
-        finalTotalValue: product.editableQuantity * product.editablePurchasePrice,
-        finalProfitMargin: product.profitMargin.toFixed(2) + '%'
-      });
+      console.log(`✅ [ResaleProductsStock] Alterações salvas para: ${product.productName}`);
     } catch (error) {
-      console.error(`❌ [ResaleProductsStock] Erro crítico ao salvar alterações para ${product.productName}:`, {
-        error: error instanceof Error ? error.message : error,
-        stack: error instanceof Error ? error.stack : undefined,
-        productId,
-        productData: {
-          quantity: product.editableQuantity,
-          purchasePrice: product.editablePurchasePrice,
-          salePrice: product.editableSalePrice
-        }
-      });
+      console.error(`❌ [ResaleProductsStock] Erro ao salvar alterações para ${product.productName}:`, error);
     } finally {
       setIsSaving(false);
     }
   };
 
-  const calculateTotals = () => {
-    console.log('📊 [ResaleProductsStock] Calculando totais do resumo:', {
-      totalProductAnalysis: productAnalysis.length,
-      productData: productAnalysis.map(p => ({
-        name: p.productName,
-        quantity: p.quantity,
-        totalValue: p.totalValue,
-        profitMargin: p.profitMargin
-      }))
-    });
+  const handleSaveAllToFile = () => {
+    const dataToSave: ResaleProductStockData[] = productAnalysis.map(product => ({
+      productId: product.productId,
+      productName: product.productName,
+      unit: product.unit,
+      quantity: product.quantity,
+      purchasePrice: product.purchasePrice,
+      salePrice: product.salePrice,
+      totalValue: product.totalValue,
+      profitMargin: product.profitMargin,
+      lastUpdated: new Date().toISOString()
+    }));
 
+    saveStockData(dataToSave);
+  };
+
+  const handleLoadFromFile = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data: ResaleProductStockData[] = JSON.parse(e.target?.result as string);
+        
+        // Atualizar estado com dados carregados
+        setProductAnalysis(prev => 
+          prev.map(product => {
+            const loadedData = data.find(d => d.productId === product.productId);
+            if (loadedData) {
+              return {
+                ...product,
+                quantity: loadedData.quantity,
+                editableQuantity: loadedData.quantity,
+                purchasePrice: loadedData.purchasePrice,
+                editablePurchasePrice: loadedData.purchasePrice,
+                salePrice: loadedData.salePrice,
+                editableSalePrice: loadedData.salePrice,
+                totalValue: loadedData.totalValue,
+                profitMargin: loadedData.profitMargin
+              };
+            }
+            return product;
+          })
+        );
+
+        // Salvar no localStorage
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data, null, 2));
+        console.log("✅ Dados carregados do arquivo com sucesso!");
+      } catch (error) {
+        console.error("❌ Erro ao carregar arquivo:", error);
+        alert("Erro ao carregar arquivo. Verifique se o formato está correto.");
+      }
+    };
+    reader.readAsText(file);
+    
+    // Limpar input
+    event.target.value = '';
+  };
+
+  const calculateTotals = () => {
     const totalQuantity = productAnalysis.reduce((total, product) => total + product.quantity, 0);
     const totalValue = productAnalysis.reduce((total, product) => total + product.totalValue, 0);
     const productsInStock = productAnalysis.filter(product => product.quantity > 0).length;
     const averageMargin = productAnalysis.length > 0 ? 
       productAnalysis.reduce((total, product) => total + product.profitMargin, 0) / productAnalysis.length : 0;
 
-    console.log('✅ [ResaleProductsStock] Totais calculados:', {
-      totalQuantity,
-      totalValue,
-      productsInStock,
-      averageMargin: averageMargin.toFixed(2) + '%'
-    });
-
     return { totalQuantity, totalValue, productsInStock, averageMargin };
   };
 
   const { totalQuantity, totalValue, productsInStock, averageMargin } = calculateTotals();
 
-  // Force re-render of totals when productAnalysis changes
-  useEffect(() => {
-    console.log('🔄 [ResaleProductsStock] productAnalysis atualizado, recalculando totais...');
-  }, [productAnalysis]);
-
-  if (isLoading || stockLoading || productsLoading) {
+  if (isLoading || productsLoading) {
     return (
       <Card className="bg-factory-800/50 border-tire-600/30">
         <CardHeader>
           <CardTitle className="text-tire-200 text-lg flex items-center gap-2">
             <ShoppingCart className="h-5 w-5 text-neon-blue" />
-            Produtos para Revenda
+            Produtos para Revenda (Sistema de Arquivo)
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -512,20 +510,44 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
             <div>
               <CardTitle className="text-tire-200 text-lg flex items-center gap-2">
                 <ShoppingCart className="h-5 w-5 text-neon-blue" />
-                Produtos para Revenda
+                Produtos para Revenda (Sistema de Arquivo)
                 <span className="text-neon-blue text-sm">({productAnalysis.length} produtos)</span>
               </CardTitle>
               <p className="text-tire-300 text-sm mt-1">
-                Gerenciamento completo de produtos para revenda com controle de preços e margem
+                Sistema independente de estoque salvo em arquivo JSON - Não utiliza banco de dados
               </p>
             </div>
-            <Button
-              onClick={() => setIsAddDialogOpen(true)}
-              className="bg-neon-green hover:bg-neon-green/80 text-white"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Definir Estoque
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                onClick={() => setIsAddDialogOpen(true)}
+                className="bg-neon-green hover:bg-neon-green/80 text-white"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Definir Estoque
+              </Button>
+              <Button
+                onClick={handleSaveAllToFile}
+                className="bg-neon-blue hover:bg-neon-blue/80 text-white"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Baixar Arquivo
+              </Button>
+              <label className="cursor-pointer">
+                <Button
+                  type="button"
+                  className="bg-neon-purple hover:bg-neon-purple/80 text-white"
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  Carregar Arquivo
+                </Button>
+                <input
+                  type="file"
+                  accept=".json"
+                  onChange={handleLoadFromFile}
+                  className="hidden"
+                />
+              </label>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="p-6 pt-0">
@@ -554,7 +576,6 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
                     </div>
                   </div>
 
-                  {/* Seção de Controles */}
                   <div className="bg-factory-600/20 rounded-lg p-4 space-y-4 border border-tire-600/30">
                     <div className="flex items-center justify-between">
                       <Label className="text-tire-300 font-medium text-base flex items-center gap-2">
@@ -586,14 +607,13 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                      {/* Quantidade */}
                       <div>
                         <Label className="text-tire-400 text-sm">Quantidade em Estoque</Label>
                         {product.isEditing ? (
                           <div className="relative">
                             <Input
                               type="text"
-                              value={Math.round(product.editableQuantity).toString()}
+                              value={product.editableQuantity.toString()}
                               onChange={(e) => handleQuantityChange(product.productId, e.target.value)}
                               placeholder="0"
                               className="bg-factory-700/50 border-tire-600/30 text-white h-9 text-sm pr-12"
@@ -604,12 +624,11 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
                           </div>
                         ) : (
                           <p className="text-white font-medium text-lg">
-                            {Math.round(product.quantity)} {product.unit}
+                            {product.quantity} {product.unit}
                           </p>
                         )}
                       </div>
 
-                      {/* Preço de Compra */}
                       <div>
                         <Label className="text-tire-400 text-sm">Preço de Compra</Label>
                         {product.isEditing ? (
@@ -619,7 +638,7 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
                             </span>
                             <Input
                               type="text"
-                              value={Math.round(product.editablePurchasePrice).toString()}
+                              value={product.editablePurchasePrice.toString()}
                               onChange={(e) => handlePurchasePriceChange(product.productId, e.target.value)}
                               placeholder="0"
                               className="bg-factory-700/50 border-tire-600/30 text-white h-9 text-sm pl-8"
@@ -627,12 +646,11 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
                           </div>
                         ) : (
                           <p className="text-neon-orange font-medium text-lg">
-                            R$ {Math.round(product.purchasePrice)}
+                            R$ {product.purchasePrice}
                           </p>
                         )}
                       </div>
 
-                      {/* Preço de Venda */}
                       <div>
                         <Label className="text-tire-400 text-sm">Preço de Venda</Label>
                         {product.isEditing ? (
@@ -642,7 +660,7 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
                             </span>
                             <Input
                               type="text"
-                              value={Math.round(product.editableSalePrice).toString()}
+                              value={product.editableSalePrice.toString()}
                               onChange={(e) => handleSalePriceChange(product.productId, e.target.value)}
                               placeholder="0"
                               className="bg-factory-700/50 border-tire-600/30 text-white h-9 text-sm pl-8"
@@ -650,12 +668,11 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
                           </div>
                         ) : (
                           <p className="text-neon-cyan font-medium text-lg">
-                            R$ {Math.round(product.salePrice)}
+                            R$ {product.salePrice}
                           </p>
                         )}
                       </div>
 
-                      {/* Margem de Lucro */}
                       <div>
                         <Label className="text-tire-400 text-sm">Margem de Lucro</Label>
                         <p className={`font-bold text-lg ${product.profitMargin > 0 ? 'text-neon-green' : 'text-red-400'}`}>
@@ -671,12 +688,11 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
         </CardContent>
       </Card>
 
-      {/* Card de Resumo Total */}
       <Card className="bg-factory-800/50 border-tire-600/30">
         <CardHeader>
           <CardTitle className="text-tire-200 text-lg flex items-center gap-2">
             <TrendingUp className="h-5 w-5 text-neon-purple" />
-            Resumo dos Produtos de Revenda
+            Resumo dos Produtos de Revenda (Arquivo Local)
             {isSaving && (
               <span className="text-neon-orange text-sm animate-pulse ml-2">
                 (Salvando...)
@@ -733,7 +749,6 @@ const ResaleProductsStock: React.FC<ResaleProductsStockProps> = ({ isLoading = f
         </CardContent>
       </Card>
 
-      {/* Dialog para definir estoque */}
       <AddStockDialog
         onAddStock={handleAddStock}
         resaleProducts={resaleProducts}
