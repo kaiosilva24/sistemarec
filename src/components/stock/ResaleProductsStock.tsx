@@ -566,7 +566,6 @@ const ResaleProductsStock = ({ isLoading = false }: ResaleProductsStockProps) =>
                 <TableHeader>
                   <TableRow className="border-tire-600/30">
                     <TableHead className="text-tire-300">Produto</TableHead>
-                    <TableHead className="text-tire-300">Fornecedor</TableHead>
                     <TableHead className="text-tire-300 text-center">Quantidade</TableHead>
                     <TableHead className="text-tire-300 text-center">Nível Mín.</TableHead>
                     <TableHead className="text-tire-300 text-center">Status</TableHead>
@@ -584,9 +583,6 @@ const ResaleProductsStock = ({ isLoading = false }: ResaleProductsStockProps) =>
                             <div className="text-xs text-tire-400">SKU: {product.sku}</div>
                           )}
                         </div>
-                      </TableCell>
-                      <TableCell className="text-tire-300">
-                        {product.supplier_name || "N/A"}
                       </TableCell>
                       <TableCell className="text-center">
                         <span className="text-white font-medium">
