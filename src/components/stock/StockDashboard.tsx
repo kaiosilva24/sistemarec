@@ -45,8 +45,8 @@ import {
   useSensor,
   useSensors,
   DragEndEvent,
-  DragOverlay,
   DragStartEvent,
+  DragOverlay,
 } from "@dnd-kit/core";
 import {
   arrayMove,
@@ -914,8 +914,7 @@ const StockDashboard = ({
             minimumFractionDigits: 0,
             maximumFractionDigits: 0,
           }).format(metrics.finalProductTotalValue),
-        };
-      default:return card;
+        };      default:return card;
     }
   });
 
@@ -1112,32 +1111,6 @@ const StockDashboard = ({
             </div>
           </div>
         </div>
-
-        {/* Draggable Metrics Cards */}
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-        >
-          <SortableContext
-            items={updatedCards.map((card) => card.id)}
-            strategy={rectSortingStrategy}
-          >
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-              {updatedCards.map((card) => (
-                <SortableCard key={card.id} card={card} />
-              ))}
-            </div>
-          </SortableContext>
-          <DragOverlay>
-            {activeId ? (
-              <DragOverlayCard
-                card={updatedCards.find((card) => card.id === activeId)!}
-              />
-            ) : null}
-          </DragOverlay>
-        </DndContext>
 
         {/* Summary Card - Total Values */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
