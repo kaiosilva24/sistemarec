@@ -61,6 +61,18 @@ const ResaleProductsStock = ({ isLoading = false }: ResaleProductsStockProps) =>
   const { resaleProducts, isLoading: resaleProductsLoading } = useResaleProducts();
   const { stockItems, updateStockItem, createStockItem, isLoading: stockLoading } = useStockItems();
 
+  // Debug: Log when hooks are loaded
+  useEffect(() => {
+    console.log("🔍 [ResaleProductsStock] Estado dos hooks:", {
+      resaleProductsCount: resaleProducts.length,
+      stockItemsCount: stockItems.length,
+      isResaleProductsLoading: resaleProductsLoading,
+      isStockLoading: stockLoading,
+      updateStockItemFunction: typeof updateStockItem,
+      createStockItemFunction: typeof createStockItem
+    });
+  }, [resaleProducts.length, stockItems.length, resaleProductsLoading, stockLoading]);
+
   // Filter resale product stock items
   const resaleStockItems = stockItems.filter(
     (item) => 
@@ -153,6 +165,15 @@ const ResaleProductsStock = ({ isLoading = false }: ResaleProductsStockProps) =>
     }
 
     try {
+      console.log("🔄 Iniciando atualização de estoque:", {
+        productId: selectedProduct,
+        productName: product.name,
+        operation: stockOperation,
+        quantity: quantityValue,
+        price: priceValue,
+        existingStockId: product.stockId
+      });
+
       if (product.stockId) {
         // Update existing stock
         const currentQuantity = Math.round(product.quantity || 0);
@@ -176,26 +197,32 @@ const ResaleProductsStock = ({ isLoading = false }: ResaleProductsStockProps) =>
 
         const updateData = {
           quantity: Math.round(newQuantity),
-          unit_cost: Math.round(newUnitCost * 100) / 100, // Arredondar para 2 casas decimais
+          unit_cost: Math.round(newUnitCost * 100) / 100,
           total_value: Math.round(newQuantity * newUnitCost * 100) / 100,
           last_updated: new Date().toISOString(),
         };
 
-        console.log("Atualizando estoque:", {
+        console.log("📝 Atualizando estoque existente:", {
           stockId: product.stockId,
-          productName: product.name,
-          operation: stockOperation,
-          quantityValue,
-          currentQuantity,
-          newQuantity: updateData.quantity,
+          currentData: { quantity: currentQuantity, unitCost: currentUnitCost },
           updateData
         });
 
-        await updateStockItem(product.stockId, updateData);
+        const result = await updateStockItem(product.stockId, updateData);
+        
+        if (!result) {
+          throw new Error("Falha ao atualizar item no banco de dados");
+        }
+
+        console.log("✅ Estoque atualizado com sucesso");
       } else {
         // Create new stock entry
         const newUnitCost = priceValue > 0 ? priceValue : (product.purchase_price || 0);
         const newQuantity = stockOperation === "add" ? quantityValue : 0;
+
+        if (stockOperation === "remove") {
+          throw new Error("Não é possível remover estoque de um produto sem estoque registrado");
+        }
 
         const newStockData = {
           item_id: product.id,
@@ -209,27 +236,32 @@ const ResaleProductsStock = ({ isLoading = false }: ResaleProductsStockProps) =>
           last_updated: new Date().toISOString(),
         };
 
-        console.log("Criando novo estoque:", {
-          productName: product.name,
-          operation: stockOperation,
-          newStockData
-        });
+        console.log("🆕 Criando novo registro de estoque:", newStockData);
 
-        await createStockItem(newStockData);
+        const result = await createStockItem(newStockData);
+        
+        if (!result) {
+          throw new Error("Falha ao criar novo item no banco de dados");
+        }
+
+        console.log("✅ Novo estoque criado com sucesso");
       }
 
       toast({
-        title: "Estoque atualizado",
+        title: "Sucesso!",
         description: `${stockOperation === "add" ? "Adicionado" : "Removido"} ${quantityValue} ${product.unit} de ${product.name}`,
       });
 
+      // Reset form
       setShowStockDialog(false);
       setSelectedProduct("");
       setQuantity("");
       setUnitPrice("");
+      
     } catch (error) {
-      console.error("Erro detalhado ao atualizar estoque:", {
-        error,
+      console.error("❌ Erro ao atualizar estoque:", {
+        error: error instanceof Error ? error.message : error,
+        stack: error instanceof Error ? error.stack : undefined,
         productId: selectedProduct,
         operation: stockOperation,
         quantity: quantityValue,
@@ -239,12 +271,18 @@ const ResaleProductsStock = ({ isLoading = false }: ResaleProductsStockProps) =>
       let errorMessage = "Não foi possível atualizar o estoque.";
       
       if (error instanceof Error) {
-        if (error.message.includes("duplicate")) {
-          errorMessage = "Item já existe no estoque.";
-        } else if (error.message.includes("foreign key")) {
-          errorMessage = "Produto não encontrado.";
-        } else if (error.message.includes("permission")) {
+        const message = error.message.toLowerCase();
+        
+        if (message.includes("duplicate") || message.includes("unique")) {
+          errorMessage = "Este item já existe no estoque.";
+        } else if (message.includes("foreign key") || message.includes("violates")) {
+          errorMessage = "Produto não encontrado no sistema.";
+        } else if (message.includes("permission") || message.includes("unauthorized")) {
           errorMessage = "Sem permissão para atualizar estoque.";
+        } else if (message.includes("network") || message.includes("connection")) {
+          errorMessage = "Erro de conexão. Verifique sua internet.";
+        } else if (error.message.includes("Falha ao")) {
+          errorMessage = error.message;
         }
       }
 
