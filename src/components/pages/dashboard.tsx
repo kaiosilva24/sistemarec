@@ -41,12 +41,31 @@ import {
   useResaleProducts,
 } from "@/hooks/useDataPersistence";
 import { useMemo } from "react";
+import { supabase } from "@/supabase/supabase";
 // Imports de drag-and-drop removidos - não são mais necessários
 
 // Seção de Métricas Principais removida completamente conforme solicitado
 
+// Interface para métricas do sistema
+interface MetricasSistema {
+  id: string;
+  categoria: string;
+  nome_metrica: string;
+  valor_numerico: number | null;
+  valor_texto: string | null;
+  valor_percentual: number | null;
+  unidade: string | null;
+  descricao: string | null;
+  periodo_referencia: string;
+  timestamp_atualizacao: string;
+}
+
 // Main Dashboard Component with Financial Metrics
 const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
+  // Estados para métricas centralizadas
+  const [metricasSistema, setMetricasSistema] = useState<MetricasSistema[]>([]);
+  const [isMetricasLoading, setIsMetricasLoading] = useState(true);
+  const [lastSyncTime, setLastSyncTime] = useState<string>("");
   // Load all necessary data using hooks
   const { cashFlowEntries, isLoading: cashFlowLoading } = useCashFlow();
   const { defectiveTireSales, isLoading: defectiveTireSalesLoading } =
@@ -88,7 +107,188 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
     variableCostsLoading ||
     employeesLoading ||
     recipesLoading ||
-    warrantyEntriesLoading;
+    warrantyEntriesLoading ||
+    isMetricasLoading;
+
+  // Função para buscar métricas do Supabase
+  const fetchMetricas = async () => {
+    try {
+      setIsMetricasLoading(true);
+      const { data, error } = await supabase
+        .from('metricas_sistema')
+        .select('*')
+        .eq('ativo', true)
+        .order('categoria', { ascending: true })
+        .order('nome_metrica', { ascending: true });
+
+      if (error) {
+        console.error('❌ [Dashboard] Erro ao buscar métricas:', error);
+        return;
+      }
+
+      setMetricasSistema(data || []);
+      setLastSyncTime(new Date().toLocaleTimeString('pt-BR'));
+      console.log('✅ [Dashboard] Métricas carregadas:', data?.length || 0, 'registros');
+    } catch (error) {
+      console.error('❌ [Dashboard] Erro na busca de métricas:', error);
+    } finally {
+      setIsMetricasLoading(false);
+    }
+  };
+
+  // Função para atualizar métrica específica
+  const updateMetrica = async (nomeMetrica: string, valorNumerico?: number, valorTexto?: string, valorPercentual?: number) => {
+    try {
+      const { error } = await supabase.rpc('atualizar_metrica', {
+        nome_metrica_param: nomeMetrica,
+        valor_numerico_param: valorNumerico || null,
+        valor_texto_param: valorTexto || null,
+        valor_percentual_param: valorPercentual || null
+      });
+
+      if (error) {
+        console.error(`❌ [Dashboard] Erro ao atualizar métrica ${nomeMetrica}:`, error);
+        return false;
+      }
+
+      console.log(`✅ [Dashboard] Métrica ${nomeMetrica} atualizada com sucesso`);
+      return true;
+    } catch (error) {
+      console.error(`❌ [Dashboard] Erro na atualização da métrica ${nomeMetrica}:`, error);
+      return false;
+    }
+  };
+
+  // Função para sincronizar todas as métricas
+  const syncAllMetrics = async () => {
+    console.log('🔄 [Dashboard] Iniciando sincronização completa de métricas...');
+    
+    try {
+      // Métricas Financeiras
+      const totalIncome = cashFlowEntries.filter(entry => entry.type === 'income').reduce((sum, entry) => sum + entry.amount, 0);
+      const totalExpense = cashFlowEntries.filter(entry => entry.type === 'expense').reduce((sum, entry) => sum + entry.amount, 0);
+      const cashBalance = totalIncome - totalExpense;
+      
+      await updateMetrica('saldo_atual', cashBalance);
+      await updateMetrica('total_entradas', totalIncome);
+      await updateMetrica('total_saidas', totalExpense);
+
+      // Métricas de Produção
+      const totalProducao = productionEntries.reduce((sum, entry) => sum + entry.quantity_produced, 0);
+      const totalPerdasProducao = productionEntries.reduce((sum, entry) => sum + (entry.production_loss || 0), 0);
+      const diasProducao = new Set(productionEntries.map(entry => entry.production_date)).size;
+      
+      await updateMetrica('total_produzido', totalProducao);
+      await updateMetrica('perdas_producao', totalPerdasProducao);
+      await updateMetrica('dias_producao_ativa', diasProducao);
+
+      // Métricas de Estoque
+      const valorTotalMP = stockItems
+        .filter(item => item.item_type === 'material')
+        .reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0);
+      
+      const valorTotalFinais = stockItems
+        .filter(item => item.item_type === 'product')
+        .reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0);
+
+      await updateMetrica('valor_total_materia_prima', valorTotalMP);
+      await updateMetrica('valor_total_produtos_finais', valorTotalFinais);
+
+      // Métricas de Vendas
+      const vendasDefeituosos = defectiveTireSales.reduce((sum, sale) => sum + sale.sale_value, 0);
+      const qtdDefeituosos = defectiveTireSales.reduce((sum, sale) => sum + sale.quantity, 0);
+      const garantiasTotal = warrantyEntries.length;
+
+      await updateMetrica('vendas_pneus_defeituosos', vendasDefeituosos);
+      await updateMetrica('quantidade_defeituosos_vendidos', qtdDefeituosos);
+      await updateMetrica('garantias_registradas', garantiasTotal);
+
+      console.log('✅ [Dashboard] Sincronização completa de métricas finalizada');
+      
+      // Atualizar dados após sincronização
+      await fetchMetricas();
+      
+    } catch (error) {
+      console.error('❌ [Dashboard] Erro na sincronização de métricas:', error);
+    }
+  };
+
+  // Hook para buscar métricas na inicialização
+  useEffect(() => {
+    fetchMetricas();
+  }, []);
+
+  // Hook para setup do Realtime
+  useEffect(() => {
+    console.log('🔄 [Dashboard] Configurando Realtime para métricas...');
+    
+    const channel = supabase
+      .channel('metricas-realtime')
+      .on('postgres_changes', 
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'metricas_sistema' 
+        }, 
+        (payload) => {
+          console.log('📡 [Dashboard] Realtime - Mudança detectada:', payload);
+          fetchMetricas();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      console.log('🔌 [Dashboard] Desconectando canal Realtime');
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  // Hook para sincronização automática quando dados mudarem
+  useEffect(() => {
+    if (!isDataLoading && cashFlowEntries.length > 0) {
+      const timeoutId = setTimeout(() => {
+        syncAllMetrics();
+      }, 1000);
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [
+    cashFlowEntries, 
+    productionEntries, 
+    stockItems, 
+    defectiveTireSales, 
+    warrantyEntries,
+    isDataLoading
+  ]);
+
+  // Função para obter métrica por nome
+  const getMetrica = (nomeMetrica: string): MetricasSistema | null => {
+    return metricasSistema.find(m => m.nome_metrica === nomeMetrica) || null;
+  };
+
+  // Função para formatar valor da métrica
+  const formatMetricValue = (metrica: MetricasSistema | null): string => {
+    if (!metrica) return '0';
+    
+    if (metrica.valor_numerico !== null) {
+      if (metrica.unidade === 'BRL') {
+        return new Intl.NumberFormat('pt-BR', {
+          style: 'currency',
+          currency: 'BRL'
+        }).format(metrica.valor_numerico);
+      } else if (metrica.unidade === '%') {
+        return `${metrica.valor_numerico.toFixed(1)}%`;
+      } else {
+        return `${metrica.valor_numerico.toLocaleString('pt-BR')} ${metrica.unidade || ''}`.trim();
+      }
+    }
+    
+    if (metrica.valor_percentual !== null) {
+      return `${metrica.valor_percentual.toFixed(1)}%`;
+    }
+    
+    return metrica.valor_texto || '0';
+  };
 
   // Estados de métricas principais removidos
 
@@ -131,7 +331,146 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
 
   return (
     <div className="space-y-6">
-      {/* Seção de Métricas Principais removida completamente */}
+      {/* Seção de Métricas Centralizadas */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        {/* Header com botão de sincronização */}
+        <div className="col-span-full flex justify-between items-center mb-4">
+          <div>
+            <h2 className="text-2xl font-bold text-white">📊 Métricas Centralizadas</h2>
+            <p className="text-tire-300">
+              Última sincronização: {lastSyncTime || 'Aguardando...'}
+            </p>
+          </div>
+          <Button
+            onClick={syncAllMetrics}
+            disabled={isDataLoading}
+            className="bg-gradient-to-r from-neon-blue to-neon-purple hover:from-neon-purple hover:to-neon-blue text-white rounded-full px-6 h-11 shadow-lg transition-all duration-300 flex items-center gap-2 neon-glow"
+          >
+            <RefreshCw className={`h-4 w-4 ${isDataLoading ? 'animate-spin' : ''}`} />
+            Sincronizar Métricas
+          </Button>
+        </div>
+
+        {/* Métricas Financeiras */}
+        <Card className="bg-factory-800/50 border-tire-600/30 col-span-full lg:col-span-4">
+          <CardHeader>
+            <CardTitle className="text-tire-200 text-lg flex items-center gap-2">
+              💰 Métricas Financeiras
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="p-4 bg-factory-700/30 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-tire-300 text-sm">Saldo Atual</p>
+                    <p className={`text-2xl font-bold ${
+                      (getMetrica('saldo_atual')?.valor_numerico || 0) >= 0 
+                        ? 'text-neon-green' 
+                        : 'text-red-400'
+                    }`}>
+                      {formatMetricValue(getMetrica('saldo_atual'))}
+                    </p>
+                  </div>
+                  <div className="text-neon-green">
+                    <span className="text-2xl">💎</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-4 bg-factory-700/30 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-tire-300 text-sm">Total Entradas</p>
+                    <p className="text-2xl font-bold text-neon-green">
+                      {formatMetricValue(getMetrica('total_entradas'))}
+                    </p>
+                  </div>
+                  <div className="text-neon-green">
+                    <TrendingUp className="h-8 w-8" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-4 bg-factory-700/30 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-tire-300 text-sm">Total Saídas</p>
+                    <p className="text-2xl font-bold text-red-400">
+                      {formatMetricValue(getMetrica('total_saidas'))}
+                    </p>
+                  </div>
+                  <div className="text-red-400">
+                    <TrendingUp className="h-8 w-8 rotate-180" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Métricas de Produção */}
+        <Card className="bg-factory-800/50 border-tire-600/30 col-span-full lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="text-tire-200 text-lg flex items-center gap-2">
+              🏭 Métricas de Produção
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <span className="text-tire-300">Total Produzido:</span>
+                <span className="text-neon-blue font-bold">
+                  {formatMetricValue(getMetrica('total_produzido'))}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-tire-300">Perdas Produção:</span>
+                <span className="text-red-400 font-bold">
+                  {formatMetricValue(getMetrica('perdas_producao'))}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-tire-300">Dias Produção:</span>
+                <span className="text-neon-orange font-bold">
+                  {formatMetricValue(getMetrica('dias_producao_ativa'))}
+                </span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Métricas de Estoque */}
+        <Card className="bg-factory-800/50 border-tire-600/30 col-span-full lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="text-tire-200 text-lg flex items-center gap-2">
+              📦 Métricas de Estoque
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <span className="text-tire-300">Valor Matéria-Prima:</span>
+                <span className="text-neon-cyan font-bold">
+                  {formatMetricValue(getMetrica('valor_total_materia_prima'))}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-tire-300">Valor Produtos Finais:</span>
+                <span className="text-neon-green font-bold">
+                  {formatMetricValue(getMetrica('valor_total_produtos_finais'))}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-tire-300">Valor Revenda:</span>
+                <span className="text-neon-purple font-bold">
+                  {formatMetricValue(getMetrica('valor_total_revenda'))}
+                </span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Combined Charts Section - Production and Profit in Tabs */}
       <Card className="bg-factory-800/50 border-tire-600/30">
