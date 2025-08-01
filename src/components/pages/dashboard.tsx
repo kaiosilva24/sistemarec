@@ -507,6 +507,44 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       return 42.5;
     };
 
+    // FUNÇÃO NOVA: Calcular lucro baseado no custo atual
+    const calculateProfitFromCurrentMetrics = (costPerTire: number) => {
+      try {
+        // Obter métricas atuais de vendas
+        const currentMetrics = calculateMetrics();
+        
+        if (currentMetrics.salesQuantity > 0) {
+          // Calcular novo lucro por pneu: (Receita Total / Vendas) - Custo por Pneu
+          const averageSellingPrice = currentMetrics.totalRevenue / currentMetrics.salesQuantity;
+          const newProfitPerTire = averageSellingPrice - costPerTire;
+          
+          console.log(`🔄 [Dashboard] RECALCULANDO LUCRO AUTOMATICAMENTE:`, {
+            averageSellingPrice: averageSellingPrice.toFixed(2),
+            costPerTire: costPerTire.toFixed(2),
+            newProfitPerTire: newProfitPerTire.toFixed(3),
+            salesQuantity: currentMetrics.salesQuantity,
+            totalRevenue: currentMetrics.totalRevenue
+          });
+          
+          setAverageProfitPerTire(newProfitPerTire);
+          
+          // Calcular nova porcentagem de lucro
+          if (averageSellingPrice > 0) {
+            const newProfitPercentage = (newProfitPerTire / averageSellingPrice) * 100;
+            setProfitPercentage(newProfitPercentage);
+            
+            console.log(`✅ [Dashboard] LUCRO RECALCULADO: ${newProfitPerTire.toFixed(3)} (${newProfitPercentage.toFixed(1)}%)`);
+          }
+          
+          return newProfitPerTire;
+        }
+      } catch (error) {
+        console.error("❌ [Dashboard] Erro ao recalcular lucro:", error);
+      }
+      
+      return 69.765; // Valor padrão
+    };
+
     // Função para ler lucro médio por produto final
     const readFinalProductProfit = () => {
       try {
@@ -541,6 +579,9 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
         const newCost = event.detail.averageCostPerTire;
         console.log(`✨ [Dashboard] FÓRMULA EXCEL: ${averageCostPerTire.toFixed(2)} → ${newCost.toFixed(2)}`);
         setAverageCostPerTire(newCost);
+
+        // 🔥 NOVO: RECALCULAR LUCRO AUTOMATICAMENTE QUANDO CUSTO MUDA
+        calculateProfitFromCurrentMetrics(newCost);
 
         // Salvar para persistência
         localStorage.setItem("dashboard_averageCostPerTire", JSON.stringify({
@@ -579,6 +620,36 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       clearInterval(interval);
     };
   }, [averageCostPerTire, averageProfitPerTire]);
+
+  // Effect para recalcular lucro quando custo muda
+  useEffect(() => {
+    if (averageCostPerTire > 0) {
+      // Obter métricas atuais
+      const currentMetrics = calculateMetrics();
+      
+      if (currentMetrics.salesQuantity > 0) {
+        const averageSellingPrice = currentMetrics.totalRevenue / currentMetrics.salesQuantity;
+        const calculatedProfitPerTire = averageSellingPrice - averageCostPerTire;
+        
+        // Atualizar lucro se for diferente do atual (evitar loops infinitos)
+        if (Math.abs(calculatedProfitPerTire - averageProfitPerTire) > 0.01) {
+          console.log(`🔄 [Dashboard] CUSTO MUDOU - RECALCULANDO LUCRO:`, {
+            novoCusto: averageCostPerTire.toFixed(2),
+            precoMedioVenda: averageSellingPrice.toFixed(2),
+            novoLucro: calculatedProfitPerTire.toFixed(3)
+          });
+          
+          setAverageProfitPerTire(calculatedProfitPerTire);
+          
+          // Recalcular porcentagem
+          if (averageSellingPrice > 0) {
+            const newProfitPercentage = (calculatedProfitPerTire / averageSellingPrice) * 100;
+            setProfitPercentage(newProfitPercentage);
+          }
+        }
+      }
+    }
+  }, [averageCostPerTire]);
 
   // Debug log para mostrar que a fórmula está funcionando
   useEffect(() => {
