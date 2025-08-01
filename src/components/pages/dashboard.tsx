@@ -1007,9 +1007,8 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
         colorClass: "#F59E0B",
         iconColorClass: "text-neon-orange",
       },
-      
     ],
-    [metrics],
+    [metrics, profitPercentage],
   );
 
   // Ordenar cards conforme a ordem salva e filtrar cards ocultos
