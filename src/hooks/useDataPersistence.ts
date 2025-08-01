@@ -658,9 +658,38 @@ export const useStockItems = () => {
     }
   };
 
+  const createStockItem = async (
+    stockItemData: Omit<StockItem, "id" | "created_at">,
+  ) => {
+    setIsSaving(true);
+
+    // Remove any fields that don't belong to the stock_items table
+    const {
+      updated_at, // This field doesn't exist in stock_items table
+      ...cleanStockItemData
+    } = stockItemData;
+
+    console.log("🔥 [useStockItems] Criando item de estoque:", {
+      originalData: stockItemData,
+      cleanData: cleanStockItemData,
+    });
+
+    const newStockItem = await dataManager.saveStockItem(cleanStockItemData);
+    if (newStockItem) {
+      setStockItems((prev) => [...prev, newStockItem]);
+      console.log(
+        "✅ [useStockItems] Item criado com sucesso:",
+        newStockItem,
+      );
+    }
+    setIsSaving(false);
+    return newStockItem;
+  };
+
   return {
     stockItems,
     addStockItem,
+    createStockItem,
     updateStockItem,
     removeStockItemByItemId,
     isLoading,
