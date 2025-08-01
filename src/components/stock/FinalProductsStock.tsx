@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -34,12 +33,16 @@ interface ProductAnalysis {
 }
 
 const FinalProductsStock: React.FC<FinalProductsStockProps> = ({ isLoading = false }) => {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterType, setFilterType] = useState<"all" | "in-stock" | "out-of-stock">("all");
+  const [showMinLevelDialog, setShowMinLevelDialog] = useState(false);
+  const [selectedProductForMinLevel, setSelectedProductForMinLevel] = useState<string>("");
+  const [minLevel, setMinLevel] = useState<string>("");
+
   const { stockItems, isLoading: stockLoading, updateStockItem } = useStockItems();
   const { products, isLoading: productsLoading } = useProducts();
   const [productAnalysis, setProductAnalysis] = useState<ProductAnalysis[]>([]);
   const [isSaving, setIsSaving] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filterType, setFilterType] = useState<"all" | "in-stock" | "out-of-stock">("all");
 
   // Função para extrair as medidas do nome do produto
   const extractMeasures = (productName: string): string => {
@@ -163,7 +166,7 @@ const FinalProductsStock: React.FC<FinalProductsStockProps> = ({ isLoading = fal
       if (stockItem) {
         // Calcular novo valor total baseado na quantidade editável
         const newTotalValue = product.editableQuantity * product.costPerTire;
-        
+
         await updateStockItem(stockItem.id, {
           quantity: product.editableQuantity,
           total_value: newTotalValue
@@ -289,14 +292,14 @@ const FinalProductsStock: React.FC<FinalProductsStockProps> = ({ isLoading = fal
                 `de ${productAnalysis.length} total`}
             </p>
           </div>
-          
+
           <div className="bg-factory-800/50 border border-tire-600/30 rounded-lg p-4">
             <p className="text-tire-400 text-sm">Quantidade Total</p>
             <p className="text-2xl font-bold text-neon-cyan">
               {filteredProductAnalysis.reduce((total, product) => total + product.quantity, 0)} unidades
             </p>
           </div>
-          
+
           <div className="bg-factory-800/50 border border-tire-600/30 rounded-lg p-4">
             <p className="text-tire-400 text-sm">Custo Médio por Pneu</p>
             <p className="text-2xl font-bold text-neon-orange">
@@ -306,7 +309,7 @@ const FinalProductsStock: React.FC<FinalProductsStockProps> = ({ isLoading = fal
               )}
             </p>
           </div>
-          
+
           <div className="bg-neon-green/10 border border-neon-green/30 rounded-lg p-4">
             <p className="text-tire-400 text-sm">Valor Total do Estoque</p>
             <p className="text-2xl font-bold text-neon-green">
@@ -379,7 +382,7 @@ const FinalProductsStock: React.FC<FinalProductsStockProps> = ({ isLoading = fal
                     {product.isEditing ? "Cancelar" : "Editar"}
                   </Button>
                 </div>
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div>
                     <Label className="text-tire-400 text-sm mb-1 block">Quantidade Atual</Label>
@@ -397,7 +400,7 @@ const FinalProductsStock: React.FC<FinalProductsStockProps> = ({ isLoading = fal
                       </div>
                     )}
                   </div>
-                  
+
                   <div>
                     <Label className="text-tire-400 text-sm mb-1 block">Custo por Pneu</Label>
                     <div className="bg-factory-600/30 border border-tire-600/20 rounded-md px-3 py-2 h-10 flex items-center">
@@ -415,7 +418,7 @@ const FinalProductsStock: React.FC<FinalProductsStockProps> = ({ isLoading = fal
                       </span>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-end">
                     {product.isEditing && (
                       <Button
