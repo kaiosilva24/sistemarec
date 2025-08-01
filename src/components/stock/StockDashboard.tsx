@@ -59,7 +59,6 @@ import { CSS } from "@dnd-kit/utilities";
 import RawMaterialStock from "./RawMaterialStock";
 import ProductStock from "./ProductStock";
 import FinalProductsStock from "./FinalProductsStock";
-import ResaleProductsStock from "./ResaleProductsStock";
 import StockCharts from "./StockCharts";
 import {
   useMaterials,
@@ -87,9 +86,7 @@ interface MetricCard {
     | "materialTypes"
     | "materialValue"
     | "finalProductQuantity"
-    | "finalProductValue"
-    | "resaleProductQuantity"
-    | "resaleProductValue";
+    | "finalProductValue";
 }
 
 interface SortableCardProps {
@@ -382,26 +379,6 @@ const StockDashboard = ({
       bgColor: "bg-factory-800/50",
       type: "finalProductValue",
     },
-    {
-      id: "resaleProductQuantity",
-      title: "Qtd. Produtos Revenda",
-      value: 0,
-      subtitle: "Produtos para revenda",
-      icon: "🛒",
-      color: "text-neon-purple",
-      bgColor: "bg-factory-800/50",
-      type: "resaleProductQuantity",
-    },
-    {
-      id: "resaleProductValue",
-      title: "Saldo Produtos Revenda",
-      value: "R$ 0",
-      subtitle: "Valor em revenda",
-      icon: "💰",
-      color: "text-yellow-400",
-      bgColor: "bg-factory-800/50",
-      type: "resaleProductValue",
-    },
   ];
 
   // Drag and drop sensors with improved activation for better UX
@@ -555,16 +532,9 @@ const StockDashboard = ({
   // Use database hooks
   const { materials, isLoading: materialsLoading } = useMaterials();
   const { products, isLoading: productsLoading } = useProducts();
-  const { resaleProducts, isLoading: resaleProductsLoading } =
-    useResaleProducts();
-  const {
-    stockItems,
-    addStockItem,
-    updateStockItem,
-    isLoading: stockLoading,
-  } = useStockItems();
+  const { stockItems, isLoading: stockLoading } = useStockItems();
 
-  const { removeStockItemByItemId } = useStockItems();
+  const { updateStockItem } = useStockItems();
   const { averageCostPerTire, synchronizedCostData } =
     useCostCalculationOptions();
 
@@ -632,44 +602,6 @@ const StockDashboard = ({
           updateData,
         );
       }
-    } else {
-      // Create new stock item
-      let sourceItem;
-      let finalItemName = itemName;
-
-      if (itemType === "material") {
-        sourceItem = materials.find((m) => m.id === itemId);
-      } else {
-        // Check both final products and resale products
-        sourceItem =
-          products.find((p) => p.id === itemId) ||
-          resaleProducts.find((p) => p.id === itemId);
-      }
-
-      // Use provided itemName or fallback to sourceItem name
-      if (!finalItemName && sourceItem) {
-        finalItemName = sourceItem.name;
-      }
-
-      if (sourceItem && operation === "add" && finalItemName) {
-        const cost = unitPrice || 0;
-        const newStockItem = {
-          item_id: itemId,
-          item_name: finalItemName,
-          item_type: itemType,
-          unit: sourceItem.unit,
-          quantity: quantity,
-          unit_cost: cost,
-          total_value: quantity * cost,
-          last_updated: new Date().toISOString(),
-        };
-
-        console.log(
-          `🆕 [StockDashboard] Criando novo item de estoque:`,
-          newStockItem,
-        );
-        await addStockItem(newStockItem);
-      }
     }
   };
 
@@ -708,10 +640,6 @@ const StockDashboard = ({
   // Get all products and stock items (no filtering by type here)
   const getAllProducts = () => {
     return products.filter((p) => !p.archived);
-  };
-
-  const getAllResaleProducts = () => {
-    return resaleProducts.filter((p) => !p.archived);
   };
 
   const getAllProductStockItems = () => {
@@ -772,18 +700,12 @@ const StockDashboard = ({
       })),
     );
 
-    // Separar produtos finais e de revenda
+    // Separar produtos finais
     const finalProductIds = getAllProducts().map((p) => p.id);
-    const resaleProductIds = getAllResaleProducts().map((p) => p.id);
 
     console.log("🔍 [StockDashboard] IDs dos produtos cadastrados:", {
       finalProductIds,
-      resaleProductIds,
       finalProductNames: getAllProducts().map((p) => ({
-        id: p.id,
-        name: p.name,
-      })),
-      resaleProductNames: getAllResaleProducts().map((p) => ({
         id: p.id,
         name: p.name,
       })),
@@ -792,21 +714,10 @@ const StockDashboard = ({
     const finalProductStockItems = productStockItems.filter((item) =>
       finalProductIds.includes(item.item_id),
     );
-    const resaleProductStockItems = productStockItems.filter((item) =>
-      resaleProductIds.includes(item.item_id),
-    );
 
     console.log(
       `🏭 [StockDashboard] Produtos finais em estoque: ${finalProductStockItems.length}`,
       finalProductStockItems.map((item) => ({
-        name: item.item_name,
-        quantity: item.quantity,
-        value: item.total_value,
-      })),
-    );
-    console.log(
-      `🛒 [StockDashboard] Produtos revenda em estoque: ${resaleProductStockItems.length}`,
-      resaleProductStockItems.map((item) => ({
         name: item.item_name,
         quantity: item.quantity,
         value: item.total_value,
@@ -842,24 +753,6 @@ const StockDashboard = ({
 
         console.log(
           `📊 Produto Final ${item.item_name}: ${quantity} (original: ${item.quantity}, type: ${typeof item.quantity})`,
-        );
-        return sum + quantity;
-      },
-      0,
-    );
-    const resaleProductTotalQuantity = resaleProductStockItems.reduce(
-      (sum, item) => {
-        // Garantir que quantity seja um número válido
-        let quantity = 0;
-
-        // Convert to number and validate
-        const numericQuantity = Number(item.quantity);
-        if (!isNaN(numericQuantity) && numericQuantity >= 0) {
-          quantity = numericQuantity;
-        }
-
-        console.log(
-          `📊 Produto Revenda ${item.item_name}: ${quantity} (original: ${item.quantity}, type: ${typeof item.quantity})`,
         );
         return sum + quantity;
       },
@@ -903,23 +796,9 @@ const StockDashboard = ({
             return sum + calculatedValue;
           }, 0);
 
-    const resaleProductTotalValue = resaleProductStockItems.reduce(
-      (sum, item) => {
-        const unitCost = Number(item.unit_cost) || 0;
-        const quantity = Number(item.quantity) || 0;
-        const calculatedValue = unitCost * quantity;
-        console.log(
-          `💰 Produto Revenda ${item.item_name}: ${quantity} × R$ ${unitCost.toFixed(2)} = R$ ${calculatedValue.toFixed(2)} (stored: R$ ${(item.total_value || 0).toFixed(2)})`,
-        );
-        return sum + calculatedValue;
-      },
-      0,
-    );
-
     console.log(`📊 [StockDashboard] TOTAIS CALCULADOS - Quantidades:`, {
       materialTotalQuantity,
       finalProductTotalQuantity,
-      resaleProductTotalQuantity,
     });
     console.log(
       `💰 [StockDashboard] TOTAIS CALCULADOS - Valores (RECALCULADOS):`,
@@ -934,24 +813,8 @@ const StockDashboard = ({
           averageCostPerTire > 0
             ? `${finalProductTotalQuantity} × R$ ${averageCostPerTire.toFixed(2)} = R$ ${finalProductTotalValue.toFixed(2)}`
             : "N/A",
-        resaleProductTotalValue: `R$ ${resaleProductTotalValue.toFixed(2)}`,
       },
     );
-
-    // Log detalhado para debug do valor de produtos de revenda
-    console.log(`🔍 [StockDashboard] DETALHAMENTO PRODUTOS REVENDA:`, {
-      totalResaleProductsInStock: resaleProductStockItems.length,
-      resaleProductsBreakdown: resaleProductStockItems.map((item) => ({
-        name: item.item_name,
-        id: item.item_id,
-        quantity: item.quantity,
-        unit_cost: item.unit_cost,
-        calculated_value: (item.quantity || 0) * (item.unit_cost || 0),
-        stored_total_value: item.total_value,
-      })),
-      expectedTotal: "R$ 60 (6 × R$ 10)",
-      calculatedTotal: `R$ ${resaleProductTotalValue.toFixed(2)}`,
-    });
 
     // Itens com estoque baixo por categoria
     const materialLowStock = materialStockItems.filter(
@@ -962,13 +825,9 @@ const StockDashboard = ({
       (item) =>
         item.min_level && item.min_level > 0 && item.quantity <= item.min_level,
     ).length;
-    const resaleProductLowStock = resaleProductStockItems.filter(
-      (item) =>
-        item.min_level && item.min_level > 0 && item.quantity <= item.min_level,
-    ).length;
 
     console.log(
-      `⚠️ [StockDashboard] Estoque baixo - Matéria-prima: ${materialLowStock}, Finais: ${finalProductLowStock}, Revenda: ${resaleProductLowStock}`,
+      `⚠️ [StockDashboard] Estoque baixo - Matéria-prima: ${materialLowStock}, Finais: ${finalProductLowStock}`,
     );
 
     // Usar custo médio por pneu sincronizado do TireCostManager, com fallback para cálculo local
@@ -998,20 +857,17 @@ const StockDashboard = ({
       // Quantidades
       materialTotalQuantity,
       finalProductTotalQuantity,
-      resaleProductTotalQuantity,
       // Valores
       materialTotalValue,
       finalProductTotalValue,
-      resaleProductTotalValue,
       // Custo médio por pneu dos produtos finais
       finalProductAverageCost,
       // Estoque baixo
       materialLowStock,
       finalProductLowStock,
-      resaleProductLowStock,
       // Totais gerais
       totalLowStock:
-        materialLowStock + finalProductLowStock + resaleProductLowStock,
+        materialLowStock + finalProductLowStock,
       // Material types metrics
       totalMaterialsRegistered,
       materialTypesInStock,
@@ -1058,23 +914,7 @@ const StockDashboard = ({
             maximumFractionDigits: 0,
           }).format(metrics.finalProductTotalValue),
         };
-      case "resaleProductQuantity":
-        return {
-          ...card,
-          value: metrics.resaleProductTotalQuantity.toLocaleString("pt-BR"),
-        };
-      case "resaleProductValue":
-        return {
-          ...card,
-          value: new Intl.NumberFormat("pt-BR", {
-            style: "currency",
-            currency: "BRL",
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 0,
-          }).format(metrics.resaleProductTotalValue),
-        };
-      default:
-        return card;
+      default:return card;
     }
   });
 
@@ -1315,8 +1155,7 @@ const StockDashboard = ({
                       maximumFractionDigits: 0,
                     }).format(
                       metrics.materialTotalValue +
-                        metrics.finalProductTotalValue +
-                        metrics.resaleProductTotalValue,
+                        metrics.finalProductTotalValue,
                     )}
                   </p>
                   <p className="text-xs text-tire-400 mt-1">
@@ -1342,8 +1181,7 @@ const StockDashboard = ({
                   </p>
                   <p className="text-xs text-tire-400 mt-1">
                     MP: {metrics.materialLowStock} | Finais:{" "}
-                    {metrics.finalProductLowStock} | Revenda:{" "}
-                    {metrics.resaleProductLowStock}
+                    {metrics.finalProductLowStock}
                   </p>
                 </div>
                 <div className="text-red-400">
@@ -1355,7 +1193,7 @@ const StockDashboard = ({
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-5 bg-factory-800/50 border border-tire-600/30">
+          <TabsList className="grid w-full grid-cols-4 bg-factory-800/50 border border-tire-600/30">
             <TabsTrigger
               value="dashboard"
               className="text-tire-300 data-[state=active]:text-white data-[state=active]:bg-neon-blue/20"
@@ -1374,11 +1212,11 @@ const StockDashboard = ({
             >
               Produtos Finais
             </TabsTrigger>
-            <TabsTrigger
-              value="resale-products"
+             <TabsTrigger
+              value="charts"
               className="text-tire-300 data-[state=active]:text-white data-[state=active]:bg-neon-blue/20"
             >
-              Produtos Revenda
+              Gráficos
             </TabsTrigger>
           </TabsList>
 
@@ -1387,12 +1225,10 @@ const StockDashboard = ({
               isLoading={
                 materialsLoading ||
                 productsLoading ||
-                resaleProductsLoading ||
                 stockLoading
               }
               materials={materials}
               products={getAllProducts()}
-              resaleProducts={getAllResaleProducts()}
               stockItems={stockItems}
               productType="all"
             />
@@ -1415,10 +1251,17 @@ const StockDashboard = ({
               }
             />
           </TabsContent>
-
-          <TabsContent value="resale-products">
-            <ResaleProductsStock
-              isLoading={isLoading}
+            <TabsContent value="charts">
+            <StockCharts
+              isLoading={
+                materialsLoading ||
+                productsLoading ||
+                stockLoading
+              }
+              materials={materials}
+              products={getAllProducts()}
+              stockItems={stockItems}
+              productType="all"
             />
           </TabsContent>
         </Tabs>

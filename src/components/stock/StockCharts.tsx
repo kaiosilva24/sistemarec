@@ -45,13 +45,11 @@ import {
   RawMaterial,
   Product,
   StockItem,
-  ResaleProduct,
 } from "@/types/financial";
 
 interface StockChartsProps {
   materials?: RawMaterial[];
   products?: Product[];
-  resaleProducts?: ResaleProduct[];
   stockItems?: StockItem[];
   productType?: "all" | "final" | "resale";
   isLoading?: boolean;
@@ -60,7 +58,6 @@ interface StockChartsProps {
 const StockCharts = ({
   materials = [],
   products = [],
-  resaleProducts = [],
   stockItems = [],
   productType = "all",
   isLoading = false,
@@ -74,11 +71,6 @@ const StockCharts = ({
   const [productSortOrder, setProductSortOrder] = useState<"asc" | "desc">(
     "desc",
   );
-
-  // Estado para filtro de tipo de produto
-  const [productTypeFilter, setProductTypeFilter] = useState<
-    "all" | "final" | "resale"
-  >("all");
 
   // Estados para configuração de cores
   const [showColorSettings, setShowColorSettings] = useState(false);
@@ -183,76 +175,54 @@ const StockCharts = ({
     });
   };
 
-  const getProductChartData = () => {
-    console.log("🔍 [StockCharts] Iniciando getProductChartData:", {
+  // Função para obter dados dos produtos finais apenas
+  const getProductChartData = (
+    products: Product[],
+    stockItems: StockItem[]
+  ) => {
+    console.log('🔍 [StockCharts] Iniciando getProductChartData:', {
       productsCount: products.length,
-      resaleProductsCount: resaleProducts.length,
-      stockItemsCount: stockItems.length,
-      productType,
-      productTypeFilter,
+      stockItemsCount: stockItems.length
     });
 
-    // Combinar produtos finais e de revenda
-    let allProducts = [
-      ...products
-        .filter((p) => !p.archived)
-        .map((p) => ({ ...p, type: "final" as const })),
-      ...resaleProducts
-        .filter((p) => !p.archived)
-        .map((p) => ({ ...p, type: "resale" as const })),
-    ];
+    // Apenas produtos finais
+    const finalProducts = products.filter(p => !p.archived).map(product => ({
+      ...product,
+      type: 'final' as const
+    }));
 
-    // Aplicar filtro de tipo de produto
-    if (productTypeFilter === "final") {
-      allProducts = allProducts.filter((p) => p.type === "final");
-    } else if (productTypeFilter === "resale") {
-      allProducts = allProducts.filter((p) => p.type === "resale");
-    }
-
-    console.log("📊 [StockCharts] Produtos após filtro:", {
-      totalProducts: allProducts.length,
-      finalProducts: allProducts.filter((p) => p.type === "final").length,
-      resaleProducts: allProducts.filter((p) => p.type === "resale").length,
-      activeFilter: productTypeFilter,
+    console.log('📊 [StockCharts] Produtos finais processados:', {
+      totalProducts: finalProducts.length
     });
 
-    const data = allProducts.map((product, index) => {
-      const stock = stockItems.find(
-        (item) => item.item_id === product.id && item.item_type === "product",
+    const chartData = finalProducts.map(product => {
+      const stockItem = stockItems.find(item => 
+        item.item_id === product.id && 
+        item.item_type === 'product'
       );
-      const quantity = stock?.quantity || 0;
-      const minLevel = stock?.min_level || 0;
 
-      let status = "normal";
-      if (minLevel > 0 && quantity <= minLevel) status = "low";
-
-      const result = {
-        name:
-          product.name.length > 15
-            ? product.name.substring(0, 15) + "..."
-            : product.name,
-        fullName: product.name,
-        quantity,
-        minLevel,
-        unit: product.unit,
-        status,
-        totalValue: stock?.total_value || 0,
-        originalIndex: index,
-        productType: product.type,
-      };
+      const quantity = stockItem?.quantity || 0;
+      const totalValue = stockItem?.total_value || 0;
 
       console.log(`📦 [StockCharts] Produto processado: ${product.name}`, {
         type: product.type,
         quantity,
-        stockFound: !!stock,
-        stockId: stock?.id,
+        stockFound: !!stockItem,
+        stockId: stockItem?.id
       });
 
-      return result;
+      return {
+        name: product.name.length > 15 ? `${product.name.substring(0, 15)}...` : product.name,
+        fullName: product.name,
+        quantity,
+        totalValue,
+        minimumLevel: product.minimum_level || 0,
+        type: product.type,
+        unit: product.unit
+      };
     });
 
-    // Aplicar ordenação baseada no estado
-    return data.sort((a, b) => {
+    return chartData.sort((a, b) => {
       let comparison = 0;
       switch (productSortBy) {
         case "name":
@@ -275,37 +245,17 @@ const StockCharts = ({
   };
 
   const materialData = getMaterialChartData();
-  const productData = getProductChartData();
+  const productData = getProductChartData(products, stockItems);
 
-  // Calcular contadores para o filtro
-  const allProductsData = (() => {
-    const allProducts = [
-      ...products
-        .filter((p) => !p.archived)
-        .map((p) => ({ ...p, type: "final" as const })),
-      ...resaleProducts
-        .filter((p) => !p.archived)
-        .map((p) => ({ ...p, type: "resale" as const })),
-    ];
-    return allProducts.map((product) => {
-      const stock = stockItems.find(
-        (item) => item.item_id === product.id && item.item_type === "product",
-      );
-      return {
-        ...product,
-        quantity: stock?.quantity || 0,
-        productType: product.type,
-      };
-    });
-  })();
+  // Calcular dados dos produtos finais
+  const productChartData = getProductChartData(
+    products, 
+    stockItems
+  );
 
-  const finalProductsCount = allProductsData.filter(
-    (p) => p.productType === "final",
-  ).length;
-  const resaleProductsCount = allProductsData.filter(
-    (p) => p.productType === "resale",
-  ).length;
-  const totalProductsCount = allProductsData.length;
+  // Contar apenas produtos finais
+  const finalProductsCount = products.filter(p => !p.archived).length;
+  const displayedProductsCount = finalProductsCount;
 
   const getBarColor = (status: string) => {
     if (status === "low") {
@@ -684,22 +634,10 @@ const StockCharts = ({
             <CardTitle className="text-tire-200 text-lg flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Palette className="h-4 w-4 text-neon-orange" />
-                Estoque de Produtos
-                {productTypeFilter === "all" && (
-                  <span className="text-xs text-tire-400">
-                    ({finalProductsCount} finais, {resaleProductsCount} revenda)
-                  </span>
-                )}
-                {productTypeFilter === "final" && (
-                  <span className="text-xs text-neon-green font-medium">
-                    🏭 Produtos Finais ({finalProductsCount})
-                  </span>
-                )}
-                {productTypeFilter === "resale" && (
-                  <span className="text-xs text-neon-cyan font-medium">
-                    🛒 Produtos Revenda ({resaleProductsCount})
-                  </span>
-                )}
+                Estoque de Produtos Finais
+                <span className="text-xs text-tire-400">
+                  ({finalProductsCount} produtos)
+                </span>
               </div>
               <div className="flex gap-2">
                 {productSummary.lowStock > 0 && (
@@ -772,43 +710,6 @@ const StockCharts = ({
                 {productSortOrder === "asc" ? "Crescente" : "Decrescente"}
               </Button>
 
-              {/* Filtro de Tipo de Produto - Minimalista */}
-              <div className="flex items-center gap-2 ml-4">
-                <Palette className="h-4 w-4 text-neon-purple" />
-                <span className="text-tire-300 text-sm font-medium">
-                  Filtro:
-                </span>
-                <Select
-                  value={productTypeFilter}
-                  onValueChange={(value: "all" | "final" | "resale") =>
-                    setProductTypeFilter(value)
-                  }
-                >
-                  <SelectTrigger className="w-40 bg-factory-700/50 border-tire-600/30 text-white">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-factory-800 border-tire-600/30">
-                    <SelectItem
-                      value="all"
-                      className="text-white hover:bg-tire-700/50"
-                    >
-                      📊 Todos ({totalProductsCount})
-                    </SelectItem>
-                    <SelectItem
-                      value="final"
-                      className="text-white hover:bg-tire-700/50"
-                    >
-                      🏭 Finais ({finalProductsCount})
-                    </SelectItem>
-                    <SelectItem
-                      value="resale"
-                      className="text-white hover:bg-tire-700/50"
-                    >
-                      🛒 Revenda ({resaleProductsCount})
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
             </div>
           </CardHeader>
           <CardContent>
