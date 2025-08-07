@@ -3367,34 +3367,34 @@ export class DataManager {
     }
   }
 
-  // ---- Métodos adicionados para Matéria Prima Unitária ----
+  // ---- Métodos para Matéria Prima Unitária ----
 
   /**
    * Salva a contagem de tipos de matéria-prima no Supabase
    */
-  static async saveRawMaterialTypes(count: number): Promise<boolean> {
+  async saveRawMaterialTypes(count: number): Promise<boolean> {
     try {
       console.log(`📦 [DataManager] Salvando tipos de matéria-prima: ${count}`);
 
-      const { error } = await supabase
-        .from('system_settings')
-        .upsert({
-          key: 'raw_material_types_count',
-          value: count.toString(),
-          updated_at: new Date().toISOString()
-        }, {
-          onConflict: 'key'
-        });
+      const success = await this.saveSystemSetting('raw_material_types_count', count.toString());
 
-      if (error) {
-        console.error('❌ [DataManager] Erro ao salvar tipos de matéria-prima:', error);
-        return false;
+      if (success) {
+        console.log(`✅ [DataManager] Tipos de matéria-prima salvos: ${count}`);
+        
+        // Disparar evento de atualização
+        const updateEvent = new CustomEvent('rawMaterialTypesUpdated', {
+          detail: {
+            count,
+            timestamp: Date.now(),
+            source: 'DataManager-saveRawMaterialTypes'
+          }
+        });
+        window.dispatchEvent(updateEvent);
       }
 
-      console.log(`✅ [DataManager] Tipos de matéria-prima salvos: ${count}`);
-      return true;
+      return success;
     } catch (error) {
-      console.error('❌ [DataManager] Erro inesperado ao salvar tipos de matéria-prima:', error);
+      console.error('❌ [DataManager] Erro ao salvar tipos de matéria-prima:', error);
       return false;
     }
   }
@@ -3402,26 +3402,22 @@ export class DataManager {
   /**
    * Carrega a contagem de tipos de matéria-prima do Supabase
    */
-  static async loadRawMaterialTypes(): Promise<number> {
+  async loadRawMaterialTypes(): Promise<number> {
     try {
-      console.log(`📦 [DataManager] Carregando tipos de matéria-prima...`);
+      console.log('📦 [DataManager] Carregando tipos de matéria-prima...');
 
-      const { data, error } = await supabase
-        .from('system_settings')
-        .select('value')
-        .eq('key', 'raw_material_types_count')
-        .single();
+      const countStr = await this.loadSystemSetting('raw_material_types_count');
 
-      if (error && error.code !== 'PGRST116') {
-        console.error('❌ [DataManager] Erro ao carregar tipos de matéria-prima:', error);
-        return 0;
+      if (countStr) {
+        const count = parseInt(countStr) || 0;
+        console.log(`✅ [DataManager] Tipos de matéria-prima carregados: ${count}`);
+        return count;
       }
 
-      const count = data?.value ? parseInt(data.value) : 0;
-      console.log(`✅ [DataManager] Tipos de matéria-prima carregados: ${count}`);
-      return count;
+      console.log('📦 [DataManager] Tipos de matéria-prima não encontrados, retornando 0');
+      return 0;
     } catch (error) {
-      console.error('❌ [DataManager] Erro inesperado ao carregar tipos de matéria-prima:', error);
+      console.error('❌ [DataManager] Erro ao carregar tipos de matéria-prima:', error);
       return 0;
     }
   }
@@ -3429,10 +3425,10 @@ export class DataManager {
   /**
    * Configura subscription em tempo real para mudanças na contagem de tipos de matéria-prima
    */
-  static subscribeToRawMaterialTypesChanges(callback: (count: number) => void): () => void {
+  subscribeToRawMaterialTypesChanges(callback: (count: number) => void): () => void {
     console.log('🔔 [DataManager] Configurando subscription para tipos de matéria-prima...');
 
-    const channel = supabase
+    const subscription = supabase
       .channel('raw_material_types_changes')
       .on('postgres_changes', {
         event: '*',
@@ -3443,7 +3439,7 @@ export class DataManager {
         console.log('📡 [DataManager] Mudança detectada nos tipos de matéria-prima:', payload);
 
         if (payload.new && payload.new.value) {
-          const newCount = parseInt(payload.new.value);
+          const newCount = parseInt(payload.new.value) || 0;
           console.log(`📦 [DataManager] Novo valor recebido: ${newCount}`);
           callback(newCount);
         }
@@ -3452,7 +3448,7 @@ export class DataManager {
 
     return () => {
       console.log('🔕 [DataManager] Cancelando subscription de tipos de matéria-prima');
-      supabase.removeChannel(channel);
+      supabase.removeChannel(subscription);
     };
   }
 }

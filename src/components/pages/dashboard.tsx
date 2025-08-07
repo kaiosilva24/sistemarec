@@ -1547,6 +1547,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
           const success = await dataManager.saveRawMaterialTypes(materialTypesInStock);
           if (success) {
             console.log(`✅ [Dashboard] Tipos de matéria-prima salvos no Supabase: ${materialTypesInStock}`);
+            console.log(`📦 [Dashboard] Card "Matéria Prima Unitária" sincronizado com valor: ${materialTypesInStock}`);
             
             // Disparar evento de atualização para tipos
             const typesUpdateEvent = new CustomEvent('rawMaterialTypesUpdated', {
@@ -2077,9 +2078,9 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-tire-300 text-sm font-medium">Matéria Prima Unitária</p>
-                  <p className="text-2xl font-bold text-tire-200">
-                    {isLoadingRawMaterialStock || rawMaterialStockBalance === null ? (
+                  <p className="text-tire-300 text-sm">Matéria Prima Unitária</p>
+                  <p className="text-2xl font-bold text-neon-orange">
+                    {isLoadingRawMaterialTypes ? (
                       <span className="animate-pulse">Carregando...</span>
                     ) : (
                       rawMaterialTypesInStock
@@ -2089,8 +2090,8 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                     {rawMaterialTypesInStock} tipos em estoque
                   </p>
                 </div>
-                <div className="p-2 rounded-full bg-cyan-500/20">
-                  <span className="text-lg">📦</span>
+                <div className="text-neon-orange">
+                  <span className="text-2xl">📦</span>
                 </div>
               </div>
             </CardContent>
