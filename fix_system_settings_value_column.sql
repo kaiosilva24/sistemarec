@@ -1,4 +1,8 @@
--- Script para corrigir o tipo da coluna 'value' na tabela system_settings
+-- Script para corrigir o tipo da coluna 'value' na tabela 'system_settings'
+-- Altera a coluna 'value' para o tipo TEXT para permitir o armazenamento de objetos JSON.
+
+ALTER TABLE public.system_settings
+ALTER COLUMN value TYPE TEXT;
 -- O erro indica que a coluna está como NUMERIC quando deveria ser TEXT
 
 -- Primeiro, vamos verificar o tipo atual da coluna
