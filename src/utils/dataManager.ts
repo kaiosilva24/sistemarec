@@ -3370,23 +3370,23 @@ export class DataManager {
   // ---- Métodos para Matéria Prima Unitária ----
 
   /**
-   * Salva a contagem de tipos de matéria-prima no Supabase
+   * Salva a quantidade unitária de matéria-prima no Supabase
    */
-  async saveRawMaterialTypes(count: number): Promise<boolean> {
+  async saveRawMaterialUnitaryQuantity(quantity: number): Promise<boolean> {
     try {
-      console.log(`📦 [DataManager] Salvando tipos de matéria-prima: ${count}`);
+      console.log(`📦 [DataManager] Salvando quantidade unitária de matéria-prima: ${quantity}`);
 
-      const success = await this.saveSystemSetting('raw_material_types_count', count.toString());
+      const success = await this.saveSystemSetting('raw_material_unitary_quantity', quantity.toString());
 
       if (success) {
-        console.log(`✅ [DataManager] Tipos de matéria-prima salvos: ${count}`);
+        console.log(`✅ [DataManager] Quantidade unitária de matéria-prima salva: ${quantity}`);
         
         // Disparar evento de atualização
-        const updateEvent = new CustomEvent('rawMaterialTypesUpdated', {
+        const updateEvent = new CustomEvent('rawMaterialUnitaryQuantityUpdated', {
           detail: {
-            count,
+            quantity,
             timestamp: Date.now(),
-            source: 'DataManager-saveRawMaterialTypes'
+            source: 'DataManager-saveRawMaterialUnitaryQuantity'
           }
         });
         window.dispatchEvent(updateEvent);
@@ -3394,60 +3394,60 @@ export class DataManager {
 
       return success;
     } catch (error) {
-      console.error('❌ [DataManager] Erro ao salvar tipos de matéria-prima:', error);
+      console.error('❌ [DataManager] Erro ao salvar quantidade unitária de matéria-prima:', error);
       return false;
     }
   }
 
   /**
-   * Carrega a contagem de tipos de matéria-prima do Supabase
+   * Carrega a quantidade unitária de matéria-prima do Supabase
    */
-  async loadRawMaterialTypes(): Promise<number> {
+  async loadRawMaterialUnitaryQuantity(): Promise<number> {
     try {
-      console.log('📦 [DataManager] Carregando tipos de matéria-prima...');
+      console.log('📦 [DataManager] Carregando quantidade unitária de matéria-prima...');
 
-      const countStr = await this.loadSystemSetting('raw_material_types_count');
+      const quantityStr = await this.loadSystemSetting('raw_material_unitary_quantity');
 
-      if (countStr) {
-        const count = parseInt(countStr) || 0;
-        console.log(`✅ [DataManager] Tipos de matéria-prima carregados: ${count}`);
-        return count;
+      if (quantityStr) {
+        const quantity = parseInt(quantityStr) || 0;
+        console.log(`✅ [DataManager] Quantidade unitária de matéria-prima carregada: ${quantity}`);
+        return quantity;
       }
 
-      console.log('📦 [DataManager] Tipos de matéria-prima não encontrados, retornando 0');
+      console.log('📦 [DataManager] Quantidade unitária de matéria-prima não encontrada, retornando 0');
       return 0;
     } catch (error) {
-      console.error('❌ [DataManager] Erro ao carregar tipos de matéria-prima:', error);
+      console.error('❌ [DataManager] Erro ao carregar quantidade unitária de matéria-prima:', error);
       return 0;
     }
   }
 
   /**
-   * Configura subscription em tempo real para mudanças na contagem de tipos de matéria-prima
+   * Configura subscription em tempo real para mudanças na quantidade unitária de matéria-prima
    */
-  subscribeToRawMaterialTypesChanges(callback: (count: number) => void): () => void {
-    console.log('🔔 [DataManager] Configurando subscription para tipos de matéria-prima...');
+  subscribeToRawMaterialUnitaryQuantityChanges(callback: (quantity: number) => void): () => void {
+    console.log('🔔 [DataManager] Configurando subscription para quantidade unitária de matéria-prima...');
 
     const subscription = supabase
-      .channel('raw_material_types_changes')
+      .channel('raw_material_unitary_quantity_changes')
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
         table: 'system_settings',
-        filter: 'key=eq.raw_material_types_count'
+        filter: 'key=eq.raw_material_unitary_quantity'
       }, (payload) => {
-        console.log('📡 [DataManager] Mudança detectada nos tipos de matéria-prima:', payload);
+        console.log('📡 [DataManager] Mudança detectada na quantidade unitária de matéria-prima:', payload);
 
         if (payload.new && payload.new.value) {
-          const newCount = parseInt(payload.new.value) || 0;
-          console.log(`📦 [DataManager] Novo valor recebido: ${newCount}`);
-          callback(newCount);
+          const newQuantity = parseInt(payload.new.value) || 0;
+          console.log(`📦 [DataManager] Nova quantidade recebida: ${newQuantity}`);
+          callback(newQuantity);
         }
       })
       .subscribe();
 
     return () => {
-      console.log('🔕 [DataManager] Cancelando subscription de tipos de matéria-prima');
+      console.log('🔕 [DataManager] Cancelando subscription de quantidade unitária de matéria-prima');
       supabase.removeChannel(subscription);
     };
   }

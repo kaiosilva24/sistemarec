@@ -223,9 +223,9 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
   const [cashBalanceState, setCashBalanceState] = useState<number | null>(null);
   const [isLoadingCashBalance, setIsLoadingCashBalance] = useState(true);
 
-  // Estado para tipos de matéria-prima - sincronização em tempo real
-  const [rawMaterialTypesInStock, setRawMaterialTypesInStock] = useState(0);
-  const [isLoadingRawMaterialTypes, setIsLoadingRawMaterialTypes] = useState(true);
+  // Estado para quantidade unitária de matéria-prima - sincronização em tempo real
+  const [rawMaterialUnitaryQuantity, setRawMaterialUnitaryQuantity] = useState(0);
+  const [isLoadingRawMaterialUnitaryQuantity, setIsLoadingRawMaterialUnitaryQuantity] = useState(true);
 
   // Estados para o sistema de checkpoint
   const [isCreatingCheckpoint, setIsCreatingCheckpoint] = useState(false);
@@ -1104,41 +1104,41 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
     };
   }, []);
 
-  // Effect para sincronização em tempo real dos tipos de matéria-prima
+  // Effect para sincronização em tempo real da quantidade unitária de matéria-prima
   useEffect(() => {
     let unsubscribe: (() => void) | null = null;
 
-    const initializeRawMaterialTypesSync = async () => {
+    const initializeRawMaterialUnitaryQuantitySync = async () => {
       try {
-        console.log('🔄 [Dashboard] Inicializando sincronização dos tipos de matéria-prima...');
+        console.log('🔄 [Dashboard] Inicializando sincronização da quantidade unitária de matéria-prima...');
         
         // Carregar valor inicial do Supabase
-        const initialCount = await dataManager.loadRawMaterialTypes();
-        console.log(`📦 [Dashboard] Valor inicial dos tipos: ${initialCount}`);
+        const initialQuantity = await dataManager.loadRawMaterialUnitaryQuantity();
+        console.log(`📦 [Dashboard] Valor inicial da quantidade unitária: ${initialQuantity}`);
         
-        setRawMaterialTypesInStock(initialCount);
-        setIsLoadingRawMaterialTypes(false);
+        setRawMaterialUnitaryQuantity(initialQuantity);
+        setIsLoadingRawMaterialUnitaryQuantity(false);
         
         // Configurar subscription em tempo real
-        unsubscribe = dataManager.subscribeToRawMaterialTypesChanges((newCount) => {
-          console.log(`📡 [Dashboard] Novo valor de tipos recebido via subscription: ${newCount}`);
-          setRawMaterialTypesInStock(newCount);
+        unsubscribe = dataManager.subscribeToRawMaterialUnitaryQuantityChanges((newQuantity) => {
+          console.log(`📡 [Dashboard] Nova quantidade unitária recebida via subscription: ${newQuantity}`);
+          setRawMaterialUnitaryQuantity(newQuantity);
         });
         
-        console.log('🔔 [Dashboard] Subscription ativa para tipos de matéria-prima');
+        console.log('🔔 [Dashboard] Subscription ativa para quantidade unitária de matéria-prima');
         
       } catch (error) {
-        console.error('❌ [Dashboard] Erro ao inicializar sincronização dos tipos:', error);
-        setIsLoadingRawMaterialTypes(false);
+        console.error('❌ [Dashboard] Erro ao inicializar sincronização da quantidade unitária:', error);
+        setIsLoadingRawMaterialUnitaryQuantity(false);
       }
     };
 
-    initializeRawMaterialTypesSync();
+    initializeRawMaterialUnitaryQuantitySync();
 
     // Cleanup subscription
     return () => {
       if (unsubscribe) {
-        console.log('🔕 [Dashboard] Cancelando subscription dos tipos de matéria-prima');
+        console.log('🔕 [Dashboard] Cancelando subscription da quantidade unitária de matéria-prima');
         unsubscribe();
       }
     };
@@ -1158,29 +1158,29 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       setIsLoadingRawMaterialStock(false);
     };
 
-    const handleRawMaterialTypesUpdate = (event: CustomEvent) => {
-      const { count, timestamp, source } = event.detail;
-      console.log(`📦 [Dashboard] Evento 'rawMaterialTypesUpdated' recebido:`);
-      console.log(`  - Tipos: ${count}`);
+    const handleRawMaterialUnitaryQuantityUpdate = (event: CustomEvent) => {
+      const { quantity, timestamp, source } = event.detail;
+      console.log(`📦 [Dashboard] Evento 'rawMaterialUnitaryQuantityUpdated' recebido:`);
+      console.log(`  - Quantidade Unitária: ${quantity}`);
       console.log(`  - Timestamp: ${new Date(timestamp).toLocaleString()}`);
       console.log(`  - Source: ${source}`);
       
       // Atualizar estado imediatamente
-      setRawMaterialTypesInStock(count);
-      setIsLoadingRawMaterialTypes(false);
+      setRawMaterialUnitaryQuantity(quantity);
+      setIsLoadingRawMaterialUnitaryQuantity(false);
     };
 
     console.log('🎯 [Dashboard] Registrando listeners para eventos de matéria-prima');
     
     // Adicionar listeners para os eventos customizados
     window.addEventListener('rawMaterialBalanceUpdated', handleRawMaterialStockUpdate as EventListener);
-    window.addEventListener('rawMaterialTypesUpdated', handleRawMaterialTypesUpdate as EventListener);
+    window.addEventListener('rawMaterialUnitaryQuantityUpdated', handleRawMaterialUnitaryQuantityUpdate as EventListener);
 
     // Cleanup
     return () => {
       console.log('🚫 [Dashboard] Removendo listeners para eventos de matéria-prima');
       window.removeEventListener('rawMaterialBalanceUpdated', handleRawMaterialStockUpdate as EventListener);
-      window.removeEventListener('rawMaterialTypesUpdated', handleRawMaterialTypesUpdate as EventListener);
+      window.removeEventListener('rawMaterialUnitaryQuantityUpdated', handleRawMaterialUnitaryQuantityUpdate as EventListener);
     };
   }, []);
 
@@ -1491,16 +1491,24 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
         const materialItems = stockItems.filter(item => item.item_type === 'material');
         console.log(`🏭 [Dashboard] Matérias-primas encontradas: ${materialItems.length}`);
         
-        // Calcular tipos de matéria-prima em estoque (com quantidade > 0)
-        const materialTypesInStock = materialItems.filter(item => 
-          item.quantity && item.quantity > 0
-        ).length;
+        // Calcular quantidade total de matéria-prima unitária (unidade "un")
+        const unitaryMaterialQuantity = materialItems.reduce((total, item) => {
+          // Buscar o material para pegar sua unidade
+          const material = materials.find(m => m.id === item.item_id);
+          const itemUnit = material?.unit || item.unit || '';
+          
+          if (itemUnit === 'un' && item.quantity > 0) {
+            console.log(`📦 [Dashboard] Material unitário encontrado: ${item.item_name} - Qtd: ${item.quantity}`);
+            return total + (item.quantity || 0);
+          }
+          return total;
+        }, 0);
         
-        // Atualizar tipos de matéria-prima
-        setRawMaterialTypesInStock(materialTypesInStock);
-        setIsLoadingRawMaterialTypes(false);
+        // Atualizar quantidade unitária de matéria-prima
+        setRawMaterialUnitaryQuantity(unitaryMaterialQuantity);
+        setIsLoadingRawMaterialUnitaryQuantity(false);
         
-        console.log(`📦 [Dashboard] Tipos de matéria-prima em estoque: ${materialTypesInStock}`);
+        console.log(`📦 [Dashboard] Quantidade unitária de matéria-prima: ${unitaryMaterialQuantity}`);
         
         // Calcular valor total das matérias-primas
         let newBalance = 0;
@@ -1542,25 +1550,25 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
           console.log(`✅ [Dashboard] Saldo já atualizado, não há necessidade de alterar`);
         }
         
-        // Salvar tipos de matéria-prima no Supabase também
+        // Salvar quantidade unitária de matéria-prima no Supabase também
         try {
-          const success = await dataManager.saveRawMaterialTypes(materialTypesInStock);
+          const success = await dataManager.saveRawMaterialUnitaryQuantity(unitaryMaterialQuantity);
           if (success) {
-            console.log(`✅ [Dashboard] Tipos de matéria-prima salvos no Supabase: ${materialTypesInStock}`);
-            console.log(`📦 [Dashboard] Card "Matéria Prima Unitária" sincronizado com valor: ${materialTypesInStock}`);
+            console.log(`✅ [Dashboard] Quantidade unitária de matéria-prima salva no Supabase: ${unitaryMaterialQuantity}`);
+            console.log(`📦 [Dashboard] Card "Matéria Prima Unitária" sincronizado com valor: ${unitaryMaterialQuantity}`);
             
-            // Disparar evento de atualização para tipos
-            const typesUpdateEvent = new CustomEvent('rawMaterialTypesUpdated', {
+            // Disparar evento de atualização para quantidade unitária
+            const quantityUpdateEvent = new CustomEvent('rawMaterialUnitaryQuantityUpdated', {
               detail: {
-                count: materialTypesInStock,
+                quantity: unitaryMaterialQuantity,
                 timestamp: Date.now(),
                 source: 'Dashboard-StockItemsMonitor'
               }
             });
-            window.dispatchEvent(typesUpdateEvent);
+            window.dispatchEvent(quantityUpdateEvent);
           }
         } catch (error) {
-          console.warn('⚠️ [Dashboard] Erro ao salvar tipos de matéria-prima:', error);
+          console.warn('⚠️ [Dashboard] Erro ao salvar quantidade unitária de matéria-prima:', error);
         }
       }, 300); // Aguardar 300ms para garantir que os dados foram processados
 
@@ -1568,7 +1576,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
         clearTimeout(timeoutId);
       };
     }
-  }, [stockItems, stockItemsLoading, rawMaterialStockBalance]);
+  }, [stockItems, stockItemsLoading, rawMaterialStockBalance, materials, materialsLoading]);
 
   // Cálculo local desabilitado - usando apenas valor sincronizado via Supabase
   // const rawMaterialStockValue = stockItems
@@ -2080,14 +2088,14 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                 <div>
                   <p className="text-tire-300 text-sm">Matéria Prima Unitária</p>
                   <p className="text-2xl font-bold text-neon-orange">
-                    {isLoadingRawMaterialTypes ? (
+                    {isLoadingRawMaterialUnitaryQuantity ? (
                       <span className="animate-pulse">Carregando...</span>
                     ) : (
-                      rawMaterialTypesInStock
+                      rawMaterialUnitaryQuantity
                     )}
                   </p>
                   <p className="text-xs text-tire-400 mt-1">
-                    {rawMaterialTypesInStock} tipos em estoque
+                    unidades em estoque
                   </p>
                 </div>
                 <div className="text-neon-orange">
