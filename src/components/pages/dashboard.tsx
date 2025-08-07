@@ -1150,6 +1150,46 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
     };
   }, []);
 
+  // Effect para sincronização em tempo real da quantidade total de produtos finais
+  useEffect(() => {
+    let unsubscribe: (() => void) | null = null;
+
+    const initializeFinalProductTotalQuantitySync = async () => {
+      try {
+        console.log('🔄 [Dashboard] Inicializando sincronização da quantidade total de produtos finais...');
+
+        // Carregar valor inicial do Supabase
+        const initialQuantity = await dataManager.loadFinalProductTotalQuantity();
+        console.log(`🏭 [Dashboard] Valor inicial da quantidade total: ${initialQuantity}`);
+
+        setFinalProductTotalQuantity(initialQuantity);
+        setIsLoadingFinalProductTotalQuantity(false);
+
+        // Configurar subscription em tempo real
+        unsubscribe = dataManager.subscribeToFinalProductTotalQuantityChanges((newQuantity) => {
+          console.log(`📡 [Dashboard] Nova quantidade total recebida via subscription: ${newQuantity}`);
+          setFinalProductTotalQuantity(newQuantity);
+        });
+
+        console.log('🔔 [Dashboard] Subscription ativa para quantidade total de produtos finais');
+
+      } catch (error) {
+        console.error('❌ [Dashboard] Erro ao inicializar sincronização da quantidade total:', error);
+        setIsLoadingFinalProductTotalQuantity(false);
+      }
+    };
+
+    initializeFinalProductTotalQuantitySync();
+
+    // Cleanup subscription
+    return () => {
+      if (unsubscribe) {
+        console.log('🔕 [Dashboard] Cancelando subscription da quantidade total de produtos finais');
+        unsubscribe();
+      }
+    };
+  }, []);
+
   // Listener para evento customizado de atualização do saldo de matéria-prima
   useEffect(() => {
     const handleRawMaterialStockUpdate = (event: CustomEvent) => {
@@ -1176,17 +1216,31 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       setIsLoadingRawMaterialUnitaryQuantity(false);
     };
 
-    console.log('🎯 [Dashboard] Registrando listeners para eventos de matéria-prima');
+    const handleFinalProductTotalQuantityUpdate = (event: CustomEvent) => {
+      const { quantity, timestamp, source } = event.detail;
+      console.log(`🏭 [Dashboard] Evento 'finalProductTotalQuantityUpdated' recebido:`);
+      console.log(`  - Quantidade Total: ${quantity}`);
+      console.log(`  - Timestamp: ${new Date(timestamp).toLocaleString()}`);
+      console.log(`  - Source: ${source}`);
+
+      // Atualizar estado imediatamente
+      setFinalProductTotalQuantity(quantity);
+      setIsLoadingFinalProductTotalQuantity(false);
+    };
+
+    console.log('🎯 [Dashboard] Registrando listeners para eventos de matéria-prima e produtos finais');
 
     // Adicionar listeners para os eventos customizados
     window.addEventListener('rawMaterialBalanceUpdated', handleRawMaterialStockUpdate as EventListener);
     window.addEventListener('rawMaterialUnitaryQuantityUpdated', handleRawMaterialUnitaryQuantityUpdate as EventListener);
+    window.addEventListener('finalProductTotalQuantityUpdated', handleFinalProductTotalQuantityUpdate as EventListener);
 
     // Cleanup
     return () => {
-      console.log('🚫 [Dashboard] Removendo listeners para eventos de matéria-prima');
+      console.log('🚫 [Dashboard] Removendo listeners para eventos de matéria-prima e produtos finais');
       window.removeEventListener('rawMaterialBalanceUpdated', handleRawMaterialStockUpdate as EventListener);
       window.removeEventListener('rawMaterialUnitaryQuantityUpdated', handleRawMaterialUnitaryQuantityUpdate as EventListener);
+      window.removeEventListener('finalProductTotalQuantityUpdated', handleFinalProductTotalQuantityUpdate as EventListener);
     };
   }, []);
 
@@ -1576,13 +1630,60 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
         } catch (error) {
           console.warn('⚠️ [Dashboard] Erro ao salvar quantidade unitária de matéria-prima:', error);
         }
+
+        // ===== CALCULAR QUANTIDADE TOTAL DE PRODUTOS FINAIS =====
+        console.log('🔍 [Dashboard] Calculando quantidade total de produtos finais...');
+
+        // Filtrar apenas produtos finais (não produtos de revenda)
+        const productItems = stockItems.filter(item => item.item_type === 'product');
+        const resaleProductIds = new Set(resaleProducts.map(p => p.id));
+        const finalProductItems = productItems.filter(item => !resaleProductIds.has(item.item_id));
+
+        console.log(`🏭 [Dashboard] Produtos finais encontrados: ${finalProductItems.length}`);
+
+        // Calcular quantidade total
+        const totalFinalProductQuantity = finalProductItems.reduce((total, item) => {
+          const quantity = Number(item.quantity) || 0;
+          console.log(`🏭 [Dashboard] Produto Final: ${item.item_name} - Qtd: ${quantity}`);
+          return total + quantity;
+        }, 0);
+
+        console.log(`🏭 [Dashboard] Quantidade total de produtos finais calculada: ${totalFinalProductQuantity}`);
+
+        // Só atualizar se houver diferença significativa
+        if (finalProductTotalQuantity === null || finalProductTotalQuantity !== totalFinalProductQuantity) {
+          console.log(`🔄 [Dashboard] Atualizando quantidade total de produtos finais: ${totalFinalProductQuantity}`);
+
+          // Salvar no Supabase
+          const success = await dataManager.saveFinalProductTotalQuantity(totalFinalProductQuantity);
+          if (success) {
+            console.log(`✅ [Dashboard] Quantidade total salva com sucesso no Supabase: ${totalFinalProductQuantity}`);
+
+            // Disparar evento de atualização
+            const updateEvent = new CustomEvent('finalProductTotalQuantityUpdated', {
+              detail: {
+                quantity: totalFinalProductQuantity,
+                timestamp: Date.now(),
+                source: 'Dashboard-StockItemsMonitor'
+              }
+            });
+            window.dispatchEvent(updateEvent);
+          }
+
+          // Atualizar estado local
+          setFinalProductTotalQuantity(totalFinalProductQuantity);
+          setIsLoadingFinalProductTotalQuantity(false);
+        } else {
+          console.log(`✅ [Dashboard] Quantidade total já atualizada: ${totalFinalProductQuantity}`);
+        }
+
       }, 300); // Aguardar 300ms para garantir que os dados foram processados
 
       return () => {
         clearTimeout(timeoutId);
       };
     }
-  }, [stockItems, stockItemsLoading, rawMaterialStockBalance, materials, materialsLoading]);
+  }, [stockItems, stockItemsLoading, rawMaterialStockBalance, materials, materialsLoading, resaleProducts, finalProductTotalQuantity]);
 
   // Log de comparação entre cálculo local e valor sincronizado
   useEffect(() => {
@@ -2092,18 +2193,24 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-tire-300 text-sm">Qtd. Total Produtos Finais</p>
-                  <p className="text-2xl font-bold text-neon-green">
-                    {isLoadingFinalProductTotalQuantity ? (
+                  <p className="text-2xl font-bold text-neon-cyan">
+                    {isLoadingFinalProductTotalQuantity || finalProductTotalQuantity === null ? (
                       <span className="animate-pulse">Carregando...</span>
                     ) : (
-                      finalProductTotalQuantity
+                      `${finalProductTotalQuantity} unidades`
                     )}
                   </p>
                   <p className="text-xs text-tire-400 mt-1">
-                    {finalProductTotalQuantity === 1 ? '1 unidade total' : `${finalProductTotalQuantity} unidades totais`}
+                    {finalProductTotalQuantity === null || finalProductTotalQuantity === 0 ? (
+                      'Nenhuma unidade em estoque'
+                    ) : finalProductTotalQuantity === 1 ? (
+                      '1 unidade total'
+                    ) : (
+                      `${finalProductTotalQuantity} unidades totais`
+                    )}
                   </p>
                 </div>
-                <div className="text-neon-green">
+                <div className="text-neon-cyan">
                   <span className="text-2xl">🏭</span>
                 </div>
               </div>
