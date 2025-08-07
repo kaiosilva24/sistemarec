@@ -223,6 +223,10 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
   const [cashBalanceState, setCashBalanceState] = useState<number | null>(null);
   const [isLoadingCashBalance, setIsLoadingCashBalance] = useState(true);
 
+  // Estado para tipos de matéria-prima - sincronização em tempo real
+  const [rawMaterialTypesInStock, setRawMaterialTypesInStock] = useState(0);
+  const [isLoadingRawMaterialTypes, setIsLoadingRawMaterialTypes] = useState(true);
+
   // Estados para o sistema de checkpoint
   const [isCreatingCheckpoint, setIsCreatingCheckpoint] = useState(false);
   const [checkpointStatus, setCheckpointStatus] = useState<string | null>(null);
@@ -1100,6 +1104,46 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
     };
   }, []);
 
+  // Effect para sincronização em tempo real dos tipos de matéria-prima
+  useEffect(() => {
+    let unsubscribe: (() => void) | null = null;
+
+    const initializeRawMaterialTypesSync = async () => {
+      try {
+        console.log('🔄 [Dashboard] Inicializando sincronização dos tipos de matéria-prima...');
+        
+        // Carregar valor inicial do Supabase
+        const initialCount = await dataManager.loadRawMaterialTypes();
+        console.log(`📦 [Dashboard] Valor inicial dos tipos: ${initialCount}`);
+        
+        setRawMaterialTypesInStock(initialCount);
+        setIsLoadingRawMaterialTypes(false);
+        
+        // Configurar subscription em tempo real
+        unsubscribe = dataManager.subscribeToRawMaterialTypesChanges((newCount) => {
+          console.log(`📡 [Dashboard] Novo valor de tipos recebido via subscription: ${newCount}`);
+          setRawMaterialTypesInStock(newCount);
+        });
+        
+        console.log('🔔 [Dashboard] Subscription ativa para tipos de matéria-prima');
+        
+      } catch (error) {
+        console.error('❌ [Dashboard] Erro ao inicializar sincronização dos tipos:', error);
+        setIsLoadingRawMaterialTypes(false);
+      }
+    };
+
+    initializeRawMaterialTypesSync();
+
+    // Cleanup subscription
+    return () => {
+      if (unsubscribe) {
+        console.log('🔕 [Dashboard] Cancelando subscription dos tipos de matéria-prima');
+        unsubscribe();
+      }
+    };
+  }, []);
+
   // Listener para evento customizado de atualização do saldo de matéria-prima
   useEffect(() => {
     const handleRawMaterialStockUpdate = (event: CustomEvent) => {
@@ -1114,15 +1158,29 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       setIsLoadingRawMaterialStock(false);
     };
 
-    console.log('🎯 [Dashboard] Registrando listener para evento rawMaterialBalanceUpdated');
+    const handleRawMaterialTypesUpdate = (event: CustomEvent) => {
+      const { count, timestamp, source } = event.detail;
+      console.log(`📦 [Dashboard] Evento 'rawMaterialTypesUpdated' recebido:`);
+      console.log(`  - Tipos: ${count}`);
+      console.log(`  - Timestamp: ${new Date(timestamp).toLocaleString()}`);
+      console.log(`  - Source: ${source}`);
+      
+      // Atualizar estado imediatamente
+      setRawMaterialTypesInStock(count);
+      setIsLoadingRawMaterialTypes(false);
+    };
+
+    console.log('🎯 [Dashboard] Registrando listeners para eventos de matéria-prima');
     
-    // Adicionar listener para o evento customizado
+    // Adicionar listeners para os eventos customizados
     window.addEventListener('rawMaterialBalanceUpdated', handleRawMaterialStockUpdate as EventListener);
+    window.addEventListener('rawMaterialTypesUpdated', handleRawMaterialTypesUpdate as EventListener);
 
     // Cleanup
     return () => {
-      console.log('🚫 [Dashboard] Removendo listener para evento rawMaterialBalanceUpdated');
+      console.log('🚫 [Dashboard] Removendo listeners para eventos de matéria-prima');
       window.removeEventListener('rawMaterialBalanceUpdated', handleRawMaterialStockUpdate as EventListener);
+      window.removeEventListener('rawMaterialTypesUpdated', handleRawMaterialTypesUpdate as EventListener);
     };
   }, []);
 
@@ -1433,6 +1491,17 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
         const materialItems = stockItems.filter(item => item.item_type === 'material');
         console.log(`🏭 [Dashboard] Matérias-primas encontradas: ${materialItems.length}`);
         
+        // Calcular tipos de matéria-prima em estoque (com quantidade > 0)
+        const materialTypesInStock = materialItems.filter(item => 
+          item.quantity && item.quantity > 0
+        ).length;
+        
+        // Atualizar tipos de matéria-prima
+        setRawMaterialTypesInStock(materialTypesInStock);
+        setIsLoadingRawMaterialTypes(false);
+        
+        console.log(`📦 [Dashboard] Tipos de matéria-prima em estoque: ${materialTypesInStock}`);
+        
         // Calcular valor total das matérias-primas
         let newBalance = 0;
         materialItems.forEach(item => {
@@ -1471,6 +1540,26 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
           setRawMaterialStockBalance(newBalance);
         } else {
           console.log(`✅ [Dashboard] Saldo já atualizado, não há necessidade de alterar`);
+        }
+        
+        // Salvar tipos de matéria-prima no Supabase também
+        try {
+          const success = await dataManager.saveRawMaterialTypes(materialTypesInStock);
+          if (success) {
+            console.log(`✅ [Dashboard] Tipos de matéria-prima salvos no Supabase: ${materialTypesInStock}`);
+            
+            // Disparar evento de atualização para tipos
+            const typesUpdateEvent = new CustomEvent('rawMaterialTypesUpdated', {
+              detail: {
+                count: materialTypesInStock,
+                timestamp: Date.now(),
+                source: 'Dashboard-StockItemsMonitor'
+              }
+            });
+            window.dispatchEvent(typesUpdateEvent);
+          }
+        } catch (error) {
+          console.warn('⚠️ [Dashboard] Erro ao salvar tipos de matéria-prima:', error);
         }
       }, 300); // Aguardar 300ms para garantir que os dados foram processados
 
@@ -1855,7 +1944,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
         </div>
       </div>
 
-      {/* Seção de Cards de Métricas - 2 linhas com 3 colunas */}
+      {/* Seção de Cards de Métricas - Layout 3x3 */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {/* Primeira linha */}
           {/* Card 1 - Saldo Matéria-Prima */}
@@ -1923,7 +2012,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
           </Card>
 
           {/* Segunda linha */}
-          {/* Card 4 - Custo Médio por Pneu (abaixo de Saldo Matéria-Prima) */}
+          {/* Card 4 - Custo Médio por Pneu */}
           <Card className="bg-factory-800/50 border-tire-600/30 hover:shadow-lg transition-all duration-200">
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
@@ -1940,7 +2029,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
             </CardContent>
           </Card>
 
-          {/* Card 5 - Lucro Médio por Pneu (abaixo de Saldo Produtos Finais) */}
+          {/* Card 5 - Lucro Médio por Pneu */}
           <Card className="bg-factory-800/50 border-tire-600/30 hover:shadow-lg transition-all duration-200">
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
@@ -1961,7 +2050,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
             </CardContent>
           </Card>
 
-          {/* Card 6 - Lucro Médio Produtos Revenda (abaixo de Saldo Produtos Revenda) */}
+          {/* Card 6 - Lucro Médio Produtos Revenda */}
           <Card className="bg-factory-800/50 border-tire-600/30 hover:shadow-lg transition-all duration-200">
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
@@ -1977,6 +2066,62 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                 </div>
                 <div className="p-2 rounded-full bg-green-500/20">
                   <TrendingUp className="h-5 w-5 text-green-400" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Terceira linha */}
+          {/* Card 7 - Matéria Prima Unitária (abaixo de Custo Médio por Pneu) */}
+          <Card className="bg-factory-800/50 border-tire-600/30 hover:shadow-lg transition-all duration-200">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-tire-300 text-sm font-medium">Matéria Prima Unitária</p>
+                  <p className="text-2xl font-bold text-tire-200">
+                    {isLoadingRawMaterialStock || rawMaterialStockBalance === null ? (
+                      <span className="animate-pulse">Carregando...</span>
+                    ) : (
+                      rawMaterialTypesInStock
+                    )}
+                  </p>
+                  <p className="text-xs text-tire-400 mt-1">
+                    {rawMaterialTypesInStock} tipos em estoque
+                  </p>
+                </div>
+                <div className="p-2 rounded-full bg-cyan-500/20">
+                  <span className="text-lg">📦</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Cards 8 e 9 - Placeholder para futuras métricas */}
+          <Card className="bg-factory-800/50 border-tire-600/30 hover:shadow-lg transition-all duration-200 opacity-50">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-tire-300 text-sm font-medium">Métrica Futura</p>
+                  <p className="text-2xl font-bold text-tire-400">--</p>
+                  <p className="text-xs text-tire-400 mt-1">Em desenvolvimento</p>
+                </div>
+                <div className="p-2 rounded-full bg-gray-500/20">
+                  <span className="text-lg">⏳</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-factory-800/50 border-tire-600/30 hover:shadow-lg transition-all duration-200 opacity-50">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-tire-300 text-sm font-medium">Métrica Futura</p>
+                  <p className="text-2xl font-bold text-tire-400">--</p>
+                  <p className="text-xs text-tire-400 mt-1">Em desenvolvimento</p>
+                </div>
+                <div className="p-2 rounded-full bg-gray-500/20">
+                  <span className="text-lg">⏳</span>
                 </div>
               </div>
             </CardContent>
