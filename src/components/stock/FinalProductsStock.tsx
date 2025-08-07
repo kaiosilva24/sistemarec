@@ -51,6 +51,7 @@ const FinalProductsStock: React.FC<FinalProductsStockProps> = ({ isLoading = fal
   const [isSaving, setIsSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState<"all" | "in-stock" | "out-of-stock" | "low-stock">("all");
+  const [productTypeFilter, setProductTypeFilter] = useState<"all" | "final" | "resale">("all");
   const [showMinLevelDialog, setShowMinLevelDialog] = useState(false);
   const [selectedProductForMinLevel, setSelectedProductForMinLevel] = useState("");
   const [minLevel, setMinLevel] = useState("");
@@ -71,6 +72,20 @@ const FinalProductsStock: React.FC<FinalProductsStockProps> = ({ isLoading = fal
     const measurePattern = /(\d{3}\s\d{2}\s\d{2})/;
     const match = productName.match(measurePattern);
     return match ? match[1] : productName;
+  };
+
+  // Função auxiliar para determinar o tipo do produto
+  const getProductType = (productName: string): "final" | "resale" => {
+    // Products with "CARCAÇA" or "carcaça" are typically resale products
+    if (productName.toLowerCase().includes('carcaça')) {
+      return 'resale';
+    }
+    // Products with pattern like "175 70 14 P6" are typically final products
+    if (/\d{3}\s\d{2}\s\d{2}\s[A-Z]\d+/.test(productName)) {
+      return 'final';
+    }
+    // Default to final for other products
+    return 'final';
   };
 
   // Função para obter custo específico do TireCostManager com sincronização em tempo real
@@ -708,7 +723,14 @@ const FinalProductsStock: React.FC<FinalProductsStockProps> = ({ isLoading = fal
       (filterType === "out-of-stock" && product.quantity === 0) ||
       (filterType === "low-stock" && product.stockLevel === "low");
 
-    return matchesSearch && matchesFilter;
+    // Find the actual product to determine its type
+    const actualProduct = products.find(p => p.id === product.productId);
+    const productType = actualProduct ? getProductType(actualProduct.name) : 'final';
+    const matchesProductType = 
+      productTypeFilter === "all" ||
+      productType === productTypeFilter;
+
+    return matchesSearch && matchesFilter && matchesProductType;
   });
 
   // Calculate low stock count
@@ -740,8 +762,9 @@ const FinalProductsStock: React.FC<FinalProductsStockProps> = ({ isLoading = fal
               <div className="flex items-center gap-2">
                 <Package className="h-5 w-5 text-neon-green" />
               </div>
-              Produtos Finais
-              <span className="text-neon-green text-sm">({productAnalysis.length} tipos)</span>
+              {productTypeFilter === "all" ? "Produtos Finais" : 
+               productTypeFilter === "final" ? "🏭 Produtos Finais" : "🛒 Produtos Revenda"}
+              <span className="text-neon-green text-sm">({filteredProductAnalysis.length} {productTypeFilter === "all" ? "tipos" : productTypeFilter === "final" ? "finais" : "revenda"})</span>
               {lowStockCount > 0 && (
                 <span className="text-red-400 text-sm flex items-center gap-1">
                   <AlertTriangle className="h-3 w-3" />
@@ -859,6 +882,23 @@ const FinalProductsStock: React.FC<FinalProductsStockProps> = ({ isLoading = fal
             </SelectItem>
           </SelectContent>
         </Select>
+
+        <Select value={productTypeFilter} onValueChange={(value: "all" | "final" | "resale") => setProductTypeFilter(value)}>
+          <SelectTrigger className="w-48 bg-factory-700/50 border-tire-600/30 text-white">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent className="bg-factory-800 border-tire-600/30">
+            <SelectItem value="all" className="text-white hover:bg-tire-700/50">
+              🔄 Todos os Tipos
+            </SelectItem>
+            <SelectItem value="final" className="text-white hover:bg-tire-700/50">
+              🏭 Produtos Finais
+            </SelectItem>
+            <SelectItem value="resale" className="text-white hover:bg-tire-700/50">
+              🛒 Produtos Revenda
+            </SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Métricas de Resumo */}
@@ -905,16 +945,17 @@ const FinalProductsStock: React.FC<FinalProductsStockProps> = ({ isLoading = fal
           <div className="text-center py-12 bg-factory-800/30 rounded-lg border border-tire-600/20">
             <Package className="h-16 w-16 text-tire-500 mx-auto mb-4" />
             <p className="text-tire-400 text-lg">
-              {searchTerm || filterType !== "all"
+              {searchTerm || filterType !== "all" || productTypeFilter !== "all"
                 ? "Nenhum produto encontrado com os filtros aplicados"
                 : "Nenhum produto final em estoque"}
             </p>
-            {(searchTerm || filterType !== "all") && (
+            {(searchTerm || filterType !== "all" || productTypeFilter !== "all") && (
               <Button
                 variant="outline"
                 onClick={() => {
                   setSearchTerm("");
                   setFilterType("all");
+                  setProductTypeFilter("all");
                 }}
                 className="mt-4 bg-factory-700/50 border-tire-600/30 text-tire-300 hover:text-white hover:bg-tire-700/50"
               >
@@ -932,7 +973,15 @@ const FinalProductsStock: React.FC<FinalProductsStockProps> = ({ isLoading = fal
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h4 className="text-white font-semibold text-xl flex items-center gap-2">
-                    <span className="text-2xl">🏭</span>
+                    {(() => {
+                      const actualProduct = products.find(p => p.id === product.productId);
+                      const productType = actualProduct ? getProductType(actualProduct.name) : 'final';
+                      return (
+                        <span className="text-2xl" title={productType === 'final' ? 'Produto Final' : 'Produto de Revenda'}>
+                          {productType === 'final' ? '🏭' : '🛒'}
+                        </span>
+                      );
+                    })()}
                     {product.measures}
                     {product.stockLevel === "low" && (
                       <AlertTriangle className="h-4 w-4 text-red-400" />
@@ -948,7 +997,22 @@ const FinalProductsStock: React.FC<FinalProductsStockProps> = ({ isLoading = fal
                       </span>
                     )}
                   </h4>
-                  <p className="text-tire-400 text-sm">{product.productName}</p>
+                  <div className="flex items-center gap-2 mb-1">
+                    <p className="text-tire-400 text-sm">{product.productName}</p>
+                    {(() => {
+                      const actualProduct = products.find(p => p.id === product.productId);
+                      const productType = actualProduct ? getProductType(actualProduct.name) : 'final';
+                      return (
+                        <span className={`text-xs px-2 py-1 rounded-full border ${
+                          productType === 'final' 
+                            ? 'bg-blue-900/20 text-blue-400 border-blue-600/30' 
+                            : 'bg-purple-900/20 text-purple-400 border-purple-600/30'
+                        }`}>
+                          {productType === 'final' ? 'FINAL' : 'REVENDA'}
+                        </span>
+                      );
+                    })()}
+                  </div>
                   {product.minLevel > 0 && (
                     <p className="text-tire-500 text-xs">
                       Nível mínimo: {product.minLevel} unidades
