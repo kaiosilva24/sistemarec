@@ -161,18 +161,18 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       // Tratar valores null/undefined adequadamente
       const stock = product.current_stock ?? 0;
       const price = product.purchase_price ?? 0;
-      
+
       // Verificar se há estoque correspondente na tabela stock_items
       const stockItem = stockItems.find(item => 
         item.item_name === product.name || item.item_id === product.id
       );
-      
+
       // Usar estoque da tabela stock_items se disponível
       const finalStock = stockItem ? (stockItem.quantity || 0) : stock;
       const finalPrice = price > 0 ? price : (stockItem?.unit_cost || 0);
-      
+
       const stockValue = finalStock * finalPrice;
-      
+
       return total + stockValue;
     }, 0);
 
@@ -227,6 +227,11 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
   const [rawMaterialUnitaryQuantity, setRawMaterialUnitaryQuantity] = useState(0);
   const [isLoadingRawMaterialUnitaryQuantity, setIsLoadingRawMaterialUnitaryQuantity] = useState(true);
 
+  // Estado para Quantidade Total de Produtos Finais - sincronização em tempo real
+  const [finalProductTotalQuantity, setFinalProductTotalQuantity] = useState<number | null>(null);
+  const [isLoadingFinalProductTotalQuantity, setIsLoadingFinalProductTotalQuantity] = useState(true);
+
+
   // Estados para o sistema de checkpoint
   const [isCreatingCheckpoint, setIsCreatingCheckpoint] = useState(false);
   const [checkpointStatus, setCheckpointStatus] = useState<string | null>(null);
@@ -235,33 +240,33 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
   const updateResaleProfitWithDebounce = (newProfit: number, source: string) => {
     const now = Date.now();
     const timeSinceLastUpdate = now - lastUpdateTimestamp;
-    
+
     console.log(`🔄 [Dashboard] Tentativa de atualização de ${source}: R$ ${newProfit.toFixed(2)}`);
     console.log(`🕰️ [Dashboard] Tempo desde última atualização: ${timeSinceLastUpdate}ms`);
-    
+
     // Se já há uma atualização pendente com o mesmo valor, ignorar
     if (pendingUpdate !== null && Math.abs(pendingUpdate - newProfit) < 0.01) {
       console.log(`⚠️ [Dashboard] Atualização ignorada - valor já pendente: R$ ${pendingUpdate.toFixed(2)}`);
       return;
     }
-    
+
     // Se o valor atual já é o mesmo, ignorar
     if (averageResaleProfit !== null && Math.abs(averageResaleProfit - newProfit) < 0.01) {
       console.log(`✅ [Dashboard] Valor já atualizado: R$ ${averageResaleProfit.toFixed(2)}`);
       return;
     }
-    
+
     // Rejeitar atualizações para R$ 0.00 quando há um valor válido anterior
     if (newProfit === 0 && averageResaleProfit !== null && averageResaleProfit > 0) {
       console.log(`⛔ [Dashboard] Rejeitando atualização para R$ 0.00 de ${source} - mantendo valor atual: R$ ${averageResaleProfit.toFixed(2)}`);
       return;
     }
-    
+
     // Debounce de 300ms para evitar múltiplas atualizações
     if (timeSinceLastUpdate < 300) {
       console.log(`🔄 [Dashboard] Debounce ativo - agendando atualização em 300ms`);
       setPendingUpdate(newProfit);
-      
+
       setTimeout(() => {
         console.log(`⏰ [Dashboard] Executando atualização agendada: R$ ${newProfit.toFixed(2)}`);
         setAverageResaleProfit(newProfit);
@@ -283,95 +288,95 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
     try {
       console.log('📊 [Dashboard] Calculando lucro de revenda diretamente...');
       console.log(`📊 [Dashboard] Total de entradas no cashFlow: ${cashFlowEntries.length}`);
-      
+
       // Filtrar vendas de produtos de revenda dos últimos 30 dias
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      
+
       // Debug: Mostrar as últimas 5 entradas
       const recentEntries = cashFlowEntries
         .filter(entry => entry.type === 'income' && entry.category === 'venda')
         .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
         .slice(0, 5);
-      
+
       console.log('🔍 [Dashboard] Últimas 5 vendas:');
       recentEntries.forEach((entry, index) => {
         console.log(`  ${index + 1}. ${entry.description?.substring(0, 80)}...`);
       });
-      
+
       const resaleSales = cashFlowEntries.filter(entry => {
         if (entry.type !== 'income' || entry.category !== 'venda') return false;
-        
+
         const entryDate = new Date(entry.created_at);
         if (entryDate < thirtyDaysAgo) return false;
-        
+
         // Verificar se é produto de revenda (múltiplas formas)
         const description = entry.description || '';
         const isResale = description.includes('TIPO_PRODUTO: revenda') || 
                         description.includes('tipo_produto: revenda') ||
                         description.includes('revenda') ||
                         description.includes('REVENDA');
-        
+
         console.log(`🔍 [Dashboard] Verificando entrada: ${description.substring(0, 50)}... | É revenda: ${isResale}`);
-        
+
         return isResale;
       });
-      
+
       console.log(`📊 [Dashboard] Vendas de revenda encontradas: ${resaleSales.length}`);
-      
+
       if (resaleSales.length === 0) {
         console.log('⚠️ [Dashboard] Nenhuma venda de revenda encontrada');
-        
+
         // Se cashFlowEntries está vazio, o problema é no carregamento dos dados
         if (cashFlowEntries.length === 0) {
           console.log('❌ [Dashboard] PROBLEMA: cashFlowEntries está vazio - hook useCashFlow() não está funcionando');
           return;
         }
-        
+
         console.log('🔍 [Dashboard] cashFlowEntries tem dados, mas nenhuma venda de revenda encontrada');
         return;
       }
-      
+
       let totalProfit = 0;
       let totalQuantity = 0;
-      
+
       resaleSales.forEach(sale => {
         // Extrair informações do produto da descrição
         const productMatch = sale.description?.match(/Produto: ([^|]+)/);
         const quantityMatch = sale.description?.match(/Quantidade: (\d+)/);
-        
+
         if (productMatch && quantityMatch) {
           const productName = productMatch[1].trim();
           const quantity = parseInt(quantityMatch[1]);
-          
+
           // Buscar custo do produto no estoque
           const stockItem = stockItems.find(item => 
             item.item_name === productName && item.item_type === 'product'
           );
-          
+
           if (stockItem) {
             const unitCost = stockItem.unit_cost || 0;
             const revenue = sale.amount;
             const totalCost = unitCost * quantity;
             const profit = revenue - totalCost;
-            
+
             totalProfit += profit;
             totalQuantity += quantity;
-            
+
             console.log(`💰 [Dashboard] Produto: ${productName}, Qtd: ${quantity}, Lucro: R$ ${profit.toFixed(2)}`);
           }
         }
       });
-      
+
       const averageProfit = totalQuantity > 0 ? totalProfit / totalQuantity : 0;
-      
+
       console.log(`📊 [Dashboard] Lucro médio calculado diretamente: R$ ${averageProfit.toFixed(2)}`);
-      
+
       // Salvar no Supabase e localStorage
       const success = await dataManager.saveAverageResaleProfit(averageProfit);
       if (success) {
         console.log(`✅ [Dashboard] Lucro de revenda salvo com sucesso: R$ ${averageProfit.toFixed(2)}`);
-        
+
         // Disparar evento de atualização
         const updateEvent = new CustomEvent('resaleProfitUpdated', {
           detail: {
@@ -393,16 +398,16 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       try {
         console.log('🔍 [Dashboard] Verificando configuração do Supabase...');
         await autoSetupSupabase();
-        
+
         // Inicializar dados essenciais após verificar a configuração
         console.log('🚀 [Dashboard] Inicializando dados essenciais do sistema...');
         await ensureSystemDataExists();
-        
+
       } catch (error) {
         console.warn('⚠️ [Dashboard] Erro na verificação do Supabase:', error);
       }
     };
-    
+
     checkSupabaseSetup();
   }, []);
 
@@ -413,20 +418,20 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
     const initializeTireCostSync = async () => {
       try {
         console.log('🔄 [Dashboard] Inicializando sincronização em tempo real do custo médio por pneu...');
-        
+
         // Carregar valor inicial do Supabase
         const initialCost = await dataManager.loadAverageTireCost();
-        
+
         // Se o Supabase retornar o valor padrão (101.09), tentar localStorage
         let finalCost = initialCost;
         console.log(`🔍 [Dashboard] Valor inicial do Supabase: R$ ${initialCost.toFixed(2)}`);
-        
+
         // Usar Math.abs para comparação de float mais robusta
         if (Math.abs(initialCost - 101.09) < 0.01) {
           console.log('⚠️ [Dashboard] Valor padrão detectado, tentando localStorage...');
           const localStorageCost = getTireCostFromLocalStorage();
           console.log(`🔍 [Dashboard] Valor do localStorage: R$ ${localStorageCost.toFixed(2)}`);
-          
+
           if (Math.abs(localStorageCost - 101.09) >= 0.01) {
             finalCost = localStorageCost;
             console.log(`✅ [Dashboard] Valor do localStorage usado: R$ ${finalCost.toFixed(2)}`);
@@ -436,24 +441,24 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
         } else {
           console.log('✅ [Dashboard] Valor do Supabase não é padrão, usando diretamente');
         }
-        
+
         setAverageTireCost(finalCost);
         setIsLoadingTireCost(false);
-        
+
         console.log(`✅ [Dashboard] Custo inicial carregado: R$ ${finalCost.toFixed(2)}`);
-        
+
         // Configurar subscription em tempo real
         unsubscribe = dataManager.subscribeToTireCostChanges((newCost) => {
           console.log(`🔄 [Dashboard] Novo custo recebido via Supabase Realtime: R$ ${newCost.toFixed(2)}`);
           setAverageTireCost(newCost);
         });
-        
+
         console.log('🔔 [Dashboard] Subscription ativa para mudanças em tempo real');
-        
+
       } catch (error) {
         console.error('❌ [Dashboard] Erro ao inicializar sincronização:', error);
         setIsLoadingTireCost(false);
-        
+
         // Fallback para localStorage em caso de erro
         const fallbackCost = getTireCostFromLocalStorage();
         setAverageTireCost(fallbackCost);
@@ -478,60 +483,60 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
     const initializeTireProfitSync = async () => {
       try {
         console.log('🔄 [Dashboard] Inicializando sincronização em tempo real do lucro médio por pneu...');
-        
+
         // Carregar valor inicial do Supabase
         const initialProfit = await dataManager.loadAverageTireProfit();
         console.log(`🔍 [Dashboard] Valor inicial do lucro do Supabase: R$ ${initialProfit.toFixed(2)}`);
-        
+
         // Usar valor do Supabase exclusivamente
         console.log(`🎯 [Dashboard] Valor final escolhido: R$ ${initialProfit.toFixed(2)}`);
-        
+
         setAverageTireProfit(initialProfit);
         setIsLoadingTireProfit(false);
-        
+
         console.log(`✅ [Dashboard] Lucro inicial carregado: R$ ${initialProfit.toFixed(2)}`);
-        
+
         // Configurar subscription em tempo real
         unsubscribe = dataManager.subscribeToTireProfitChanges((newProfit) => {
           console.log(`📡 [Dashboard] Novo lucro por pneu recebido via subscription: R$ ${newProfit.toFixed(2)}`);
           setAverageTireProfit(newProfit);
         });
-        
+
         console.log('🔔 [Dashboard] Subscription ativa para mudanças de lucro em tempo real');
-        
+
         // Forçar recálculo após 1 segundo para garantir sincronização
         setTimeout(() => {
           console.log('🎯 [Dashboard] Disparando recálculo forçado do lucro médio por pneu');
           const forceRecalcEvent = new CustomEvent('forceTireProfitRecalc');
           window.dispatchEvent(forceRecalcEvent);
-          
+
           console.log('🎯 [Dashboard] Disparando recálculo forçado do lucro produtos revenda');
           const forceResaleRecalcEvent = new CustomEvent('forceResaleProfitRecalc');
           window.dispatchEvent(forceResaleRecalcEvent);
-          
+
           console.log('🔄 [Dashboard] Eventos de recálculo disparados para produtos finais e revenda');
         }, 1000);
-        
+
         // Listener para evento de nova entrada de cash flow
         const handleCashFlowEntryAdded = (event: CustomEvent) => {
           console.log('💰 [Dashboard] Evento cashFlowEntryAdded recebido:', event.detail);
           console.log('🔍 [Dashboard] Tipo de entrada:', event.detail?.type);
           console.log('🔍 [Dashboard] Categoria:', event.detail?.category);
           console.log('🔍 [Dashboard] Valor:', event.detail?.amount);
-          
+
           // Forçar recálculo imediato
           setTimeout(() => {
             console.log('🔄 [Dashboard] Forçando recálculo após nova entrada de cash flow');
-            
+
             const forceRecalcEvent = new CustomEvent('forceTireProfitRecalc');
             window.dispatchEvent(forceRecalcEvent);
-            
+
             const forceResaleRecalcEvent = new CustomEvent('forceResaleProfitRecalc');
             window.dispatchEvent(forceResaleRecalcEvent);
-            
+
             console.log('✅ [Dashboard] Eventos de recálculo disparados via cashFlowEntryAdded');
           }, 100); // Recálculo mais rápido para nova entrada
-          
+
           // Forçar recálculo adicional para garantir
           setTimeout(() => {
             console.log('🔄 [Dashboard] Segundo recálculo forçado via cashFlowEntryAdded');
@@ -539,9 +544,9 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
             window.dispatchEvent(forceResaleRecalcEvent2);
           }, 500);
         };
-        
+
         window.addEventListener('cashFlowEntryAdded', handleCashFlowEntryAdded as EventListener);
-        
+
         // Listener direto do Supabase Realtime para cash_flow_entries
         const cashFlowChannel = supabase
           .channel('cash_flow_realtime')
@@ -556,21 +561,21 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
               console.log('💰 [Dashboard] Mudança detectada na tabela cash_flow_entries:', payload);
               console.log('🔍 [Dashboard] Tipo de evento:', payload.eventType);
               console.log('🔍 [Dashboard] Dados da mudança:', payload.new || payload.old);
-              
+
               // Forçar recálculo imediato quando há mudanças no cash flow
               setTimeout(async () => {
                 console.log('🔄 [Dashboard] Forçando recálculo após mudança no cash flow (Supabase Realtime)');
-                
+
                 const forceRecalcEvent = new CustomEvent('forceTireProfitRecalc');
                 window.dispatchEvent(forceRecalcEvent);
-                
+
                 // Calcular lucro de revenda diretamente
                 await calculateResaleProfitDirectly();
-                
+
                 console.log('✅ [Dashboard] Eventos de recálculo disparados');
               }, 200); // Recálculo rápido para mudanças em tempo real
-              
-              // Forçar recálculo adicional após mais tempo para garantir
+
+              // Forçar recálculo adicional para garantir
               setTimeout(() => {
                 console.log('🔄 [Dashboard] Segundo recálculo forçado para garantir sincronização');
                 const forceResaleRecalcEvent2 = new CustomEvent('forceResaleProfitRecalc');
@@ -579,17 +584,17 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
             }
           )
           .subscribe();
-        
+
         // Cleanup dos listeners
         return () => {
           window.removeEventListener('cashFlowEntryAdded', handleCashFlowEntryAdded as EventListener);
           supabase.removeChannel(cashFlowChannel);
         };
-        
+
       } catch (error) {
         console.error('❌ [Dashboard] Erro ao inicializar sincronização do lucro:', error);
         setIsLoadingTireProfit(false);
-        
+
         // Fallback para localStorage em caso de erro
         const fallbackProfit = getTireProfitFromLocalStorage();
         setAverageTireProfit(fallbackProfit);
@@ -615,31 +620,31 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
     const initializeFinalProductStockSync = async () => {
       try {
         console.log('🔄 [Dashboard] Inicializando sincronização em tempo real do saldo de produtos finais...');
-        
+
         // Carregar valor inicial do Supabase
         const initialBalance = await dataManager.loadFinalProductStockBalance();
         console.log(`🔍 [Dashboard] Valor inicial do saldo do Supabase: R$ ${initialBalance.toFixed(2)}`);
-        
+
         // Usar valor do Supabase exclusivamente
         console.log(`🎯 [Dashboard] Valor final escolhido: R$ ${initialBalance.toFixed(2)}`);
-        
+
         setFinalProductStockBalance(initialBalance);
         setIsLoadingFinalProductStock(false);
-        
+
         console.log(`✅ [Dashboard] Saldo inicial carregado: R$ ${initialBalance.toFixed(2)}`);
-        
+
         // Configurar subscription em tempo real
         unsubscribe = dataManager.subscribeToFinalProductStockChanges((newBalance) => {
           console.log(`📡 [Dashboard] Novo saldo de produtos finais recebido via subscription: R$ ${newBalance.toFixed(2)}`);
           setFinalProductStockBalance(newBalance);
         });
-        
+
         console.log('🔔 [Dashboard] Subscription ativa para mudanças de saldo em tempo real');
-        
+
       } catch (error) {
         console.error('❌ [Dashboard] Erro ao inicializar sincronização do saldo:', error);
         setIsLoadingFinalProductStock(false);
-        
+
         // Fallback para valor 0 em caso de erro
         setFinalProductStockBalance(0);
       }
@@ -687,6 +692,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
         source: source || 'unknown'
       });
       setFinalProductStockBalance(balance);
+      setIsLoadingFinalProductStock(false);
     };
 
     // Adicionar listener para o evento customizado
@@ -719,15 +725,15 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
         timestamp: new Date().toISOString()
       });
       console.log('🔄 [Dashboard] Disparando recálculo forçado do lucro');
-      
+
       // Disparar recálculo para produtos finais
       const forceRecalcEvent = new CustomEvent('forceTireProfitRecalc');
       window.dispatchEvent(forceRecalcEvent);
-      
+
       // Disparar recálculo para produtos de revenda
       const forceResaleRecalcEvent = new CustomEvent('forceResaleProfitRecalc');
       window.dispatchEvent(forceResaleRecalcEvent);
-      
+
       console.log('🔄 [Dashboard] Eventos de recálculo disparados para produtos finais e revenda');
     }, 500); // Aguardar 500ms para garantir que os dados foram processados
 
@@ -742,17 +748,17 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       const timeoutId = setTimeout(() => {
         console.log('📊 [Dashboard] Monitorando stockItems para sincronização...');
         console.log(`📦 [Dashboard] Total de stockItems: ${stockItems.length}`);
-        
+
         // Filtrar apenas produtos finais para logs
         const productItems = stockItems.filter(item => item.item_type === 'product');
         console.log(`📦 [Dashboard] Produtos finais encontrados: ${productItems.length}`);
-        
+
         // Calcular valor simples apenas para comparação nos logs
         const simpleCalculation = productItems.reduce((total, item) => {
           const itemValue = item.total_value || (item.quantity * item.unit_cost) || 0;
           return total + itemValue;
         }, 0);
-        
+
         // Apenas log de comparação - não salvar nem atualizar estado
         if (finalProductStockBalance > 0 && Math.abs(finalProductStockBalance - simpleCalculation) > 0.01) {
           console.log(`⚠️ [Dashboard] Diferença detectada entre cálculo local e sincronizado:`);
@@ -843,7 +849,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
     const initializeResaleProfitSync = async () => {
       try {
         console.log('🚀 [Dashboard] Inicializando sincronização do lucro médio dos produtos de revenda...');
-        
+
         // Verificar se já temos um valor inicial carregado
         if (averageResaleProfit !== null) {
           console.log(`📊 [Dashboard] Valor já carregado na inicialização: R$ ${averageResaleProfit.toFixed(2)}`);
@@ -864,14 +870,14 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
             console.log('⚠️ [Dashboard] Erro ao carregar do localStorage, continuando com Supabase');
           }
         }
-        
+
         // Carregar valor definitivo do Supabase
         const supabaseProfit = await dataManager.loadAverageResaleProfit();
         console.log(`📊 [Dashboard] Lucro médio carregado do Supabase: R$ ${supabaseProfit.toFixed(2)}`);
-        
+
         // Usar valor do Supabase como definitivo
         console.log(`🎯 [Dashboard] Valor final escolhido: R$ ${supabaseProfit.toFixed(2)}`);
-        
+
         setAverageResaleProfit(supabaseProfit);
         setIsLoadingResaleProfit(false);
 
@@ -892,7 +898,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       } catch (error) {
         console.error('❌ [Dashboard] Erro ao inicializar sincronização do lucro de revenda:', error);
         setIsLoadingResaleProfit(false);
-        
+
         // Usar valor padrão em caso de erro
         console.log('🔄 [Dashboard] Usando valor padrão: R$ 23.61');
         setAverageResaleProfit(23.61);
@@ -916,15 +922,15 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
     const initializeFinalProductStockSync = async () => {
       try {
         console.log('🚀 [Dashboard] Inicializando sincronização do saldo de produtos finais...');
-        
+
         // Carregar valor do Supabase
         const supabaseBalance = await dataManager.loadFinalProductStockBalance();
         console.log(`💰 [Dashboard] Saldo carregado do Supabase: R$ ${supabaseBalance.toFixed(2)}`);
-        
+
         // Usar valor do Supabase como inicial
         setFinalProductStockBalance(supabaseBalance);
         setIsLoadingFinalProductStock(false);
-        
+
         console.log(`🎯 [Dashboard] Saldo inicial definido: R$ ${supabaseBalance.toFixed(2)}`);
       } catch (error) {
         console.error('❌ [Dashboard] Erro ao inicializar saldo de produtos finais:', error);
@@ -942,17 +948,17 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
     const initializeRawMaterialStockSync = async () => {
       try {
         console.log('🚀 [Dashboard] Inicializando sincronização do saldo de matéria-prima...');
-        
+
         // Carregar valor inicial do Supabase
         const initialBalance = await dataManager.loadRawMaterialStockBalance();
         console.log(`🔍 [Dashboard] Valor inicial do saldo do Supabase: R$ ${initialBalance.toFixed(2)}`);
-        
+
         // Se valor for 0, calcular baseado nos stockItems
         if (initialBalance === 0 && stockItems.length > 0) {
           const calculatedBalance = stockItems
             .filter(item => item.item_type === 'material')
             .reduce((total, item) => total + (item.total_value || 0), 0);
-          
+
           if (calculatedBalance > 0) {
             console.log(`📊 [Dashboard] Calculando saldo inicial: R$ ${calculatedBalance.toFixed(2)}`);
             await dataManager.saveRawMaterialStockBalance(calculatedBalance);
@@ -963,23 +969,23 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
         } else {
           setRawMaterialStockBalance(initialBalance);
         }
-        
+
         setIsLoadingRawMaterialStock(false);
-        
+
         console.log(`✅ [Dashboard] Saldo de matéria-prima inicial carregado: R$ ${(rawMaterialStockBalance || initialBalance).toFixed(2)}`);
-        
+
         // Configurar subscription em tempo real
         unsubscribe = dataManager.subscribeToRawMaterialStockChanges((newBalance) => {
           console.log(`📡 [Dashboard] Novo saldo de matéria-prima recebido via subscription: R$ ${newBalance.toFixed(2)}`);
           setRawMaterialStockBalance(newBalance);
         });
-        
+
         console.log('🔔 [Dashboard] Subscription ativa para mudanças de saldo de matéria-prima em tempo real');
-        
+
       } catch (error) {
         console.error('❌ [Dashboard] Erro ao inicializar sincronização do saldo de matéria-prima:', error);
         setIsLoadingRawMaterialStock(false);
-        
+
         // Fallback para cálculo local em caso de erro
         const fallbackBalance = stockItems
           .filter(item => item.item_type === 'material')
@@ -1007,13 +1013,13 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       console.log(`  - Lucro: R$ ${profit.toFixed(2)}`);
       console.log(`  - Timestamp: ${new Date(timestamp).toLocaleString()}`);
       console.log(`  - Source: ${source}`);
-      
+
       // Usar função de debounce para evitar oscilações
       updateResaleProfitWithDebounce(profit, source || 'Custom Event');
     };
 
     console.log('🎯 [Dashboard] Registrando listener para evento resaleProfitUpdated');
-    
+
     // Adicionar listener para o evento customizado
     window.addEventListener('resaleProfitUpdated', handleResaleProfitUpdate as EventListener);
 
@@ -1032,14 +1038,14 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       console.log(`  - Saldo: R$ ${balance.toFixed(2)}`);
       console.log(`  - Timestamp: ${new Date(timestamp).toLocaleString()}`);
       console.log(`  - Source: ${source}`);
-      
+
       // Atualizar estado imediatamente (sem debounce pois é calculado)
       setFinalProductStockBalance(balance);
       setIsLoadingFinalProductStock(false);
     };
 
     console.log('🎯 [Dashboard] Registrando listener para evento finalProductStockUpdated');
-    
+
     // Adicionar listener para o evento customizado
     window.addEventListener('finalProductStockUpdated', handleFinalProductStockUpdate as EventListener);
 
@@ -1057,26 +1063,26 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
     const initializeFinalProductStockSync = async () => {
       try {
         console.log('🚀 [Dashboard] Inicializando sincronização do saldo de produtos finais...');
-        
+
         // Carregar valor inicial do Supabase
         const initialBalance = await dataManager.loadFinalProductStockBalance();
         console.log(`📊 [Dashboard] Valor inicial do saldo de produtos finais: R$ ${initialBalance.toFixed(2)}`);
-        
+
         setFinalProductStockBalance(initialBalance);
         setIsLoadingFinalProductStock(false);
-        
+
         // Configurar subscription em tempo real para mudanças no Supabase
         unsubscribe = dataManager.subscribeToFinalProductStockChanges((newBalance) => {
           console.log(`📡 [Dashboard] Novo saldo de produtos finais recebido via Supabase: R$ ${newBalance.toFixed(2)}`);
           setFinalProductStockBalance(newBalance);
         });
-        
+
         console.log('🔔 [Dashboard] Subscription ativa para mudanças no saldo de produtos finais');
-        
+
       } catch (error) {
         console.error('❌ [Dashboard] Erro ao inicializar sincronização do saldo de produtos finais:', error);
         setIsLoadingFinalProductStock(false);
-        
+
         // Fallback para localStorage em caso de erro
         try {
           const localValue = localStorage.getItem('finalProductStockBalance');
@@ -1111,22 +1117,22 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
     const initializeRawMaterialUnitaryQuantitySync = async () => {
       try {
         console.log('🔄 [Dashboard] Inicializando sincronização da quantidade unitária de matéria-prima...');
-        
+
         // Carregar valor inicial do Supabase
         const initialQuantity = await dataManager.loadRawMaterialUnitaryQuantity();
         console.log(`📦 [Dashboard] Valor inicial da quantidade unitária: ${initialQuantity}`);
-        
+
         setRawMaterialUnitaryQuantity(initialQuantity);
         setIsLoadingRawMaterialUnitaryQuantity(false);
-        
+
         // Configurar subscription em tempo real
         unsubscribe = dataManager.subscribeToRawMaterialUnitaryQuantityChanges((newQuantity) => {
           console.log(`📡 [Dashboard] Nova quantidade unitária recebida via subscription: ${newQuantity}`);
           setRawMaterialUnitaryQuantity(newQuantity);
         });
-        
+
         console.log('🔔 [Dashboard] Subscription ativa para quantidade unitária de matéria-prima');
-        
+
       } catch (error) {
         console.error('❌ [Dashboard] Erro ao inicializar sincronização da quantidade unitária:', error);
         setIsLoadingRawMaterialUnitaryQuantity(false);
@@ -1152,7 +1158,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       console.log(`  - Saldo: R$ ${balance.toFixed(2)}`);
       console.log(`  - Timestamp: ${new Date(timestamp).toLocaleString()}`);
       console.log(`  - Source: ${source}`);
-      
+
       // Atualizar estado imediatamente
       setRawMaterialStockBalance(balance);
       setIsLoadingRawMaterialStock(false);
@@ -1164,14 +1170,14 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       console.log(`  - Quantidade Unitária: ${quantity}`);
       console.log(`  - Timestamp: ${new Date(timestamp).toLocaleString()}`);
       console.log(`  - Source: ${source}`);
-      
+
       // Atualizar estado imediatamente
       setRawMaterialUnitaryQuantity(quantity);
       setIsLoadingRawMaterialUnitaryQuantity(false);
     };
 
     console.log('🎯 [Dashboard] Registrando listeners para eventos de matéria-prima');
-    
+
     // Adicionar listeners para os eventos customizados
     window.addEventListener('rawMaterialBalanceUpdated', handleRawMaterialStockUpdate as EventListener);
     window.addEventListener('rawMaterialUnitaryQuantityUpdated', handleRawMaterialUnitaryQuantityUpdate as EventListener);
@@ -1189,7 +1195,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
     const initializeResaleStockBalance = async () => {
       try {
         console.log('🔄 [Dashboard] Inicializando saldo de produtos de revenda...');
-        
+
         // PRIORIDADE 1: Tentar carregar do localStorage (sincronizado pelo ResaleProductsStock)
         const localStorageData = localStorage.getItem('resale_total_stock_value');
         if (localStorageData) {
@@ -1206,22 +1212,22 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
             console.log('⚠️ [Dashboard] Erro ao parsear localStorage, usando cálculo local');
           }
         }
-        
+
         // PRIORIDADE 2: Fallback para cálculo local
         console.log('📊 [Dashboard] Usando cálculo local como fallback...');
         const localValue = resaleProductStockValue;
         console.log(`🔍 [Dashboard] Valor calculado localmente: R$ ${localValue.toFixed(2)}`);
-        
+
         setResaleProductStockBalance(localValue);
         setIsLoadingResaleProductStock(false);
-        
+
       } catch (error) {
         console.error('❌ [Dashboard] Erro ao inicializar saldo de produtos de revenda:', error);
         setResaleProductStockBalance(0);
         setIsLoadingResaleProductStock(false);
       }
     };
-    
+
     // Aguardar um pouco para garantir que os dados estejam carregados
     if (!resaleProductsLoading && !stockItemsLoading) {
       initializeResaleStockBalance();
@@ -1236,14 +1242,14 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       console.log(`  - Valor Total: R$ ${totalValue.toFixed(2)}`);
       console.log(`  - Timestamp: ${new Date(timestamp).toLocaleString()}`);
       console.log(`  - Source: ${source}`);
-      
+
       // Atualizar estado imediatamente
       setResaleProductStockBalance(totalValue);
       setIsLoadingResaleProductStock(false);
     };
 
     console.log('🎯 [Dashboard] Registrando listener para evento resaleTotalStockUpdated');
-    
+
     // Adicionar listener para o evento customizado
     window.addEventListener('resaleTotalStockUpdated', handleResaleStockUpdate as EventListener);
 
@@ -1261,28 +1267,28 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
     const initializeCashBalanceSync = async () => {
       try {
         console.log('🔄 [Dashboard] Inicializando sincronização em tempo real do saldo de caixa...');
-        
+
         // Carregar valor inicial do Supabase
         const initialBalance = await dataManager.loadCashBalance();
         console.log(`🔍 [Dashboard] Valor inicial do saldo do Supabase: R$ ${initialBalance.toFixed(2)}`);
-        
+
         setCashBalanceState(initialBalance);
         setIsLoadingCashBalance(false);
-        
+
         console.log(`✅ [Dashboard] Saldo inicial carregado: R$ ${initialBalance.toFixed(2)}`);
-        
+
         // Configurar subscription em tempo real
         unsubscribe = dataManager.subscribeToCashBalanceChanges((newBalance) => {
           console.log(`📡 [Dashboard] Novo saldo de caixa recebido via subscription: R$ ${newBalance.toFixed(2)}`);
           setCashBalanceState(newBalance);
         });
-        
+
         console.log('🔔 [Dashboard] Subscription ativa para mudanças de saldo em tempo real');
-        
+
       } catch (error) {
         console.error('❌ [Dashboard] Erro ao inicializar sincronização do saldo de caixa:', error);
         setIsLoadingCashBalance(false);
-        
+
         // Fallback para cálculo local em caso de erro
         const fallbackBalance = cashBalance;
         setCashBalanceState(fallbackBalance);
@@ -1308,14 +1314,14 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       console.log(`  - Saldo: R$ ${balance.toFixed(2)}`);
       console.log(`  - Timestamp: ${new Date(timestamp).toLocaleString()}`);
       console.log(`  - Source: ${source}`);
-      
+
       // Atualizar estado imediatamente
       setCashBalanceState(balance);
       setIsLoadingCashBalance(false);
     };
 
     console.log('🎯 [Dashboard] Registrando listener para evento cashBalanceUpdated');
-    
+
     // Adicionar listener para o evento customizado
     window.addEventListener('cashBalanceUpdated', handleCashBalanceUpdate as EventListener);
 
@@ -1329,7 +1335,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
   // Sistema de sincronização em tempo real para dados de estoque
   useEffect(() => {
     console.log('🔔 [Dashboard] Iniciando subscription para mudanças no estoque...');
-    
+
     const stockChannel = supabase
       .channel('stock_realtime')
       .on('postgres_changes', {
@@ -1338,11 +1344,11 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
         table: 'stock_items'
       }, (payload) => {
         console.log('📦 [Dashboard] Mudança detectada na tabela stock_items:', payload);
-        
+
         // Recarregar dados de estoque após mudança
         setTimeout(() => {
           console.log('🔄 [Dashboard] Recarregando dados de estoque após mudança (Supabase Realtime)');
-          
+
           // Disparar evento customizado para forçar recarga
           const stockUpdateEvent = new CustomEvent('stockItemsUpdated', {
             detail: {
@@ -1355,7 +1361,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
         }, 200); // Delay pequeno para garantir que a mudança foi persistida
       })
       .subscribe();
-    
+
     // Cleanup
     return () => {
       console.log('🔕 [Dashboard] Cancelando subscription do estoque');
@@ -1371,15 +1377,15 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       console.log(`  - Timestamp: ${new Date(timestamp).toLocaleString()}`);
       console.log(`  - Source: ${source}`);
       console.log(`  - Update Data:`, updateData);
-      
+
       // Forçar recálculo imediato do saldo de matéria-prima
       setTimeout(() => {
         console.log('🔄 [Dashboard] Forçando recálculo do saldo de matéria-prima após atualização de estoque');
-        
+
         // Recarregar dados de estoque para recalcular valores
         const forceReloadEvent = new CustomEvent('forceStockItemsReload');
         window.dispatchEvent(forceReloadEvent);
-        
+
         // Disparar evento específico para recálculo de matéria-prima
         const forceRawMaterialEvent = new CustomEvent('forceRawMaterialBalanceRecalc', {
           detail: {
@@ -1396,22 +1402,22 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       console.log(`🔄 [Dashboard] Evento 'forceRawMaterialRecalc' recebido:`);
       console.log(`  - Timestamp: ${new Date(timestamp).toLocaleString()}`);
       console.log(`  - Source: ${source}`);
-      
+
       // Recarregar dados de estoque e recalcular saldo
       try {
         const updatedStockItems = await dataManager.loadStockItems();
-        
+
         // Calcular novo saldo de matéria-prima
         const materialStockItems = updatedStockItems.filter(item => item.item_type === 'material');
         const newRawMaterialBalance = materialStockItems.reduce((total, item) => {
           return total + (item.total_value || 0);
         }, 0);
-        
+
         console.log(`💰 [Dashboard] Novo saldo de matéria-prima calculado: R$ ${newRawMaterialBalance.toFixed(2)}`);
-        
+
         // Salvar no Supabase e disparar evento de atualização
         await dataManager.saveRawMaterialStockBalance(newRawMaterialBalance);
-        
+
         // Disparar evento para atualizar o card no dashboard
         const updateEvent = new CustomEvent('rawMaterialBalanceUpdated', {
           detail: {
@@ -1421,14 +1427,14 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
           }
         });
         window.dispatchEvent(updateEvent);
-        
+
       } catch (error) {
         console.error('❌ [Dashboard] Erro ao recalcular saldo de matéria-prima:', error);
       }
     };
 
     console.log('🎯 [Dashboard] Registrando listeners para eventos de matéria-prima');
-    
+
     // Adicionar listeners para os eventos customizados
     window.addEventListener('materialStockUpdated', handleMaterialStockUpdate as EventListener);
     window.addEventListener('forceRawMaterialRecalc', handleForceRawMaterialRecalc as EventListener);
@@ -1448,12 +1454,12 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       console.log(`📦 [Dashboard] Evento 'stockItemsUpdated' recebido:`);
       console.log(`  - Timestamp: ${new Date(timestamp).toLocaleString()}`);
       console.log(`  - Source: ${source}`);
-      
+
       // Recarregar dados de estoque
       try {
         console.log('🔄 [Dashboard] Recarregando dados de estoque...');
         const updatedStockItems = await dataManager.loadStockItems();
-        
+
         // Atualizar estado local (isso vai recalcular automaticamente os valores dos cards)
         // Como estamos usando o hook useStockItems, precisamos forçar uma atualização
         // Vamos disparar um evento para o hook
@@ -1461,7 +1467,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
           detail: { updatedStockItems }
         });
         window.dispatchEvent(forceReloadEvent);
-        
+
         console.log(`✅ [Dashboard] Dados de estoque recarregados: ${updatedStockItems.length} itens`);
       } catch (error) {
         console.error('❌ [Dashboard] Erro ao recarregar dados de estoque:', error);
@@ -1469,7 +1475,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
     };
 
     console.log('🎯 [Dashboard] Registrando listener para evento stockItemsUpdated');
-    
+
     // Adicionar listener para o evento customizado
     window.addEventListener('stockItemsUpdated', handleStockUpdate as EventListener);
 
@@ -1486,53 +1492,53 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       const timeoutId = setTimeout(async () => {
         console.log('🔍 [Dashboard] Calculando saldo de matéria-prima automaticamente...');
         console.log(`📊 [Dashboard] Total de stockItems: ${stockItems.length}`);
-        
+
         // Filtrar apenas matéria-prima
         const materialItems = stockItems.filter(item => item.item_type === 'material');
         console.log(`🏭 [Dashboard] Matérias-primas encontradas: ${materialItems.length}`);
-        
+
         // Calcular quantidade total de matéria-prima unitária (unidade "un")
         const unitaryMaterialQuantity = materialItems.reduce((total, item) => {
           // Buscar o material para pegar sua unidade
           const material = materials.find(m => m.id === item.item_id);
           const itemUnit = material?.unit || item.unit || '';
-          
+
           if (itemUnit === 'un' && item.quantity > 0) {
             console.log(`📦 [Dashboard] Material unitário encontrado: ${item.item_name} - Qtd: ${item.quantity}`);
             return total + (item.quantity || 0);
           }
           return total;
         }, 0);
-        
+
         // Atualizar quantidade unitária de matéria-prima
         setRawMaterialUnitaryQuantity(unitaryMaterialQuantity);
         setIsLoadingRawMaterialUnitaryQuantity(false);
-        
+
         console.log(`📦 [Dashboard] Quantidade unitária de matéria-prima: ${unitaryMaterialQuantity}`);
-        
+
         // Calcular valor total das matérias-primas
         let newBalance = 0;
         materialItems.forEach(item => {
           const itemValue = item.total_value || 0;
           newBalance += itemValue;
-          
+
           if (itemValue > 0) {
             console.log(`  - ${item.item_name}: R$ ${itemValue.toFixed(2)} (qtd: ${item.quantity}, custo: ${item.unit_cost})`);
           }
         });
-        
+
         console.log(`💰 [Dashboard] Saldo calculado: R$ ${newBalance.toFixed(2)}`);
         console.log(`💰 [Dashboard] Saldo atual no estado: R$ ${(rawMaterialStockBalance || 0).toFixed(2)}`);
-        
+
         // Só atualizar se houver diferença significativa
         if (rawMaterialStockBalance === null || Math.abs((rawMaterialStockBalance || 0) - newBalance) > 0.01) {
           console.log(`🔄 [Dashboard] Atualizando saldo de matéria-prima: R$ ${newBalance.toFixed(2)}`);
-          
+
           // Salvar no Supabase
           const success = await dataManager.saveRawMaterialStockBalance(newBalance);
           if (success) {
             console.log(`✅ [Dashboard] Saldo salvo com sucesso no Supabase: R$ ${newBalance.toFixed(2)}`);
-            
+
             // Disparar evento de atualização
             const updateEvent = new CustomEvent('rawMaterialBalanceUpdated', {
               detail: {
@@ -1543,20 +1549,20 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
             });
             window.dispatchEvent(updateEvent);
           }
-          
+
           // Atualizar estado local
           setRawMaterialStockBalance(newBalance);
         } else {
           console.log(`✅ [Dashboard] Saldo já atualizado, não há necessidade de alterar`);
         }
-        
+
         // Salvar quantidade unitária de matéria-prima no Supabase também
         try {
           const success = await dataManager.saveRawMaterialUnitaryQuantity(unitaryMaterialQuantity);
           if (success) {
             console.log(`✅ [Dashboard] Quantidade unitária de matéria-prima salva no Supabase: ${unitaryMaterialQuantity}`);
             console.log(`📦 [Dashboard] Card "Matéria Prima Unitária" sincronizado com valor: ${unitaryMaterialQuantity}`);
-            
+
             // Disparar evento de atualização para quantidade unitária
             const quantityUpdateEvent = new CustomEvent('rawMaterialUnitaryQuantityUpdated', {
               detail: {
@@ -1577,67 +1583,6 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       };
     }
   }, [stockItems, stockItemsLoading, rawMaterialStockBalance, materials, materialsLoading]);
-
-  // Cálculo local desabilitado - usando apenas valor sincronizado via Supabase
-  // const rawMaterialStockValue = stockItems
-  //   .filter(item => item.item_type === 'material') // Filtra apenas matéria-prima
-  //   .reduce((total, item) => total + (item.total_value || 0), 0); // Soma o valor total de cada item
-
-  // Cálculo local desabilitado - usando apenas valor sincronizado do FinalProductsStock
-  // const finalProductStockValue = useMemo(() => {
-  //   const productItems = stockItems.filter(item => item.item_type === 'product');
-  //   
-  //   // Remover duplicatas baseado no nome do produto (manter apenas a entrada com valor_total válido)
-  //   const uniqueProducts = new Map();
-  //   
-  //   productItems.forEach(item => {
-  //     const key = item.item_name;
-  //     const existingItem = uniqueProducts.get(key);
-  //     
-  //     // Priorizar item com valor_total válido
-  //     if (!existingItem || (!existingItem.total_value && item.total_value)) {
-  //       uniqueProducts.set(key, item);
-  //     }
-  //   });
-  //   
-  //   // Calcular valor total dos produtos únicos
-  //   let totalValue = 0;
-  //   uniqueProducts.forEach(item => {
-  //     // Usar total_value se disponível, senão calcular quantity * unit_cost
-  //     const itemValue = item.total_value || (item.quantity * item.unit_cost) || 0;
-  //     totalValue += itemValue;
-  //   });
-  //   
-  //   // Log para monitoramento de correções
-  //   if (productItems.length !== uniqueProducts.size) {
-  //     console.log(`⚠️ [Dashboard] Duplicatas removidas: ${productItems.length} -> ${uniqueProducts.size} produtos`);
-  //     uniqueProducts.forEach((item, name) => {
-  //       const itemValue = item.total_value || (item.quantity * item.unit_cost) || 0;
-  //       console.log(`  - ${name}: R$ ${itemValue.toFixed(2)} (qtd: ${item.quantity}, custo: ${item.unit_cost})`);
-  //     });
-  //   }
-  //   
-  //   return totalValue;
-  // }, [stockItems]);
-  
-  // Log para monitoramento desabilitado - usando apenas valor sincronizado do FinalProductsStock
-  // if (Math.abs(finalProductStockValue - (finalProductStockBalance || 0)) > 0.01) {
-  //   console.log('⚠️ [Dashboard] Diferença detectada entre cálculo local e sincronizado:');
-  //   console.log(`  - Cálculo local: R$ ${finalProductStockValue.toFixed(2)}`);
-  //   console.log(`  - Estado sincronizado: R$ ${(finalProductStockBalance || 0).toFixed(2)}`);
-  //   
-  //   const productItems = stockItems.filter(item => item.item_type === 'product');
-  //   console.log(`  - Produtos finais encontrados: ${productItems.length}`);
-  //   
-  //   // Log apenas produtos com problemas
-  //   const problemProducts = productItems.filter(item => !item.total_value || item.total_value === 0);
-  //   if (problemProducts.length > 0) {
-  //     console.log(`  - Produtos com valor_total inválido: ${problemProducts.length}`);
-  //     problemProducts.forEach(item => {
-  //       console.log(`    * ${item.item_name}: valor_total=${item.total_value}, custo_unit=${item.unit_cost}, qtd=${item.quantity}`);
-  //     });
-  //   }
-  // }
 
   // Log de comparação entre cálculo local e valor sincronizado
   useEffect(() => {
@@ -1662,12 +1607,12 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       const timeoutId = setTimeout(async () => {
         console.log('🔍 [Dashboard] Calculando saldo de caixa automaticamente...');
         console.log(`📊 [Dashboard] Total de entradas no cashFlow: ${cashFlowEntries.length}`);
-        
+
         // Calcular saldo baseado nas entradas de fluxo de caixa
         let newBalance = 0;
         let totalIncome = 0;
         let totalExpense = 0;
-        
+
         cashFlowEntries.forEach(entry => {
           if (entry.type === 'income') {
             totalIncome += entry.amount;
@@ -1677,21 +1622,21 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
             newBalance -= entry.amount;
           }
         });
-        
+
         console.log(`💰 [Dashboard] Receitas: R$ ${totalIncome.toFixed(2)}`);
         console.log(`💸 [Dashboard] Despesas: R$ ${totalExpense.toFixed(2)}`);
         console.log(`💰 [Dashboard] Saldo calculado: R$ ${newBalance.toFixed(2)}`);
         console.log(`💰 [Dashboard] Saldo atual no estado: R$ ${(cashBalanceState || 0).toFixed(2)}`);
-        
+
         // Só atualizar se houver diferença significativa
         if (cashBalanceState === null || Math.abs((cashBalanceState || 0) - newBalance) > 0.01) {
           console.log(`🔄 [Dashboard] Atualizando saldo de caixa: R$ ${newBalance.toFixed(2)}`);
-          
+
           // Salvar no Supabase
           const success = await dataManager.saveCashBalance(newBalance);
           if (success) {
             console.log(`✅ [Dashboard] Saldo salvo com sucesso no Supabase: R$ ${newBalance.toFixed(2)}`);
-            
+
             // Disparar evento de atualização
             const updateEvent = new CustomEvent('cashBalanceUpdated', {
               detail: {
@@ -1702,7 +1647,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
             });
             window.dispatchEvent(updateEvent);
           }
-          
+
           // Atualizar estado local
           setCashBalanceState(newBalance);
         } else {
@@ -1719,13 +1664,13 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
   // Monitoramento de mudanças no estoque para sincronização entre componentes
   useEffect(() => {
     if (!stockItems.length || stockItemsLoading) return;
-    
+
     console.log('📊 [Dashboard] Monitorando mudanças no estoque para sincronização:', {
       totalStockItems: stockItems.length,
       finalProducts: stockItems.filter(item => item.item_type === 'product').length,
       materials: stockItems.filter(item => item.item_type === 'material').length
     });
-    
+
     // Debounce para evitar múltiplos disparos
     const timeoutId = setTimeout(() => {
       // Disparar evento para forçar sincronização entre StockCharts e FinalProductsStock
@@ -1736,10 +1681,10 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
           source: 'Dashboard-StockMonitor'
         }
       });
-      
+
       window.dispatchEvent(stockSyncEvent);
       console.log('📡 [Dashboard] Evento de sincronização de estoque disparado');
-      
+
       // Forçar recalculação no FinalProductsStock após mudanças no estoque
       setTimeout(() => {
         const forceRecalcEvent = new CustomEvent('forceStockRecalculation', {
@@ -1751,9 +1696,9 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
         window.dispatchEvent(forceRecalcEvent);
         console.log('🔄 [Dashboard] Forçando recalculação após mudança no estoque');
       }, 300);
-      
+
     }, 1000); // Debounce de 1 segundo
-    
+
     return () => clearTimeout(timeoutId);
   }, [stockItems, stockItemsLoading]);
 
@@ -1764,7 +1709,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       console.log(`🔄 [Dashboard] Evento 'resaleProductStockUpdated' de checkpoint recebido:`);
       console.log(`  - Saldo: R$ ${balance.toFixed(2)}`);
       console.log(`  - Source: ${source}`);
-      
+
       // Atualizar estado imediatamente
       setResaleProductStockBalance(balance);
       setIsLoadingResaleProductStock(false);
@@ -1775,7 +1720,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       console.log(`🔄 [Dashboard] Evento 'rawMaterialStockUpdated' de checkpoint recebido:`);
       console.log(`  - Saldo: R$ ${balance.toFixed(2)}`);
       console.log(`  - Source: ${source}`);
-      
+
       // Atualizar estado imediatamente
       setRawMaterialStockBalance(balance);
       setIsLoadingRawMaterialStock(false);
@@ -1786,7 +1731,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       console.log(`🔄 [Dashboard] Evento 'cashBalanceUpdated' de checkpoint recebido:`);
       console.log(`  - Saldo: R$ ${balance.toFixed(2)}`);
       console.log(`  - Source: ${source}`);
-      
+
       // Atualizar estado imediatamente
       setCashBalanceState(balance);
       setIsLoadingCashBalance(false);
@@ -1801,7 +1746,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
     };
 
     console.log('🎯 [Dashboard] Registrando listeners para eventos de checkpoint');
-    
+
     // Adicionar listeners para os eventos de checkpoint
     window.addEventListener('resaleProductStockUpdated', handleResaleProductStockRestore as EventListener);
     window.addEventListener('rawMaterialStockUpdated', handleRawMaterialStockRestore as EventListener);
@@ -1847,9 +1792,9 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
     try {
       setIsCreatingCheckpoint(true);
       setCheckpointStatus('creating');
-      
+
       console.log('💾 [Dashboard] Iniciando criação de checkpoint...');
-      
+
       // Criar checkpoint usando o checkpointManager com informações de todos os saldos
       const checkpointDescription = [
         `Saldo Caixa: ${formatCurrency(cashBalanceState || 0)}`,
@@ -1857,15 +1802,15 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
         `Saldo Matéria-Prima: ${formatCurrency(rawMaterialStockBalance || 0)}`,
         `Saldo Produtos Revenda: ${formatCurrency(resaleProductStockBalance || 0)}`
       ].join(' | ');
-      
+
       const success = await checkpointManager.createCheckpoint(
         `Dashboard - ${checkpointDescription}`
       );
-      
+
       if (success) {
         console.log('✅ [Dashboard] Checkpoint criado com sucesso');
         setCheckpointStatus('success');
-        
+
         // Resetar status após 3 segundos
         setTimeout(() => {
           setCheckpointStatus(null);
@@ -1876,7 +1821,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
     } catch (error) {
       console.error('❌ [Dashboard] Erro ao criar checkpoint:', error);
       setCheckpointStatus('error');
-      
+
       // Resetar status após 3 segundos
       setTimeout(() => {
         setCheckpointStatus(null);
@@ -2081,7 +2026,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
           </Card>
 
           {/* Terceira linha */}
-          {/* Card 7 - Matéria Prima Unitária (abaixo de Custo Médio por Pneu) */}
+          {/* Card 7 - Matéria Prima Unitária */}
           <Card className="bg-factory-800/50 border-tire-600/30 hover:shadow-lg transition-all duration-200">
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
@@ -2095,7 +2040,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                     )}
                   </p>
                   <p className="text-xs text-tire-400 mt-1">
-                    unidades em estoque
+                    {rawMaterialUnitaryQuantity === 1 ? '1 tipo em estoque' : `${rawMaterialUnitaryQuantity > 0 ? 'tipos' : '0 tipos'} em estoque`}
                   </p>
                 </div>
                 <div className="text-neon-orange">
@@ -2131,6 +2076,35 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                 </div>
                 <div className="p-2 rounded-full bg-gray-500/20">
                   <span className="text-lg">⏳</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Quarta linha - Card adicional */}
+        </div>
+
+        {/* Quarta linha - Card adicional */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {/* Card 10 - Quantidade Total Produtos Finais */}
+          <Card className="bg-factory-800/50 border-tire-600/30 hover:shadow-lg transition-all duration-200">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-tire-300 text-sm">Qtd. Total Produtos Finais</p>
+                  <p className="text-2xl font-bold text-neon-green">
+                    {isLoadingFinalProductTotalQuantity ? (
+                      <span className="animate-pulse">Carregando...</span>
+                    ) : (
+                      finalProductTotalQuantity
+                    )}
+                  </p>
+                  <p className="text-xs text-tire-400 mt-1">
+                    {finalProductTotalQuantity === 1 ? '1 unidade total' : `${finalProductTotalQuantity} unidades totais`}
+                  </p>
+                </div>
+                <div className="text-neon-green">
+                  <span className="text-2xl">🏭</span>
                 </div>
               </div>
             </CardContent>
@@ -2334,8 +2308,6 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
         </Card>
       </div>
 
-      {/* Seção de debug removida completamente */}
-
       {/* PresumedProfitManager sempre ativo para cálculos em tempo real */}
       <div className="hidden">
         <PresumedProfitManager
@@ -2482,7 +2454,7 @@ const Home = () => {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [activeSection, setActiveSection] = useState("dashboard");
-  const { stockItems, updateStockItem } = useStockItems(); // ✅ Usando Supabase em vez de localStorage
+  const { stockItems, updateStockItem, loadStockItems } = useStockItems(); // ✅ Usando Supabase em vez de localStorage
   const [isDiagnosticOpen, setIsDiagnosticOpen] = useState(false);
 
   // Function to trigger loading state for demonstration
@@ -2510,16 +2482,32 @@ const Home = () => {
   useEffect(() => {
     const hash = window.location.hash.replace('#', '');
     console.log(`🔗 [Dashboard] Hash da URL detectado: "${hash}"`);
-    
+
     if (hash && hash !== activeSection) {
       console.log(`🔄 [Dashboard] Mudando seção ativa de "${activeSection}" para "${hash}"`);
       setActiveSection(hash);
     }
   }, []);
 
-  // ✅ Stock items agora carregados via useStockItems hook do Supabase
+  // Listen for stockItemsUpdated event to reload stock items
+  useEffect(() => {
+    const handleStockItemsUpdated = async () => {
+      console.log('🔄 [Home] Evento stockItemsUpdated recebido, recarregando itens de estoque...');
+      await loadStockItems();
+    };
 
-  // ✅ Função updateStock agora usa Supabase via hook useStockItems
+    window.addEventListener('stockItemsUpdated', handleStockItemsUpdated as EventListener);
+    // Also listen for the generic reload event from MainDashboard
+    window.addEventListener('forceStockItemsReload', handleStockItemsUpdated as EventListener);
+
+    return () => {
+      window.removeEventListener('stockItemsUpdated', handleStockItemsUpdated as EventListener);
+      window.removeEventListener('forceStockItemsReload', handleStockItemsUpdated as EventListener);
+    };
+  }, [loadStockItems]);
+
+
+  // ✅ Function updateStock now uses Supabase via hook useStockItems
   const updateStock = async (
     itemId: string,
     itemType: "material" | "product",
@@ -2578,6 +2566,19 @@ const Home = () => {
       try {
         await updateStockItem(existingStock.id, updateData);
         console.log(`✅ [Home] Estoque atualizado com sucesso via Supabase`);
+
+        // Disparar evento para notificar outros componentes
+        const stockUpdateEvent = new CustomEvent('stockItemsUpdated', {
+          detail: {
+            timestamp: Date.now(),
+            source: 'Home-UpdateStock',
+            updateType: operation,
+            itemId: itemId,
+            itemType: itemType
+          }
+        });
+        window.dispatchEvent(stockUpdateEvent);
+
       } catch (error) {
         console.error(`❌ [Home] Erro ao atualizar estoque via Supabase:`, error);
       }

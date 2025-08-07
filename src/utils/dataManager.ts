@@ -2319,7 +2319,7 @@ export class DataManager {
   }
 
   /**
-   * Carrega o saldo de produtos finais apenas do Supabase (sem localStorage)
+   * Busca o saldo de produtos finais apenas do Supabase (sem localStorage)
    */
   async loadFinalProductStockBalance(): Promise<number> {
     try {
@@ -2351,12 +2351,38 @@ export class DataManager {
    */
   subscribeToFinalProductStockChanges(callback: (newBalance: number) => void): () => void {
     console.log('🔔 [DataManager] Iniciando subscription para mudanças no saldo de produtos finais...');
-    console.log('⚠️ [DataManager] TEMPORÁRIO: Subscription desabilitada (tabela system_settings não existe)');
 
-    // TODO: Implementar Supabase Realtime quando tabela system_settings for criada
-    // Por enquanto, retornar função vazia
+    const subscription = supabase
+      .channel('final_product_stock_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'system_settings',
+          filter: 'key=eq.final_product_stock_balance'
+        },
+        (payload) => {
+          console.log('📡 [DataManager] Mudança detectada no saldo de produtos finais:', payload);
+
+          if (payload.new && payload.new.value) {
+            const newBalance = Number(payload.new.value) || 0;
+
+            if (newBalance >= 0) {
+              console.log(`💰 [DataManager] Novo saldo de produtos finais: R$ ${newBalance.toFixed(2)}`);
+              callback(newBalance);
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    console.log('✅ [DataManager] Subscription ativa para mudanças no saldo de produtos finais');
+
+    // Retornar função de cleanup
     return () => {
-      console.log('🔌 [DataManager] Cleanup de subscription (vazia)');
+      console.log('🔌 [DataManager] Cancelando subscription do saldo de produtos finais');
+      supabase.removeChannel(subscription);
     };
   }
 
@@ -2440,11 +2466,23 @@ export class DataManager {
     try {
       console.log(`💾 [DataManager] Salvando configuração do sistema: ${key}`);
 
-      const { data: existingData } = await supabase
+      const { data: existingData, error: selectError } = await supabase
         .from('system_settings')
         .select('id, value')
         .eq('key', key)
         .single();
+
+      // Handle case where the table might not exist yet
+      if (selectError && selectError.code === '42P01') { // '42P01' is Undefined_table error code
+          console.warn(`⚠️ [DataManager] Tabela 'system_settings' não encontrada. Tentando criar.`);
+          // Attempt to create the table (this is a simplified example, actual DDL should be managed separately)
+          // In a real app, you'd run migrations. For this example, we'll log a message.
+          console.warn(`⚠️ [DataManager] Please ensure the 'system_settings' table exists with 'key' (TEXT, PRIMARY KEY), 'value' (TEXT), and 'updated_at' (TIMESTAMP WITH TIME ZONE) columns.`);
+          // Proceed as if trying to insert, it might work if the table is implicitly created by some setups or will error again.
+      } else if (selectError) {
+          console.error(`❌ [DataManager] Erro ao verificar configuração ${key}:`, selectError);
+          return false;
+      }
 
       if (existingData) {
         // Atualizar registro existente
@@ -2500,11 +2538,15 @@ export class DataManager {
         .single();
 
       if (error) {
-        console.warn(`⚠️ [DataManager] Configuração ${key} não encontrada:`, error.message);
+        if (error.code === 'PGRST116') { // Not found
+          console.log(`⚠️ [DataManager] Configuração ${key} não encontrada`);
+          return null;
+        }
+        console.error(`❌ [DataManager] Erro ao carregar configuração ${key}:`, error);
         return null;
       }
 
-      console.log(`✅ [DataManager] Configuração ${key} carregada com sucesso`);
+      console.log(`✅ [DataManager] Configuração ${key} carregada: ${data.value}`);
       return data.value;
     } catch (error) {
       console.error(`❌ [DataManager] Erro ao carregar configuração ${key}:`, error);
@@ -2694,7 +2736,7 @@ export class DataManager {
         .single();
 
       if (error) {
-        if (error.code === 'PGRST116') {
+        if (error.code === 'PGRST116') { // Not found
           console.log(`⚠️ [DataManager] Configuração ${key} não encontrada`);
           return null;
         }
@@ -3271,8 +3313,8 @@ export class DataManager {
         .eq('key', 'stock_chart_colors')
         .single();
 
-      if (selectError && selectError.code !== 'PGRST116') {
-        console.warn('⚠️ [DataManager] Supabase não disponível, usando apenas localStorage');
+      if (selectError && selectError.code !== 'PGRST116') { // PGRST116 = Not found
+        console.warn('⚠️ [DataManager] Supabase não disponível para backup, usando apenas localStorage');
         return;
       }
 
@@ -3370,29 +3412,29 @@ export class DataManager {
   // ---- Métodos para Matéria Prima Unitária ----
 
   /**
-   * Salva a quantidade unitária de matéria-prima no Supabase
+   * Salva a quantidade unitária de matéria-prima apenas no Supabase (sem localStorage)
    */
   async saveRawMaterialUnitaryQuantity(quantity: number): Promise<boolean> {
     try {
       console.log(`📦 [DataManager] Salvando quantidade unitária de matéria-prima: ${quantity}`);
 
-      const success = await this.saveSystemSetting('raw_material_unitary_quantity', quantity.toString());
-
-      if (success) {
-        console.log(`✅ [DataManager] Quantidade unitária de matéria-prima salva: ${quantity}`);
-        
-        // Disparar evento de atualização
-        const updateEvent = new CustomEvent('rawMaterialUnitaryQuantityUpdated', {
-          detail: {
-            quantity,
-            timestamp: Date.now(),
-            source: 'DataManager-saveRawMaterialUnitaryQuantity'
-          }
+      const { error } = await supabase
+        .from('system_settings')
+        .upsert({
+          key: 'raw_material_unitary_quantity',
+          value: quantity.toString(),
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'key'
         });
-        window.dispatchEvent(updateEvent);
+
+      if (error) {
+        console.error('❌ [DataManager] Erro ao salvar quantidade unitária de matéria-prima no Supabase:', error);
+        return false;
       }
 
-      return success;
+      console.log(`✅ [DataManager] Quantidade unitária de matéria-prima salva com sucesso: ${quantity}`);
+      return true;
     } catch (error) {
       console.error('❌ [DataManager] Erro ao salvar quantidade unitária de matéria-prima:', error);
       return false;
@@ -3400,22 +3442,27 @@ export class DataManager {
   }
 
   /**
-   * Carrega a quantidade unitária de matéria-prima do Supabase
+   * Carrega a quantidade unitária de matéria-prima apenas do Supabase (sem localStorage)
    */
   async loadRawMaterialUnitaryQuantity(): Promise<number> {
     try {
       console.log('📦 [DataManager] Carregando quantidade unitária de matéria-prima...');
 
-      const quantityStr = await this.loadSystemSetting('raw_material_unitary_quantity');
+      const { data, error } = await supabase
+        .from('system_settings')
+        .select('value')
+        .eq('key', 'raw_material_unitary_quantity')
+        .single();
 
-      if (quantityStr) {
-        const quantity = parseInt(quantityStr) || 0;
-        console.log(`✅ [DataManager] Quantidade unitária de matéria-prima carregada: ${quantity}`);
-        return quantity;
+      if (error) {
+        console.warn('⚠️ [DataManager] Erro ao carregar quantidade unitária de matéria-prima do Supabase:', error.message);
+        return 0; // Valor padrão
       }
 
-      console.log('📦 [DataManager] Quantidade unitária de matéria-prima não encontrada, retornando 0');
-      return 0;
+      const quantity = parseInt(data.value) || 0;
+      console.log(`✅ [DataManager] Quantidade unitária de matéria-prima carregada: ${quantity}`);
+
+      return quantity;
     } catch (error) {
       console.error('❌ [DataManager] Erro ao carregar quantidade unitária de matéria-prima:', error);
       return 0;
@@ -3448,6 +3495,104 @@ export class DataManager {
 
     return () => {
       console.log('🔕 [DataManager] Cancelando subscription de quantidade unitária de matéria-prima');
+      supabase.removeChannel(subscription);
+    };
+  }
+
+  // ===== FINAL PRODUCT TOTAL QUANTITY METHODS =====
+
+  /**
+   * Salva a quantidade total de produtos finais apenas no Supabase (sem localStorage)
+   */
+  async saveFinalProductTotalQuantity(quantity: number): Promise<boolean> {
+    try {
+      console.log(`📦 [DataManager] Salvando quantidade total de produtos finais: ${quantity}`);
+
+      const { error } = await supabase
+        .from('system_settings')
+        .upsert({
+          key: 'final_product_total_quantity',
+          value: quantity.toString(),
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'key'
+        });
+
+      if (error) {
+        console.error('❌ [DataManager] Erro ao salvar quantidade total de produtos finais no Supabase:', error);
+        return false;
+      }
+
+      console.log(`✅ [DataManager] Quantidade total de produtos finais salva com sucesso: ${quantity}`);
+      return true;
+    } catch (error) {
+      console.error('❌ [DataManager] Erro ao salvar quantidade total de produtos finais:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Carrega a quantidade total de produtos finais apenas do Supabase (sem localStorage)
+   */
+  async loadFinalProductTotalQuantity(): Promise<number> {
+    try {
+      console.log('🔍 [DataManager] Carregando quantidade total de produtos finais do Supabase...');
+
+      const { data, error } = await supabase
+        .from('system_settings')
+        .select('value')
+        .eq('key', 'final_product_total_quantity')
+        .single();
+
+      if (error) {
+        console.warn('⚠️ [DataManager] Erro ao carregar quantidade total de produtos finais do Supabase:', error.message);
+        return 0; // Valor padrão
+      }
+
+      const quantity = Number(data.value) || 0;
+      console.log(`✅ [DataManager] Quantidade total de produtos finais carregada do Supabase: ${quantity}`);
+
+      return quantity;
+    } catch (error) {
+      console.error('❌ [DataManager] Erro ao carregar quantidade total de produtos finais:', error);
+      return 0; // Valor padrão em caso de erro
+    }
+  }
+
+  /**
+   * Configura subscription em tempo real para mudanças na quantidade total de produtos finais
+   */
+  subscribeToFinalProductTotalQuantityChanges(callback: (newQuantity: number) => void): () => void {
+    console.log('🔔 [DataManager] Iniciando subscription para mudanças na quantidade total de produtos finais...');
+
+    const subscription = supabase
+      .channel('final_product_quantity_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'system_settings',
+          filter: 'key=eq.final_product_total_quantity'
+        },
+        (payload) => {
+          console.log('🔄 [DataManager] Mudança detectada na quantidade total de produtos finais:', payload);
+
+          if (payload.new && typeof payload.new === 'object' && 'value' in payload.new) {
+            const newQuantity = Number(payload.new.value) || 0;
+            console.log(`📦 [DataManager] Nova quantidade total de produtos finais recebida: ${newQuantity}`);
+
+            callback(newQuantity);
+          }
+        }
+      )
+      .subscribe();
+
+    console.log('✅ [DataManager] Subscription ativa para mudanças na quantidade total de produtos finais');
+
+    // Retornar função de cleanup
+    return () => {
+      console.log('🔌 [DataManager] Cancelando subscription da quantidade total de produtos finais');
       supabase.removeChannel(subscription);
     };
   }
