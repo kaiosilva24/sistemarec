@@ -2151,43 +2151,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
             </CardContent>
           </Card>
 
-          {/* Cards 8 e 9 - Placeholder para futuras métricas */}
-          <Card className="bg-factory-800/50 border-tire-600/30 hover:shadow-lg transition-all duration-200 opacity-50">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-tire-300 text-sm font-medium">Métrica Futura</p>
-                  <p className="text-2xl font-bold text-tire-400">--</p>
-                  <p className="text-xs text-tire-400 mt-1">Em desenvolvimento</p>
-                </div>
-                <div className="p-2 rounded-full bg-gray-500/20">
-                  <span className="text-lg">⏳</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-factory-800/50 border-tire-600/30 hover:shadow-lg transition-all duration-200 opacity-50">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-tire-300 text-sm font-medium">Métrica Futura</p>
-                  <p className="text-2xl font-bold text-tire-400">--</p>
-                  <p className="text-xs text-tire-400 mt-1">Em desenvolvimento</p>
-                </div>
-                <div className="p-2 rounded-full bg-gray-500/20">
-                  <span className="text-lg">⏳</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Quarta linha - Card adicional */}
-        </div>
-
-        {/* Quarta linha - Card adicional */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {/* Card 10 - Quantidade Total Produtos Finais */}
+          {/* Card 8 - Quantidade Total Produtos Finais */}
           <Card className="bg-factory-800/50 border-tire-600/30 hover:shadow-lg transition-all duration-200">
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
@@ -2212,6 +2176,22 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                 </div>
                 <div className="text-neon-cyan">
                   <span className="text-2xl">🏭</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Card 9 - Placeholder para futura métrica */}
+          <Card className="bg-factory-800/50 border-tire-600/30 hover:shadow-lg transition-all duration-200 opacity-50">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-tire-300 text-sm font-medium">Métrica Futura</p>
+                  <p className="text-2xl font-bold text-tire-400">--</p>
+                  <p className="text-xs text-tire-400 mt-1">Em desenvolvimento</p>
+                </div>
+                <div className="p-2 rounded-full bg-gray-500/20">
+                  <span className="text-lg">⏳</span>
                 </div>
               </div>
             </CardContent>
