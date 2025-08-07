@@ -1,6 +1,5 @@
 import { Suspense } from "react";
-import { Navigate, Route, Routes, useRoutes } from "react-router-dom";
-import routes from "tempo-routes";
+import { Navigate, Route, Routes } from "react-router-dom";
 import LoginForm from "./components/auth/LoginForm";
 import SignUpForm from "./components/auth/SignUpForm";
 import Dashboard from "./components/pages/dashboard";
@@ -9,6 +8,7 @@ import Home from "./components/pages/home";
 import { AuthProvider, useAuth } from "../supabase/auth";
 import { Toaster } from "./components/ui/toaster";
 import { LoadingScreen, LoadingSpinner } from "./components/ui/loading-spinner";
+import { QueryProvider } from "./providers/QueryProvider";
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -39,6 +39,7 @@ function AppRoutes() {
             </PrivateRoute>
           }
         />
+
         <Route
           path="/success"
           element={
@@ -46,19 +47,21 @@ function AppRoutes() {
           }
         />
       </Routes>
-      {import.meta.env.VITE_TEMPO === "true" && useRoutes(routes)}
+
     </>
   );
 }
 
 function App() {
   return (
-    <AuthProvider>
-      <Suspense fallback={<LoadingScreen text="Loading application..." />}>
-        <AppRoutes />
-      </Suspense>
-      <Toaster />
-    </AuthProvider>
+    <QueryProvider>
+      <AuthProvider>
+        <Suspense fallback={<LoadingScreen text="Loading application..." />}>
+          <AppRoutes />
+        </Suspense>
+        <Toaster />
+      </AuthProvider>
+    </QueryProvider>
   );
 }
 

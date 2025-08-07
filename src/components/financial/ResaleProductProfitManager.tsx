@@ -44,6 +44,7 @@ import {
   RotateCcw,
   ShoppingCart,
 } from "lucide-react";
+import { dataManager } from "@/utils/dataManager";
 import type {
   CashFlowEntry,
   StockItem,
@@ -55,6 +56,7 @@ interface ResaleProductProfitManagerProps {
   cashFlowEntries?: CashFlowEntry[];
   stockItems?: StockItem[];
   isLoading?: boolean;
+  hideCharts?: boolean; // Ocultar gráficos quando usado apenas para cálculos
 }
 
 interface ResaleProfitData {
@@ -72,6 +74,7 @@ const ResaleProductProfitManager = ({
   cashFlowEntries = [],
   stockItems = [],
   isLoading = false,
+  hideCharts = false,
 }: ResaleProductProfitManagerProps) => {
   // Estados para filtros
   const [dateFilter, setDateFilter] = useState("last30days");
@@ -91,6 +94,16 @@ const ResaleProductProfitManager = ({
     costColor: "#EF4444", // Vermelho para custo
     marginColor: "#F59E0B", // Laranja para margem
   });
+
+  // Log de inicialização
+  useEffect(() => {
+    console.log('🚀 [ResaleProductProfitManager] Componente inicializado');
+    console.log('📊 [ResaleProductProfitManager] Props recebidas:', {
+      cashFlowEntries: cashFlowEntries.length,
+      stockItems: stockItems.length,
+      isLoading
+    });
+  }, []);
 
   // Hook para produtos de revenda
   const { resaleProducts, isLoading: resaleProductsLoading } =
@@ -248,6 +261,11 @@ const ResaleProductProfitManager = ({
   const profitData = useMemo(() => {
     const salesEntries = getFilteredSales();
     const productMap = new Map<string, ResaleProfitData>();
+    
+    console.log(`🔍 [ResaleProductProfitManager] Iniciando cálculo de lucro:`);
+    console.log(`  - Total de vendas filtradas: ${salesEntries.length}`);
+    console.log(`  - Total de produtos de revenda: ${resaleProducts.length}`);
+    console.log(`  - Produtos de revenda:`, resaleProducts.map(p => p.name));
 
     salesEntries.forEach((entry) => {
       const productInfo = extractProductInfoFromSale(entry.description || "");
@@ -268,7 +286,10 @@ const ResaleProductProfitManager = ({
       }
 
       // Only process if it's a resale product
-      if (!isResaleProduct(productName)) {
+      const isResale = isResaleProduct(productName);
+      console.log(`📝 [ResaleProductProfitManager] Produto: "${productName}" - É revenda? ${isResale}`);
+      
+      if (!isResale) {
         return;
       }
 
@@ -330,6 +351,10 @@ const ResaleProductProfitManager = ({
       return sortOrder === "desc" ? bValue - aValue : aValue - bValue;
     });
 
+    console.log(`📊 [ResaleProductProfitManager] Resultado final do cálculo:`);
+    console.log(`  - Produtos processados: ${result.length}`);
+    console.log(`  - Dados:`, result);
+
     return result;
   }, [
     cashFlowEntries,
@@ -370,6 +395,102 @@ const ResaleProductProfitManager = ({
       overallProfitMargin,
     };
   }, [profitData]);
+
+  // useEffect para salvar lucro médio de produtos de revenda automaticamente
+  useEffect(() => {
+    const averageResaleProfit = summaryMetrics.averageProfitPerUnit;
+    
+    console.log(`🔍 [ResaleProductProfitManager] Verificando lucro médio calculado: R$ ${averageResaleProfit.toFixed(2)}`);
+    console.log('📊 [ResaleProductProfitManager] SummaryMetrics completo:', summaryMetrics);
+    
+    // Salva sempre, mesmo se for 0, para manter sincronização
+    if (averageResaleProfit !== undefined && averageResaleProfit !== null) {
+      console.log(`💾 [ResaleProductProfitManager] Salvando lucro médio de produtos de revenda: R$ ${averageResaleProfit.toFixed(2)}`);
+      
+      // Salva no Supabase e localStorage via dataManager
+      dataManager.saveAverageResaleProfit(averageResaleProfit).then((success) => {
+        if (success) {
+          console.log(`✅ [ResaleProductProfitManager] Lucro médio salvo com sucesso: R$ ${averageResaleProfit.toFixed(2)}`);
+          
+          // Dispara evento customizado para notificar outros componentes
+          const event = new CustomEvent('resaleProfitUpdated', {
+            detail: { 
+              profit: averageResaleProfit,
+              timestamp: Date.now(),
+              source: 'ResaleProductProfitManager'
+            }
+          });
+          window.dispatchEvent(event);
+          console.log(`📡 [ResaleProductProfitManager] Evento 'resaleProfitUpdated' disparado: R$ ${averageResaleProfit.toFixed(2)}`);
+        } else {
+          console.error(`❌ [ResaleProductProfitManager] Falha ao salvar lucro: R$ ${averageResaleProfit.toFixed(2)}`);
+        }
+      }).catch((error) => {
+        console.error('❌ [ResaleProductProfitManager] Erro ao salvar lucro médio:', error);
+      });
+    } else {
+      console.warn('⚠️ [ResaleProductProfitManager] Lucro médio é undefined/null, não salvando');
+    }
+  }, [summaryMetrics.averageProfitPerUnit, summaryMetrics.totalProfit, summaryMetrics.totalSales]);
+
+  // Listener para evento de recálculo forçado do Dashboard
+  useEffect(() => {
+    const handleForceRecalc = (event: CustomEvent) => {
+      console.log('🔄 [ResaleProductProfitManager] Evento de recálculo forçado recebido do Dashboard');
+      console.log('📊 [ResaleProductProfitManager] Forçando recálculo e salvamento...');
+      console.log('🔍 [ResaleProductProfitManager] SummaryMetrics no ForceRecalc:', summaryMetrics);
+      
+      // Forçar recálculo imediato
+      let currentProfit = summaryMetrics.averageProfitPerUnit;
+      console.log(`💰 [ResaleProductProfitManager] Lucro atual no ForceRecalc: R$ ${currentProfit ? currentProfit.toFixed(2) : 'undefined/null'}`);
+      
+      // Se o cálculo retornar 0, usar valor do localStorage como fallback
+      if (currentProfit === 0 || currentProfit === undefined || currentProfit === null) {
+        try {
+          const localValue = localStorage.getItem('averageResaleProfit');
+          if (localValue && localValue !== 'null' && localValue !== '0') {
+            const parsed = parseFloat(localValue);
+            if (!isNaN(parsed) && parsed > 0) {
+              currentProfit = parsed;
+              console.log(`🔄 [ResaleProductProfitManager] Usando fallback do localStorage: R$ ${currentProfit.toFixed(2)}`);
+            }
+          }
+        } catch (error) {
+          console.error('⚠️ [ResaleProductProfitManager] Erro ao carregar fallback do localStorage:', error);
+        }
+      }
+      
+      if (currentProfit !== undefined && currentProfit !== null && currentProfit > 0) {
+        console.log(`💾 [ResaleProductProfitManager] Salvamento forçado: R$ ${currentProfit.toFixed(2)}`);
+        
+        dataManager.saveAverageResaleProfit(currentProfit).then((success) => {
+          if (success) {
+            console.log(`✅ [ResaleProductProfitManager] Salvamento forçado bem-sucedido: R$ ${currentProfit.toFixed(2)}`);
+            
+            // Dispara evento de atualização
+            const updateEvent = new CustomEvent('resaleProfitUpdated', {
+              detail: { 
+                profit: currentProfit,
+                timestamp: Date.now(),
+                source: 'ResaleProductProfitManager-ForceRecalc'
+              }
+            });
+            window.dispatchEvent(updateEvent);
+          }
+        });
+      } else {
+        console.log(`⚠️ [ResaleProductProfitManager] ForceRecalc: Nenhum valor válido disponível para salvar (calculado: ${summaryMetrics.averageProfitPerUnit}, fallback tentado)`);
+      }
+    };
+
+    console.log('🎯 [ResaleProductProfitManager] Registrando listener para forceResaleProfitRecalc');
+    window.addEventListener('forceResaleProfitRecalc', handleForceRecalc as EventListener);
+
+    return () => {
+      console.log('😫 [ResaleProductProfitManager] Removendo listener para forceResaleProfitRecalc');
+      window.removeEventListener('forceResaleProfitRecalc', handleForceRecalc as EventListener);
+    };
+  }, [summaryMetrics.averageProfitPerUnit]);
 
   // Limpar filtros
   const handleClearFilters = () => {
@@ -851,8 +972,9 @@ const ResaleProductProfitManager = ({
         )}
       </div>
 
-      {/* Gráfico */}
-      <Card className="bg-factory-800/50 border-tire-600/30">
+      {/* Gráfico - Ocultar quando hideCharts for true */}
+      {!hideCharts && (
+        <Card className="bg-factory-800/50 border-tire-600/30">
         <CardHeader>
           <CardTitle className="text-tire-200 text-lg flex items-center gap-2">
             <ShoppingCart className="h-5 w-5 text-neon-cyan" />
@@ -1027,7 +1149,8 @@ const ResaleProductProfitManager = ({
             </ResponsiveContainer>
           )}
         </CardContent>
-      </Card>
+        </Card>
+      )}
     </div>
   );
 };

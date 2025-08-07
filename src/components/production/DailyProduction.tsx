@@ -589,6 +589,7 @@ const DailyProduction = ({
   };
 
   const handleDeleteProduction = async (entry: ProductionEntry) => {
+    console.log('🔥 [DEBUG] handleDeleteProduction called with:', entry);
     if (
       confirm(
         `Tem certeza que deseja deletar a produção de ${entry.quantity_produced} unidades de ${entry.product_name}?`,

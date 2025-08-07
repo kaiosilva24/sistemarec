@@ -13,6 +13,10 @@ if (process.env.TEMPO === "true") {
 // https://vitejs.dev/config/
 export default defineConfig({
   base: process.env.NODE_ENV === "development" ? "/" : process.env.VITE_BASE_PATH || "/",
+  server: {
+    port: 5000,
+    host: true
+  },
   optimizeDeps: {
     entries: ["src/main.tsx", "src/tempobook/**/*"],
   },
@@ -28,10 +32,4 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
-  server: {
-    host: "0.0.0.0",
-    port: 5000,
-    // @ts-ignore
-    allowedHosts: true,
-  }
 });

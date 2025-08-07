@@ -501,16 +501,49 @@ export const useStockItems = () => {
     loadStockItems();
   }, []);
 
+  // Listener para evento de recarga forçada dos dados de estoque
+  useEffect(() => {
+    const handleForceReload = (event: CustomEvent) => {
+      const { updatedStockItems } = event.detail;
+      console.log('🔄 [useStockItems] Evento de recarga forçada recebido');
+      
+      if (updatedStockItems && Array.isArray(updatedStockItems)) {
+        console.log(`📦 [useStockItems] Atualizando estado com ${updatedStockItems.length} itens`);
+        setStockItems(updatedStockItems);
+      } else {
+        // Se não recebeu dados, recarregar do banco
+        console.log('🔄 [useStockItems] Recarregando dados do banco...');
+        const loadStockItems = async () => {
+          setIsLoading(true);
+          const data = await dataManager.loadStockItems();
+          setStockItems(data);
+          setIsLoading(false);
+          console.log(`✅ [useStockItems] Dados recarregados: ${data.length} itens`);
+        };
+        loadStockItems();
+      }
+    };
+
+    console.log('🎯 [useStockItems] Registrando listener para evento forceStockItemsReload');
+    
+    // Adicionar listener para o evento customizado
+    window.addEventListener('forceStockItemsReload', handleForceReload as EventListener);
+
+    // Cleanup
+    return () => {
+      console.log('🚫 [useStockItems] Removendo listener para evento forceStockItemsReload');
+      window.removeEventListener('forceStockItemsReload', handleForceReload as EventListener);
+    };
+  }, []);
+
   const addStockItem = async (
     stockItemData: Omit<StockItem, "id" | "created_at">,
   ) => {
     setIsSaving(true);
 
     // Remove any fields that don't belong to the stock_items table
-    const {
-      updated_at, // This field doesn't exist in stock_items table
-      ...cleanStockItemData
-    } = stockItemData;
+    // Note: updated_at field doesn't exist in stock_items table or StockItem type
+    const cleanStockItemData = stockItemData;
 
     console.log("🔥 [useStockItems] Adicionando item ao estoque:", {
       originalData: stockItemData,
@@ -524,6 +557,18 @@ export const useStockItems = () => {
         "✅ [useStockItems] Item adicionado com sucesso:",
         newStockItem,
       );
+      
+      // Disparar evento customizado para notificar dashboard
+      const stockUpdateEvent = new CustomEvent('stockItemsUpdated', {
+        detail: {
+          timestamp: Date.now(),
+          source: 'useStockItems-addStockItem',
+          action: 'INSERT',
+          item: newStockItem
+        }
+      });
+      window.dispatchEvent(stockUpdateEvent);
+      console.log('📡 [useStockItems] Evento stockItemsUpdated disparado para adição');
     }
     setIsSaving(false);
     return newStockItem;
@@ -550,7 +595,7 @@ export const useStockItems = () => {
     ];
 
     // Explicitly forbidden fields that should never be sent to Supabase
-    const forbiddenFields = ["updated_at", "created_at", "id"];
+    const forbiddenFields = ["created_at", "id"];
 
     Object.keys(updates).forEach((key) => {
       // Skip forbidden fields completely
@@ -616,6 +661,18 @@ export const useStockItems = () => {
         "✅ [useStockItems] Item atualizado com sucesso:",
         updatedStockItem,
       );
+      
+      // Disparar evento customizado para notificar dashboard
+      const stockUpdateEvent = new CustomEvent('stockItemsUpdated', {
+        detail: {
+          timestamp: Date.now(),
+          source: 'useStockItems-updateStockItem',
+          action: 'UPDATE',
+          item: updatedStockItem
+        }
+      });
+      window.dispatchEvent(stockUpdateEvent);
+      console.log('📡 [useStockItems] Evento stockItemsUpdated disparado para atualização');
     }
     setIsSaving(false);
     return updatedStockItem;
@@ -641,6 +698,18 @@ export const useStockItems = () => {
         console.log(
           `✅ [useStockItems] Item removido do estoque com sucesso: ${itemId}`,
         );
+        
+        // Disparar evento customizado para notificar dashboard
+        const stockUpdateEvent = new CustomEvent('stockItemsUpdated', {
+          detail: {
+            timestamp: Date.now(),
+            source: 'useStockItems-removeStockItemByItemId',
+            action: 'DELETE',
+            itemId: itemId
+          }
+        });
+        window.dispatchEvent(stockUpdateEvent);
+        console.log('📡 [useStockItems] Evento stockItemsUpdated disparado para remoção');
       } else {
         console.error(
           `❌ [useStockItems] Falha ao remover item do estoque: ${itemId}`,
@@ -664,10 +733,8 @@ export const useStockItems = () => {
     setIsSaving(true);
 
     // Remove any fields that don't belong to the stock_items table
-    const {
-      updated_at, // This field doesn't exist in stock_items table
-      ...cleanStockItemData
-    } = stockItemData;
+    // Note: updated_at field doesn't exist in stock_items table or StockItem type
+    const cleanStockItemData = stockItemData;
 
     console.log("🔥 [useStockItems] Criando item de estoque:", {
       originalData: stockItemData,

@@ -9,6 +9,7 @@ import {
   Legend,
   ResponsiveContainer,
   ReferenceLine,
+  Cell,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -46,6 +47,197 @@ import {
   Product,
   StockItem,
 } from "@/types/financial";
+import { dataManager } from "@/utils/dataManager";
+
+// Função para obter custo específico do TireCostManager (igual ao FinalProductsStock)
+const getSpecificCost = (productName: string): number => {
+  try {
+    // Buscar dados específicos salvos pelo TireCostManager
+    const productKey = `tireAnalysis_${productName.toLowerCase().replace(/\s+/g, "_")}`;
+    const savedAnalysis = localStorage.getItem(productKey);
+
+    console.log(`🔍 [StockCharts] Buscando custo para ${productName}:`, {
+      productKey,
+      hasData: !!savedAnalysis,
+      data: savedAnalysis ? JSON.parse(savedAnalysis) : null
+    });
+
+    if (savedAnalysis) {
+      const analysis = JSON.parse(savedAnalysis);
+      if (analysis.costPerTire && analysis.costPerTire > 0) {
+        console.log(`✅ [StockCharts] Custo encontrado para ${productName}: R$ ${analysis.costPerTire}`);
+        return analysis.costPerTire;
+      }
+    }
+
+    // Fallback para custo médio sincronizado
+    const synchronizedData = localStorage.getItem("dashboard_averageCostPerTire");
+    if (synchronizedData) {
+      const data = JSON.parse(synchronizedData);
+      if (data.value && data.value > 0) {
+        console.log(`🔄 [StockCharts] Usando custo médio para ${productName}: R$ ${data.value}`);
+        return data.value;
+      }
+    }
+
+    console.warn(`⚠️ [StockCharts] Nenhum custo encontrado para ${productName}`);
+    return 0;
+  } catch (error) {
+    console.error('Erro ao obter custo específico:', error);
+    return 0;
+  }
+};
+
+// Componente CustomTooltip para mostrar valores sincronizados
+interface CustomTooltipProps {
+  active?: boolean;
+  payload?: any[];
+  label?: string;
+}
+
+const CustomTooltip: React.FC<CustomTooltipProps> = ({ active, payload, label }) => {
+  if (active && payload && payload.length) {
+    const data = payload[0]?.payload;
+    
+    if (!data) return null;
+    
+    console.log('📊 [CustomTooltip] Dados recebidos:', {
+      fullName: data.fullName,
+      name: data.name,
+      quantity: data.quantity,
+      totalValue: data.totalValue,
+      unitCost: data.unitCost,
+      unit: data.unit,
+      type: data.type,
+      status: data.status,
+      minLevel: data.minLevel,
+      allData: data
+    });
+    
+    // Formatar valor monetário
+    const formatCurrency = (value: number) => {
+      return new Intl.NumberFormat('pt-BR', {
+        style: 'currency',
+        currency: 'BRL'
+      }).format(value || 0);
+    };
+    
+    // Formatar quantidade com unidade
+    const formatQuantity = (quantity: number, unit: string) => {
+      return `${quantity || 0} ${unit || 'un'}`;
+    };
+    
+    // Calcular valor unitário se possível
+    const unitValue = data.totalValue && data.quantity > 0 ? data.totalValue / data.quantity : 0;
+    
+    // Determinar tipo de item (material ou produto)
+    const itemType = data.type === 'final' ? 'Produto Final' : 'Matéria-Prima';
+    
+    return (
+      <div className="bg-factory-800/95 border border-tire-600/50 rounded-lg p-4 shadow-lg backdrop-blur-sm min-w-[280px]">
+        <div className="space-y-3">
+          {/* Cabeçalho com nome e tipo */}
+          <div className="border-b border-tire-600/30 pb-2">
+            <div className="font-semibold text-white text-sm">
+              {data.fullName || label}
+            </div>
+            <div className="text-xs text-tire-400 mt-1">
+              {itemType}
+            </div>
+          </div>
+          
+          {/* Informações principais */}
+          <div className="space-y-2">
+            {/* Quantidade atual */}
+            <div className="flex items-center justify-between">
+              <span className="text-tire-300 text-sm">Quantidade:</span>
+              <span className="text-neon-orange font-medium text-sm">
+                {formatQuantity(data.quantity, data.unit)}
+              </span>
+            </div>
+            
+            {/* Valor total */}
+            <div className="flex items-center justify-between">
+              <span className="text-tire-300 text-sm">Valor Total:</span>
+              <span className="text-green-400 font-medium text-sm">
+                {formatCurrency(data.totalValue)}
+              </span>
+            </div>
+            
+            {/* Valor unitário */}
+            {unitValue > 0 && (
+              <div className="flex items-center justify-between">
+                <span className="text-tire-300 text-sm">Valor Unitário:</span>
+                <span className="text-blue-400 font-medium text-sm">
+                  {formatCurrency(unitValue)}
+                </span>
+              </div>
+            )}
+            
+            {/* Nível mínimo */}
+            {data.minLevel > 0 && (
+              <div className="flex items-center justify-between">
+                <span className="text-tire-300 text-sm">Nível Mínimo:</span>
+                <span className="text-yellow-400 font-medium text-sm">
+                  {formatQuantity(data.minLevel, data.unit)}
+                </span>
+              </div>
+            )}
+          </div>
+          
+          {/* Status e alertas */}
+          <div className="pt-2 border-t border-tire-600/30">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-tire-300 text-sm">Status:</span>
+              <span className={`font-medium text-sm ${
+                data.status === 'low' ? 'text-red-400' :
+                data.status === 'out' ? 'text-red-500' :
+                'text-green-400'
+              }`}>
+                {data.status === 'low' ? 'Estoque Baixo' :
+                 data.status === 'out' ? 'Sem Estoque' :
+                 'Normal'}
+              </span>
+            </div>
+            
+            {/* Alerta de estoque baixo */}
+            {data.status === 'low' && data.minLevel > 0 && (
+              <div className="bg-red-900/20 border border-red-600/30 rounded p-2 mt-2">
+                <div className="text-red-400 text-xs flex items-center gap-1">
+                  <div className="w-1.5 h-1.5 bg-red-400 rounded-full"></div>
+                  <span>Atenção: Estoque abaixo do mínimo!</span>
+                </div>
+              </div>
+            )}
+            
+            {/* Alerta sem estoque */}
+            {data.status === 'out' && (
+              <div className="bg-red-900/30 border border-red-500/40 rounded p-2 mt-2">
+                <div className="text-red-500 text-xs flex items-center gap-1">
+                  <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></div>
+                  <span>Crítico: Sem estoque disponível!</span>
+                </div>
+              </div>
+            )}
+          </div>
+          
+          {/* Indicador de sincronização em tempo real */}
+          <div className="flex items-center justify-center pt-2 border-t border-tire-600/30">
+            <div className="flex items-center gap-2 text-xs text-tire-400">
+              <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+              <span>Sincronizado em tempo real</span>
+              <div className="text-xs text-tire-500">
+                {new Date().toLocaleTimeString('pt-BR')}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  
+  return null;
+};
 
 interface StockChartsProps {
   materials?: RawMaterial[];
@@ -62,6 +254,24 @@ const StockCharts = ({
   productType = "all",
   isLoading = false,
 }: StockChartsProps) => {
+  
+  // Log dos dados recebidos
+  console.log('🔍 [StockCharts] Dados recebidos:', {
+    materialsCount: materials.length,
+    productsCount: products.length,
+    stockItemsCount: stockItems.length,
+    productType,
+    isLoading,
+    stockItemsSample: stockItems.slice(0, 3).map(item => ({
+      id: item.id,
+      item_id: item.item_id,
+      item_name: item.item_name,
+      item_type: item.item_type,
+      quantity: item.quantity,
+      unit_cost: item.unit_cost,
+      total_value: item.total_value
+    }))
+  });
   // Estados para controle de ordenação
   const [materialSortBy, setMaterialSortBy] = useState<string>("quantity");
   const [productSortBy, setProductSortBy] = useState<string>("quantity");
@@ -77,51 +287,308 @@ const StockCharts = ({
   const [colorSettings, setColorSettings] = useState({
     quantityColor: "#FF8C00", // Laranja para quantidade atual
     lowStockColor: "#FF3838", // Vermelho para estoque baixo
-    minLevelColor: "#FFD700", // Dourado para nível mínimo
   });
+  const [isLoadingColors, setIsLoadingColors] = useState(true);
 
-  // Carregar configurações salvas do localStorage
+  // Carregar configurações salvas do Supabase com fallback para localStorage
   useEffect(() => {
-    const savedSettings = localStorage.getItem("stockChartColorSettings");
-    if (savedSettings) {
+    const loadColorSettings = async () => {
+      console.log('📁 [StockCharts] Iniciando carregamento das configurações de cores...');
       try {
-        const parsed = JSON.parse(savedSettings);
-        setColorSettings((prev) => ({ ...prev, ...parsed }));
+        // Tentar carregar do Supabase primeiro (sincronização entre navegadores)
+        console.log('🔍 [StockCharts] Tentando carregar do Supabase...');
+        const supabaseSettings = await dataManager.loadStockChartColors();
+        if (supabaseSettings) {
+          console.log('✅ [StockCharts] Configurações encontradas no Supabase:', supabaseSettings);
+          setColorSettings((prev) => ({ ...prev, ...supabaseSettings }));
+          console.log('✅ [StockCharts] Configurações carregadas do Supabase e aplicadas');
+          return;
+        }
+        console.log('⚠️ [StockCharts] Nenhuma configuração encontrada no Supabase');
+        
+        // Fallback 1: Tentar carregar do checkpoint localStorage
+        console.log('🔍 [StockCharts] Tentando carregar do checkpoint localStorage...');
+        const checkpointData = localStorage.getItem("checkpoint_stockChartColors");
+        if (checkpointData) {
+          const checkpoint = JSON.parse(checkpointData);
+          if (checkpoint.stockChartColors) {
+            console.log('✅ [StockCharts] Configurações encontradas no checkpoint:', checkpoint.stockChartColors);
+            setColorSettings((prev) => ({ ...prev, ...checkpoint.stockChartColors }));
+            console.log('✅ [StockCharts] Configurações carregadas do checkpoint e aplicadas');
+            return;
+          }
+        }
+        console.log('⚠️ [StockCharts] Nenhuma configuração encontrada no checkpoint');
+        
+        // Fallback 2: localStorage tradicional
+        console.log('🔍 [StockCharts] Tentando carregar do localStorage tradicional...');
+        const savedSettings = localStorage.getItem("stockChartColorSettings");
+        if (savedSettings) {
+          const parsed = JSON.parse(savedSettings);
+          console.log('✅ [StockCharts] Configurações encontradas no localStorage:', parsed);
+          setColorSettings((prev) => ({ ...prev, ...parsed }));
+          console.log('✅ [StockCharts] Configurações carregadas do localStorage e aplicadas');
+        } else {
+          console.log('⚠️ [StockCharts] Nenhuma configuração encontrada no localStorage - usando padrões');
+        }
       } catch (error) {
-        console.error("Erro ao carregar configurações de cores:", error);
+        console.error("❌ [StockCharts] Erro ao carregar configurações de cores:", error);
+      } finally {
+        // Marca o carregamento como concluído para permitir auto-save
+        console.log('✅ [StockCharts] Carregamento concluído - habilitando auto-save');
+        setIsLoadingColors(false);
       }
-    }
+    };
+    
+    loadColorSettings();
   }, []);
 
-  // Salvar configurações no localStorage
-  const saveColorSettings = () => {
-    localStorage.setItem(
-      "stockChartColorSettings",
-      JSON.stringify(colorSettings),
-    );
+  // Estados para sincronização em tempo real
+  const [realTimeData, setRealTimeData] = useState({
+    lastUpdate: null as Date | null,
+    isSubscribed: false,
+    updateCount: 0
+  });
+
+  // useEffect para configurar sincronização em tempo real via Supabase
+  useEffect(() => {
+    let supabaseSubscription: any = null;
+    
+    const setupRealTimeSync = async () => {
+      try {
+        console.log('🔄 [StockCharts] Configurando sincronização em tempo real...');
+        
+        // Configurar subscription do Supabase para mudanças na tabela stock_items
+        supabaseSubscription = dataManager.subscribeToStockChanges((payload) => {
+          console.log('📡 [StockCharts] Mudança detectada via Supabase Realtime:', payload);
+          
+          setRealTimeData(prev => ({
+            ...prev,
+            lastUpdate: new Date(),
+            updateCount: prev.updateCount + 1
+          }));
+          
+          // Disparar evento customizado para notificar outros componentes
+          const realtimeEvent = new CustomEvent('stockChartsRealTimeUpdate', {
+            detail: {
+              payload,
+              timestamp: Date.now(),
+              source: 'StockCharts-Supabase',
+              updateCount: realTimeData.updateCount + 1
+            }
+          });
+          
+          window.dispatchEvent(realtimeEvent);
+        });
+        
+        setRealTimeData(prev => ({ ...prev, isSubscribed: true }));
+        console.log('✅ [StockCharts] Subscription Supabase Realtime ativa');
+        
+      } catch (error) {
+        console.error('❌ [StockCharts] Erro ao configurar sincronização:', error);
+      }
+    };
+    
+    setupRealTimeSync();
+    
+    // Cleanup
+    return () => {
+      if (supabaseSubscription) {
+        console.log('🔕 [StockCharts] Cancelando subscription Supabase');
+        supabaseSubscription();
+      }
+    };
+  }, []);
+
+  // useEffect para sincronizar mudanças no estoque com FinalProductsStock
+  useEffect(() => {
+    if (!stockItems.length || !products.length) return;
+    
+    console.log('📊 [StockCharts] Detectadas mudanças nos dados de estoque:', {
+      stockItems: stockItems.length,
+      products: products.length,
+      timestamp: new Date().toISOString(),
+      realTimeStatus: realTimeData.isSubscribed ? 'Ativo' : 'Inativo',
+      lastUpdate: realTimeData.lastUpdate?.toISOString() || 'Nunca'
+    });
+    
+    // Calcular dados dos produtos finais com informações enriquecidas
+    const finalProducts = products.filter(p => !p.archived);
+    const finalProductsData = finalProducts.map(product => {
+      const stockItem = stockItems.find(item => 
+        item.item_id === product.id && 
+        item.item_type === 'product'
+      );
+      
+      const quantity = stockItem?.quantity || 0;
+      const unitCost = stockItem?.unit_cost || 0;
+      const totalValue = stockItem?.total_value || (quantity * unitCost);
+      
+      // Calcular nível de estoque
+      const minLevel = stockItem?.min_level || 0;
+      let stockLevel: 'normal' | 'low' | 'out' = 'normal';
+      if (quantity === 0) stockLevel = 'out';
+      else if (quantity <= minLevel) stockLevel = 'low';
+      
+      return {
+        id: product.id,
+        name: product.name,
+        quantity,
+        unitCost,
+        totalValue,
+        minLevel,
+        stockLevel,
+        lastUpdated: new Date().toISOString(),
+        stockItem: stockItem ? {
+          id: stockItem.id,
+          quantity: stockItem.quantity,
+          unit_cost: stockItem.unit_cost,
+          total_value: stockItem.total_value,
+          min_level: stockItem.min_level,
+          last_updated: stockItem.last_updated
+        } : null
+      };
+    });
+    
+    console.log('📦 [StockCharts] Dados de produtos finais processados:', {
+      totalProducts: finalProductsData.length,
+      inStock: finalProductsData.filter(p => p.quantity > 0).length,
+      lowStock: finalProductsData.filter(p => p.stockLevel === 'low').length,
+      outOfStock: finalProductsData.filter(p => p.stockLevel === 'out').length,
+      totalValue: finalProductsData.reduce((sum, p) => sum + p.totalValue, 0)
+    });
+    
+    // Disparar evento customizado para sincronizar com FinalProductsStock
+    const syncEvent = new CustomEvent('stockChartsDataUpdated', {
+      detail: {
+        finalProductsData,
+        timestamp: Date.now(),
+        source: 'StockCharts',
+        realTimeStatus: realTimeData.isSubscribed,
+        updateCount: realTimeData.updateCount
+      }
+    });
+    
+    window.dispatchEvent(syncEvent);
+    console.log('📡 [StockCharts] Evento de sincronização disparado para FinalProductsStock');
+    
+    // Debounce para evitar múltiplos disparos rápidos
+    const timeoutId = setTimeout(() => {
+      // Forçar recálculo do valor total no FinalProductsStock
+      const forceRecalcEvent = new CustomEvent('forceStockRecalculation', {
+        detail: {
+          source: 'StockCharts',
+          timestamp: Date.now()
+        }
+      });
+      window.dispatchEvent(forceRecalcEvent);
+      console.log('🔄 [StockCharts] Evento de recálculo forçado disparado');
+    }, 500);
+    
+    return () => clearTimeout(timeoutId);
+  }, [stockItems, products]);
+
+  // Salvar configurações no Supabase para sincronização entre navegadores
+  const saveColorSettings = async () => {
+    console.log('💾 [StockCharts] Iniciando salvamento das configurações:', colorSettings);
+    try {
+      // Salvar no localStorage para uso imediato
+      localStorage.setItem(
+        "stockChartColorSettings",
+        JSON.stringify(colorSettings),
+      );
+      console.log('✅ [StockCharts] Configurações salvas no localStorage');
+      
+      // Salvar no checkpoint também
+      const checkpointData = {
+        stockChartColors: colorSettings,
+        timestamp: new Date().toISOString(),
+        version: '1.0'
+      };
+      localStorage.setItem(
+        "checkpoint_stockChartColors",
+        JSON.stringify(checkpointData),
+      );
+      console.log('✅ [StockCharts] Configurações salvas no checkpoint');
+      
+      // Salvar no Supabase para sincronização entre navegadores
+      const success = await dataManager.saveStockChartColors(colorSettings);
+      if (success) {
+        console.log('✅ [StockCharts] Configurações salvas no Supabase e sincronizadas');
+      } else {
+        console.warn('⚠️ [StockCharts] Falha ao salvar no Supabase, usando apenas localStorage');
+      }
+    } catch (error) {
+      console.error('❌ [StockCharts] Erro ao salvar configurações:', error);
+    }
   };
 
   // Resetar cores para o padrão
-  const resetToDefaultColors = () => {
+  const resetToDefaultColors = async () => {
     const defaultSettings = {
       quantityColor: "#FF8C00",
       lowStockColor: "#FF3838",
-      minLevelColor: "#FFD700",
     };
+    // Garantir que não estamos carregando quando resetamos
+    setIsLoadingColors(false);
     setColorSettings(defaultSettings);
-    localStorage.setItem(
-      "stockChartColorSettings",
-      JSON.stringify(defaultSettings),
-    );
+    
+    try {
+      // Salvar no localStorage para uso imediato
+      localStorage.setItem(
+        "stockChartColorSettings",
+        JSON.stringify(defaultSettings),
+      );
+      
+      // Salvar no checkpoint
+      const checkpointData = {
+        stockChartColors: defaultSettings,
+        timestamp: new Date().toISOString(),
+        version: '1.0'
+      };
+      localStorage.setItem(
+        "checkpoint_stockChartColors",
+        JSON.stringify(checkpointData),
+      );
+      
+      // Salvar no Supabase para sincronização entre navegadores
+      const success = await dataManager.saveStockChartColors(defaultSettings);
+      if (success) {
+        console.log('✅ [StockCharts] Cores resetadas e sincronizadas no Supabase');
+      } else {
+        console.warn('⚠️ [StockCharts] Cores resetadas localmente, mas falha na sincronização');
+      }
+    } catch (error) {
+      console.error('❌ [StockCharts] Erro ao resetar configurações:', error);
+    }
   };
 
   // Atualizar cor específica
   const updateColor = (key: string, value: string) => {
-    setColorSettings((prev) => ({
-      ...prev,
-      [key]: value,
-    }));
+    console.log('🎨 [StockCharts] updateColor chamada:', { key, value, currentSettings: colorSettings });
+    // Garantir que não estamos mais carregando quando o usuário faz alterações
+    setIsLoadingColors(false);
+    console.log('🔓 [StockCharts] isLoadingColors definido como false');
+    setColorSettings((prev) => {
+      const newSettings = { ...prev, [key]: value };
+      console.log('🔄 [StockCharts] Novas configurações aplicadas:', newSettings);
+      return newSettings;
+    });
   };
+
+  // Auto-salvar configurações quando alteradas
+  useEffect(() => {
+    // Não salvar durante o carregamento inicial
+    if (isLoadingColors) {
+      return;
+    }
+    
+    const timer = setTimeout(() => {
+      saveColorSettings();
+    }, 500); // Debounce de 500ms
+
+    return () => clearTimeout(timer);
+  }, [colorSettings, isLoadingColors]);
 
   const getMaterialChartData = () => {
     const data = materials
@@ -202,23 +669,48 @@ const StockCharts = ({
       );
 
       const quantity = stockItem?.quantity || 0;
-      const totalValue = stockItem?.total_value || 0;
+      const minLevel = stockItem?.min_level || 0;
+      
+      // Usar a mesma lógica do FinalProductsStock
+      const costPerTire = getSpecificCost(product.name);
+      const totalValue = quantity * costPerTire;
+      
+      // Para compatibilidade, manter unitCost
+      const unitCost = costPerTire;
+      const finalTotalValue = totalValue;
 
-      console.log(`📦 [StockCharts] Produto processado: ${product.name}`, {
-        type: product.type,
-        quantity,
-        stockFound: !!stockItem,
-        stockId: stockItem?.id
-      });
+      // Determinar status do estoque
+      let status = "normal";
+      if (quantity === 0) {
+        status = "out";
+      } else if (minLevel > 0 && quantity <= minLevel) {
+        status = "low";
+      }
+
+      // Log apenas quando necessário para evitar spam
+      if (Math.random() < 0.1) { // Log apenas 10% das vezes
+        console.log(`📦 [StockCharts] Produto processado: ${product.name}`, {
+          productId: product.id,
+          quantity,
+          costPerTire,
+          totalValue,
+          finalTotalValue,
+          status,
+          source: 'TireCostManager'
+        });
+      }
 
       return {
         name: product.name.length > 15 ? `${product.name.substring(0, 15)}...` : product.name,
         fullName: product.name,
         quantity,
-        totalValue,
-        minimumLevel: product.minimum_level || 0,
+        totalValue: finalTotalValue,
+        unitCost,
+        minLevel,
+        minimumLevel: minLevel, // Compatibilidade
         type: product.type,
-        unit: product.unit
+        unit: product.unit,
+        status
       };
     });
 
@@ -268,8 +760,16 @@ const StockCharts = ({
     return colorSettings.quantityColor;
   };
 
-  const getMinLevelColor = () => {
-    return colorSettings.minLevelColor;
+
+
+  // Função para obter cor dinâmica baseada no status do estoque
+  const getDynamicBarColor = (data: any[]) => {
+    return data.map(item => {
+      if (item.status === 'low' || item.status === 'out') {
+        return colorSettings.lowStockColor;
+      }
+      return colorSettings.quantityColor;
+    });
   };
 
   const formatCurrency = (value: number) => {
@@ -279,46 +779,7 @@ const StockCharts = ({
     }).format(value);
   };
 
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
-      const data = payload[0].payload;
-      return (
-        <div className="bg-factory-800 border border-tire-600/30 rounded-lg p-3 shadow-lg">
-          <p className="text-white font-medium">{data.fullName}</p>
-          {data.productType && (
-            <p
-              className={`text-xs font-medium mb-1 ${
-                data.productType === "final"
-                  ? "text-neon-green"
-                  : "text-neon-cyan"
-              }`}
-            >
-              {data.productType === "final"
-                ? "🏭 Produto Final"
-                : "🛒 Produto Revenda"}
-            </p>
-          )}
-          <p className="text-neon-green">
-            Quantidade: {data.quantity} {data.unit}
-          </p>
-          {data.minLevel > 0 && (
-            <p className="text-yellow-400">
-              Nível Mínimo: {data.minLevel} {data.unit}
-            </p>
-          )}
-          {data.totalValue > 0 && (
-            <p className="text-tire-300">
-              Valor Total: {formatCurrency(data.totalValue)}
-            </p>
-          )}
-          <p className="text-tire-400 text-sm capitalize">
-            Status: {data.status === "low" ? "Estoque Baixo" : "Normal"}
-          </p>
-        </div>
-      );
-    }
-    return null;
-  };
+  // CustomTooltip removido - usando a versão completa definida no início do arquivo
 
   const getStockSummary = (data: any[]) => {
     const total = data.length;
@@ -442,28 +903,7 @@ const StockCharts = ({
                       </div>
                     </div>
 
-                    <div className="space-y-2">
-                      <Label className="text-tire-300">Nível Mínimo</Label>
-                      <div className="flex items-center gap-2">
-                        <Input
-                          type="color"
-                          value={colorSettings.minLevelColor}
-                          onChange={(e) =>
-                            updateColor("minLevelColor", e.target.value)
-                          }
-                          className="w-12 h-8 p-1 bg-factory-700/50 border-tire-600/30"
-                        />
-                        <Input
-                          type="text"
-                          value={colorSettings.minLevelColor}
-                          onChange={(e) =>
-                            updateColor("minLevelColor", e.target.value)
-                          }
-                          className="bg-factory-700/50 border-tire-600/30 text-white"
-                          placeholder="#FFD700"
-                        />
-                      </div>
-                    </div>
+
                   </div>
                 </div>
               </div>
@@ -611,17 +1051,20 @@ const StockCharts = ({
                   <Legend />
                   <Bar
                     dataKey="quantity"
-                    name="Quantidade Atual"
-                    fill={getQuantityBarColor()}
+                    name="Quantidade em Estoque"
                     radius={[6, 6, 0, 0]}
-                  />
-                  <Bar
-                    dataKey="minLevel"
-                    name="Nível Mínimo"
-                    fill={getMinLevelColor()}
-                    opacity={0.8}
-                    radius={[3, 3, 0, 0]}
-                  />
+                  >
+                    {materialData.map((entry, index) => (
+                      <Cell 
+                        key={`cell-${index}`} 
+                        fill={
+                          entry.status === 'low' || entry.status === 'out' 
+                            ? colorSettings.lowStockColor 
+                            : colorSettings.quantityColor
+                        } 
+                      />
+                    ))}
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             )}
@@ -738,17 +1181,20 @@ const StockCharts = ({
                   <Legend />
                   <Bar
                     dataKey="quantity"
-                    name="Quantidade Atual"
-                    fill={getQuantityBarColor()}
+                    name="Quantidade em Estoque"
                     radius={[6, 6, 0, 0]}
-                  />
-                  <Bar
-                    dataKey="minLevel"
-                    name="Nível Mínimo"
-                    fill={getMinLevelColor()}
-                    opacity={0.8}
-                    radius={[3, 3, 0, 0]}
-                  />
+                  >
+                    {productData.map((entry, index) => (
+                      <Cell 
+                        key={`cell-${index}`} 
+                        fill={
+                          entry.status === 'low' || entry.status === 'out' 
+                            ? colorSettings.lowStockColor 
+                            : colorSettings.quantityColor
+                        } 
+                      />
+                    ))}
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             )}

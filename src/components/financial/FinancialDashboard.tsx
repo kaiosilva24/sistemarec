@@ -378,6 +378,47 @@ const FinancialDashboard = ({
           />
         </TabsContent>
       </Tabs>
+
+      {/* PresumedProfitManager sempre ativo para cálculos em tempo real */}
+      <div className="hidden">
+        <PresumedProfitManager
+          isLoading={
+            materialsLoading ||
+            employeesLoading ||
+            fixedCostsLoading ||
+            variableCostsLoading ||
+            stockItemsLoading ||
+            productionLoading ||
+            productsLoading ||
+            cashFlowLoading ||
+            recipesLoading ||
+            defectiveTireSalesLoading ||
+            warrantyEntriesLoading
+          }
+          materials={materials}
+          employees={employees}
+          fixedCosts={fixedCosts}
+          variableCosts={variableCosts}
+          stockItems={stockItems}
+          productionEntries={productionEntries}
+          products={products}
+          cashFlowEntries={cashFlowEntries}
+          recipes={recipes}
+          defectiveTireSales={defectiveTireSales}
+          warrantyEntries={warrantyEntries}
+        />
+      </div>
+
+      {/* ResaleProductProfitManager sempre ativo para cálculos em tempo real */}
+      <div className="hidden">
+        <ResaleProductProfitManager
+          isLoading={
+            cashFlowLoading || stockItemsLoading || resaleProductsLoading
+          }
+          cashFlowEntries={cashFlowEntries}
+          stockItems={stockItems}
+        />
+      </div>
     </div>
   );
 };

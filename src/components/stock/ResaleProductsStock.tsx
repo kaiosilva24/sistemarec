@@ -192,7 +192,7 @@ const ResaleProductsStock = ({ isLoading = false }: ResaleProductsStockProps) =>
       if (product.stockId) {
         // Update existing stock
         const currentQuantity = product.quantity || 0;
-        const currentUnitCost = product.unitCost || 0;
+        const currentUnitCost = product.averageUnitValue || 0;
 
         let newQuantity = currentQuantity;
         let newUnitCost = currentUnitCost;
@@ -378,6 +378,54 @@ const ResaleProductsStock = ({ isLoading = false }: ResaleProductsStockProps) =>
   const totalStockValue = filteredProducts.reduce((sum, p) => sum + p.totalValue, 0);
   const totalQuantity = filteredProducts.reduce((sum, p) => sum + p.quantity, 0);
 
+  // Sistema de sincronização automática do valor total com o dashboard
+  useEffect(() => {
+    // Aguardar um pouco para garantir que os cálculos estejam estabilizados
+    const timeoutId = setTimeout(() => {
+      console.log('💰 [ResaleProductsStock] Sincronizando valor total:', {
+        totalStockValue: totalStockValue.toFixed(2),
+        totalProducts,
+        productsInStock,
+        timestamp: new Date().toLocaleString()
+      });
+      
+      // Salvar no localStorage para compatibilidade
+      const stockData = {
+        value: totalStockValue,
+        timestamp: Date.now(),
+        source: 'ResaleProductsStock'
+      };
+      
+      try {
+        localStorage.setItem('resale_total_stock_value', JSON.stringify(stockData));
+        console.log('💾 [ResaleProductsStock] Valor salvo no localStorage:', stockData);
+      } catch (error) {
+        console.warn('⚠️ [ResaleProductsStock] Erro ao salvar no localStorage:', error);
+      }
+      
+      // Disparar evento customizado para notificar o dashboard
+      const updateEvent = new CustomEvent('resaleTotalStockUpdated', {
+        detail: {
+          totalValue: totalStockValue,
+          totalProducts,
+          productsInStock,
+          lowStockProducts,
+          timestamp: Date.now(),
+          source: 'ResaleProductsStock'
+        }
+      });
+      
+      window.dispatchEvent(updateEvent);
+      console.log('📡 [ResaleProductsStock] Evento resaleTotalStockUpdated disparado:', {
+        totalValue: totalStockValue.toFixed(2),
+        source: 'ResaleProductsStock'
+      });
+      
+    }, 300); // Delay de 300ms para estabilizar cálculos
+    
+    return () => clearTimeout(timeoutId);
+  }, [totalStockValue, totalProducts, productsInStock, lowStockProducts]); // Monitora mudanças nas métricas
+
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
       style: "currency",
@@ -490,7 +538,7 @@ const ResaleProductsStock = ({ isLoading = false }: ResaleProductsStockProps) =>
           </div>
         </div>
 
-        <Select value={filterStatus} onValueChange={setFilterStatus}>
+        <Select value={filterStatus} onValueChange={(value) => setFilterStatus(value as "all" | "low" | "normal")}>
           <SelectTrigger className="w-40 bg-factory-700/50 border-tire-600/30 text-white">
             <SelectValue />
           </SelectTrigger>
@@ -542,7 +590,7 @@ const ResaleProductsStock = ({ isLoading = false }: ResaleProductsStockProps) =>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label>Operação</Label>
-                  <Select value={stockOperation} onValueChange={setStockOperation}>
+                  <Select value={stockOperation} onValueChange={(value) => setStockOperation(value as "add" | "remove")}>
                     <SelectTrigger className="bg-factory-700/50 border-tire-600/30 text-white">
                       <SelectValue />
                     </SelectTrigger>

@@ -54,6 +54,7 @@ import type {
   WarrantyEntry,
 } from "@/types/financial";
 import { useCostCalculationOptions } from "@/hooks/useDataPersistence";
+import { dataManager } from "@/utils/dataManager";
 
 interface PresumedProfitManagerProps {
   isLoading?: boolean;
@@ -68,6 +69,7 @@ interface PresumedProfitManagerProps {
   recipes?: ProductionRecipe[];
   defectiveTireSales?: DefectiveTireSale[];
   warrantyEntries?: WarrantyEntry[];
+  hideCharts?: boolean; // Ocultar gráficos quando usado apenas para cálculos
 }
 
 interface ProfitData {
@@ -94,6 +96,7 @@ const PresumedProfitManager = ({
   recipes = [],
   defectiveTireSales = [],
   warrantyEntries = [],
+  hideCharts = false,
 }: PresumedProfitManagerProps) => {
   const [dateFilter, setDateFilter] = useState("last30days");
   const [customStartDate, setCustomStartDate] = useState("");
@@ -1396,6 +1399,102 @@ const PresumedProfitManager = ({
     };
   }, [profitData]);
 
+  // Log de debug para verificar se o componente está sendo renderizado
+  useEffect(() => {
+    console.log('🏭 [PresumedProfitManager] Componente renderizado/montado');
+    console.log('📊 [PresumedProfitManager] summaryMetrics atual:', {
+      averageProfitPerTire: summaryMetrics.averageProfitPerTire,
+      totalRevenue: summaryMetrics.totalRevenue,
+      totalCost: summaryMetrics.totalCost,
+      totalProfit: summaryMetrics.totalProfit,
+      totalSales: summaryMetrics.totalSales,
+      overallProfitMargin: summaryMetrics.overallProfitMargin
+    });
+  }, []);
+
+  // Salvar lucro médio por pneu quando summaryMetrics mudarem
+  useEffect(() => {
+    const saveAverageProfitPerTire = async () => {
+      console.log(`🔍 [PresumedProfitManager] useEffect executado - averageProfitPerTire: R$ ${summaryMetrics.averageProfitPerTire.toFixed(2)}`);
+      console.log(`📊 [PresumedProfitManager] Valor bruto:`, summaryMetrics.averageProfitPerTire);
+      console.log(`📊 [PresumedProfitManager] Tipo do valor:`, typeof summaryMetrics.averageProfitPerTire);
+      console.log(`📊 [PresumedProfitManager] Valor > 0?`, summaryMetrics.averageProfitPerTire > 0);
+      
+      // Forçar salvamento mesmo se o valor for 0 para debug
+      if (summaryMetrics.averageProfitPerTire >= 0) {
+        try {
+          console.log(`💰 [PresumedProfitManager] Salvando lucro médio por pneu: R$ ${summaryMetrics.averageProfitPerTire.toFixed(2)}`);
+          console.log(`📊 [PresumedProfitManager] Valor formatado na UI: R$ ${summaryMetrics.averageProfitPerTire.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`);
+          
+          // Salva no Supabase e localStorage
+          const success = await dataManager.saveAverageTireProfit(summaryMetrics.averageProfitPerTire);
+          
+          if (success) {
+            console.log(`✅ [PresumedProfitManager] Lucro médio por pneu salvo com sucesso: R$ ${summaryMetrics.averageProfitPerTire.toFixed(2)}`);
+            
+            // Dispara evento customizado para notificar outros componentes
+            const event = new CustomEvent('tireProfitUpdated', {
+              detail: {
+                profit: summaryMetrics.averageProfitPerTire,
+                timestamp: Date.now(),
+                source: 'PresumedProfitManager'
+              }
+            });
+            window.dispatchEvent(event);
+            console.log(`📢 [PresumedProfitManager] Evento customizado disparado com valor: R$ ${summaryMetrics.averageProfitPerTire.toFixed(2)}`);
+          } else {
+            console.warn('⚠️ [PresumedProfitManager] Falha ao salvar lucro médio por pneu');
+          }
+        } catch (error) {
+          console.error('❌ [PresumedProfitManager] Erro ao salvar lucro médio por pneu:', error);
+        }
+      } else {
+        console.log(`⚠️ [PresumedProfitManager] Valor zero ou negativo, não salvando: R$ ${summaryMetrics.averageProfitPerTire.toFixed(2)}`);
+      }
+    };
+
+    saveAverageProfitPerTire();
+  }, [summaryMetrics.averageProfitPerTire]);
+
+  // Listener para forçar recálculo quando há vendas
+  useEffect(() => {
+    const handleForceRecalc = () => {
+      console.log('🔄 [PresumedProfitManager] Recálculo forçado solicitado - salvando valor atual');
+      
+      // Forçar salvamento imediato do valor atual
+      const saveCurrentValue = async () => {
+        try {
+          const success = await dataManager.saveAverageTireProfit(summaryMetrics.averageProfitPerTire);
+          if (success) {
+            console.log(`✅ [PresumedProfitManager] Valor atual salvo após recálculo forçado: R$ ${summaryMetrics.averageProfitPerTire.toFixed(2)}`);
+            
+            // Dispara evento customizado
+            const event = new CustomEvent('tireProfitUpdated', {
+              detail: {
+                profit: summaryMetrics.averageProfitPerTire,
+                timestamp: Date.now(),
+                source: 'PresumedProfitManager-ForceRecalc'
+              }
+            });
+            window.dispatchEvent(event);
+          }
+        } catch (error) {
+          console.error('❌ [PresumedProfitManager] Erro no recálculo forçado:', error);
+        }
+      };
+      
+      saveCurrentValue();
+    };
+
+    // Adicionar listener para recálculo forçado
+    window.addEventListener('forceTireProfitRecalc', handleForceRecalc);
+
+    // Cleanup
+    return () => {
+      window.removeEventListener('forceTireProfitRecalc', handleForceRecalc);
+    };
+  }, [summaryMetrics.averageProfitPerTire]);
+
   if (isLoading) {
     return (
       <div className="w-full max-w-7xl mx-auto p-6 bg-factory-900/90 backdrop-blur-md rounded-2xl border border-tire-700/30">
@@ -1683,8 +1782,9 @@ const PresumedProfitManager = ({
         )}
       </div>
 
-      {/* Profit Chart */}
-      <Card className="bg-factory-800/50 border-tire-600/30 mb-6">
+      {/* Profit Chart - Ocultar quando hideCharts for true */}
+      {!hideCharts && (
+        <Card className="bg-factory-800/50 border-tire-600/30 mb-6">
         <CardHeader>
           <CardTitle className="text-tire-200 text-lg flex items-center gap-2">
             <BarChart3 className="h-5 w-5 text-neon-green" />
@@ -1806,7 +1906,8 @@ const PresumedProfitManager = ({
             </div>
           )}
         </CardContent>
-      </Card>
+        </Card>
+      )}
 
       {/* Profit Table */}
       <Card className="bg-factory-800/50 border-tire-600/30">

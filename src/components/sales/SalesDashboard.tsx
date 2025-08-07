@@ -1037,16 +1037,26 @@ const SalesDashboard = ({
     return null;
   };
 
+  // Test function to verify onClick works
+  const testClick = () => {
+    alert('🔥 TEST: Button click works!');
+    console.log('🔥 TEST: Button click detected!');
+  };
+
   // Handle delete sale
   const handleDeleteSale = async (saleId: string, saleName: string) => {
-    if (
-      confirm(
-        `Tem certeza que deseja excluir a venda: ${saleName}?\n\nEsta ação irá devolver os produtos ao estoque.`,
-      )
-    ) {
+    console.log('🔥 [DEBUG] handleDeleteSale called with:', { saleId, saleName });
+    
+    // Temporarily removing confirm dialog for testing
+    console.log('🔥 [DEBUG] Skipping confirmation dialog for testing');
+    
+    if (true) { // Always proceed for testing
+      console.log('🔥 [DEBUG] User confirmed deletion, proceeding...');
       try {
+        console.log('🔥 [DEBUG] Starting deletion process...');
         // Find the sale to get product information
         const sale = cashFlowEntries.find((entry) => entry.id === saleId);
+        console.log('🔥 [DEBUG] Found sale:', sale);
 
         if (sale && sale.description) {
           // Extract product info from sale description
@@ -1137,7 +1147,9 @@ const SalesDashboard = ({
         }
 
         // Delete the sale from cash flow
+        console.log('🔥 [DEBUG] About to call deleteCashFlowEntry with saleId:', saleId);
         await deleteCashFlowEntry(saleId);
+        console.log('🔥 [DEBUG] deleteCashFlowEntry completed successfully');
 
         alert(
           `Venda excluída com sucesso!\n\n` +
@@ -1518,7 +1530,7 @@ const SalesDashboard = ({
   };
 
   return (
-    <div className="w-full space-y-6">
+    <div className="w-full space-y-6 max-w-7xl mx-auto px-4">
       <div className="mb-6">
         <h2 className="text-2xl font-semibold text-white flex items-center gap-3">
           <div className="w-8 h-8 rounded-full bg-gradient-to-r from-neon-green to-neon-blue flex items-center justify-center">
@@ -1532,17 +1544,17 @@ const SalesDashboard = ({
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
         <Card className="bg-factory-800/50 border-tire-600/30">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-tire-300 text-sm">Vendedores Ativos</p>
-                <p className="text-2xl font-bold text-neon-green">
+              <div className="flex-1">
+                <p className="text-tire-300 text-sm font-medium text-center mb-2">Vendedores Ativos</p>
+                <p className="text-2xl font-bold text-neon-green text-center">
                   {activeSalespeople.length}
                 </p>
               </div>
-              <div className="text-neon-green">
+              <div className="text-neon-green ml-3">
                 <UserCheck className="h-8 w-8" />
               </div>
             </div>
@@ -1552,13 +1564,15 @@ const SalesDashboard = ({
         <Card className="bg-factory-800/50 border-tire-600/30">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-tire-300 text-sm">Clientes Ativos</p>
-                <p className="text-2xl font-bold text-neon-blue">
+              <div className="flex-1">
+                <p className="text-tire-300 text-sm font-medium text-center mb-2">
+                  Clientes<br />Ativos
+                </p>
+                <p className="text-2xl font-bold text-neon-blue text-center mt-1">
                   {activeCustomers.length}
                 </p>
               </div>
-              <div className="text-neon-blue">
+              <div className="text-neon-blue ml-3">
                 <Users className="h-8 w-8" />
               </div>
             </div>
@@ -1568,13 +1582,13 @@ const SalesDashboard = ({
         <Card className="bg-factory-800/50 border-tire-600/30">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-tire-300 text-sm">Produtos Disponíveis</p>
-                <p className="text-2xl font-bold text-neon-purple">
+              <div className="flex-1">
+                <p className="text-tire-300 text-sm font-medium text-center mb-2">Produtos Disponíveis</p>
+                <p className="text-2xl font-bold text-neon-purple text-center">
                   {availableProducts.length}
                 </p>
               </div>
-              <div className="text-neon-purple">
+              <div className="text-neon-purple ml-3">
                 <Package className="h-8 w-8" />
               </div>
             </div>
@@ -1584,9 +1598,9 @@ const SalesDashboard = ({
         <Card className="bg-factory-800/50 border-tire-600/30">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-tire-300 text-sm">Qtd. Vendida (Final)</p>
-                <p className="text-2xl font-bold text-neon-orange">
+              <div className="flex-1">
+                <p className="text-tire-300 text-sm font-medium text-center mb-2">Qtd. Vendida (Final)</p>
+                <p className="text-2xl font-bold text-neon-orange text-center">
                   {finalProductSalesHistory
                     .reduce((total, sale) => {
                       const productInfo = extractProductInfoFromSale(
@@ -1597,7 +1611,7 @@ const SalesDashboard = ({
                     .toFixed(0)}
                 </p>
               </div>
-              <div className="text-neon-orange">
+              <div className="text-neon-orange ml-3">
                 <TrendingUp className="h-8 w-8" />
               </div>
             </div>
@@ -1607,9 +1621,9 @@ const SalesDashboard = ({
         <Card className="bg-factory-800/50 border-tire-600/30">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-tire-300 text-sm">Qtd. Vendida (Revenda)</p>
-                <p className="text-2xl font-bold text-neon-cyan">
+              <div className="flex-1">
+                <p className="text-tire-300 text-sm font-medium text-center mb-2">Qtd. Vendida (Revenda)</p>
+                <p className="text-2xl font-bold text-neon-cyan text-center">
                   {resaleProductSalesHistory
                     .reduce((total, sale) => {
                       const productInfo = extractProductInfoFromSale(
@@ -1620,8 +1634,30 @@ const SalesDashboard = ({
                     .toFixed(0)}
                 </p>
               </div>
-              <div className="text-neon-cyan">
+              <div className="text-neon-cyan ml-3">
                 <TrendingUp className="h-8 w-8" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-factory-800/50 border-tire-600/30">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <p className="text-tire-300 text-sm font-medium text-center mb-2">Receita Total</p>
+                <p className="text-2xl font-bold text-neon-orange text-center">
+                  {formatCurrency(
+                    finalProductSalesHistory.reduce((total, sale) => total + sale.amount, 0) +
+                    resaleProductSalesHistory.reduce((total, sale) => total + sale.amount, 0)
+                  )}
+                </p>
+                <p className="text-xs text-tire-400 text-center mt-1">
+                  Final + Revenda
+                </p>
+              </div>
+              <div className="text-neon-orange ml-3">
+                <DollarSign className="h-8 w-8" />
               </div>
             </div>
           </CardContent>

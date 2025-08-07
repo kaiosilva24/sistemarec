@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -243,6 +243,9 @@ const StockDashboard = ({
   const [selectedCardForColor, setSelectedCardForColor] = useState<string>("");
   const [customColorValue, setCustomColorValue] = useState<string>("#10B981");
   const { toast } = useToast();
+
+  // Estado para forçar re-renderização quando custos são atualizados
+  const [lastCostUpdate, setLastCostUpdate] = useState<Date | null>(null);
 
   // Color options for customization - matching main dashboard
   const colorOptions = [
@@ -533,9 +536,102 @@ const StockDashboard = ({
   // Use database hooks
   const { materials, isLoading: materialsLoading } = useMaterials();
   const { products, isLoading: productsLoading } = useProducts();
-  const { stockItems, isLoading: stockLoading } = useStockItems();
+  const { stockItems, isLoading: stockLoading, updateStockItem } = useStockItems();
 
-  const { updateStockItem } = useStockItems();
+  // Debug: monitorar quando stockItems é atualizado pelo hook
+  useEffect(() => {
+    console.log(`🔄 [StockDashboard] stockItems atualizado pelo hook:`, {
+      length: stockItems.length,
+      timestamp: Date.now(),
+      loading: stockLoading
+    });
+  }, [stockItems, stockLoading]);
+
+  // Sincronização em tempo real dos custos do TireCostManager
+  useEffect(() => {
+    const handleTireCostUpdate = (event: CustomEvent) => {
+      const { averageCostPerTire: newAverage, specificAnalyses, timestamp, source } = event.detail || {};
+      console.log(`💰 [StockDashboard] Evento 'tireCostUpdated' recebido de ${source || 'Unknown'}:`);
+      console.log(`  - Timestamp: ${timestamp ? new Date(timestamp).toLocaleString() : 'N/A'}`);
+      console.log(`  - Custo médio por pneu: R$ ${newAverage ? newAverage.toFixed(2) : '0.00'}`);
+      console.log(`  - Análises específicas: ${specificAnalyses?.length || 0} produtos`);
+      
+      // Forçar re-renderização das métricas
+      setLastCostUpdate(new Date());
+      console.log('🔄 [StockDashboard] Forçando recálculo das métricas com novos custos sincronizados...');
+    };
+
+    const handleStorageChange = (event: StorageEvent) => {
+      if (event.key === 'dashboard_averageCostPerTire' && event.newValue) {
+        console.log('💾 [StockDashboard] localStorage alterado para dashboard_averageCostPerTire:', event.newValue);
+        setLastCostUpdate(new Date());
+      }
+    };
+
+    // NOVO: Event listener para atualizações do FinalProductsStock
+    const handleFinalProductStockUpdate = (event: CustomEvent) => {
+      const { totalValue, totalProducts, productsInStock, lowStockProducts, timestamp, source } = event.detail || {};
+      console.log(`📦 [StockDashboard] Evento 'finalProductStockUpdated' recebido de ${source || 'Unknown'}:`);
+      console.log(`  - Timestamp: ${timestamp ? new Date(timestamp).toLocaleString() : 'N/A'}`);
+      console.log(`  - Valor total: R$ ${totalValue ? totalValue.toFixed(2) : '0.00'}`);
+      console.log(`  - Total produtos: ${totalProducts || 0}`);
+      console.log(`  - Produtos em estoque: ${productsInStock || 0}`);
+      console.log(`  - Produtos com estoque baixo: ${lowStockProducts || 0}`);
+      
+      // Forçar recálculo das métricas
+      setLastCostUpdate(new Date());
+      console.log('🔄 [StockDashboard] Forçando recálculo das métricas por atualização de produtos finais...');
+    };
+
+    // NOVO: Event listener para atualizações de estoque geral
+    const handleStockItemsUpdate = (event: CustomEvent) => {
+      const { itemId, itemType, operation, newQuantity, timestamp } = event.detail || {};
+      console.log(`📊 [StockDashboard] Evento 'stockItemsUpdated' recebido:`);
+      console.log(`  - Item ID: ${itemId}`);
+      console.log(`  - Tipo: ${itemType}`);
+      console.log(`  - Operação: ${operation}`);
+      console.log(`  - Nova quantidade: ${newQuantity}`);
+      console.log(`  - Timestamp: ${timestamp ? new Date(timestamp).toLocaleString() : 'N/A'}`);
+      
+      // Forçar recálculo das métricas
+      setLastCostUpdate(new Date());
+      console.log('🔄 [StockDashboard] Forçando recálculo das métricas por atualização de estoque...');
+    };
+
+    // Registrar event listeners
+    window.addEventListener('tireCostUpdated', handleTireCostUpdate as EventListener);
+    window.addEventListener('finalProductStockUpdated', handleFinalProductStockUpdate as EventListener);
+    window.addEventListener('stockItemsUpdated', handleStockItemsUpdate as EventListener);
+    window.addEventListener('storage', handleStorageChange);
+
+    console.log('🎯 [StockDashboard] Event listeners registrados para sincronização em tempo real');
+    
+    // TESTE: Verificar se os listeners estão funcionando
+    setTimeout(() => {
+      console.log('🧪 [StockDashboard] Testando listeners com evento de teste...');
+      const testEvent = new CustomEvent('finalProductStockUpdated', {
+        detail: {
+          totalValue: 999.99,
+          totalProducts: 99,
+          productsInStock: 88,
+          lowStockProducts: 1,
+          timestamp: Date.now(),
+          source: 'StockDashboard-Test',
+          test: true
+        }
+      });
+      window.dispatchEvent(testEvent);
+    }, 2000);
+
+    // Cleanup
+    return () => {
+      window.removeEventListener('tireCostUpdated', handleTireCostUpdate as EventListener);
+      window.removeEventListener('finalProductStockUpdated', handleFinalProductStockUpdate as EventListener);
+      window.removeEventListener('stockItemsUpdated', handleStockItemsUpdate as EventListener);
+      window.removeEventListener('storage', handleStorageChange);
+      console.log('🧹 [StockDashboard] Event listeners removidos');
+    };
+  }, []);
   const { averageCostPerTire, synchronizedCostData } =
     useCostCalculationOptions();
   const { resaleProducts } = useResaleProducts();
@@ -583,11 +679,18 @@ const StockDashboard = ({
         };
 
         await updateStockItem(existingStock.id, updateData);
-
-        console.log(
-          `✅ [StockDashboard] Estoque atualizado (add):`,
-          updateData,
-        );
+        
+        // Dispatch manual do evento para garantir sincronização
+        console.log('📡 [StockDashboard] Disparando evento stockItemsUpdated manualmente...');
+        window.dispatchEvent(new CustomEvent('stockItemsUpdated', {
+          detail: { 
+            itemId, 
+            itemType, 
+            operation: 'add',
+            newQuantity,
+            timestamp: new Date().toISOString()
+          }
+        }));
       } else {
         // Remove operation - keep same unit cost
         const newQuantity = Math.max(0, existingStock.quantity - quantity);
@@ -598,11 +701,18 @@ const StockDashboard = ({
         };
 
         await updateStockItem(existingStock.id, updateData);
-
-        console.log(
-          `✅ [StockDashboard] Estoque atualizado (remove):`,
-          updateData,
-        );
+        
+        // Dispatch manual do evento para garantir sincronização
+        console.log('📡 [StockDashboard] Disparando evento stockItemsUpdated manualmente...');
+        window.dispatchEvent(new CustomEvent('stockItemsUpdated', {
+          detail: { 
+            itemId, 
+            itemType, 
+            operation: 'remove',
+            newQuantity,
+            timestamp: new Date().toISOString()
+          }
+        }));
       }
     }
   };
@@ -650,6 +760,12 @@ const StockDashboard = ({
 
   // Calculate separated metrics for dashboard by type
   const calculateMetrics = () => {
+    console.log(`🚀 [StockDashboard] ===== INICIANDO CÁLCULO DE MÉTRICAS =====`);
+    console.log(
+      `📈 [StockDashboard] Calculando métricas com ${stockItems.length} itens no estoque`,
+    );
+    console.log(`🕰️ [StockDashboard] Timestamp: ${new Date().toISOString()}`);
+    console.log(`📊 [StockDashboard] averageCostPerTire: R$ ${averageCostPerTire.toFixed(2)}`);
     console.log(
       "🔍 [StockDashboard] Calculando métricas separadas do dashboard:",
       {
@@ -785,18 +901,82 @@ const StockDashboard = ({
     }, 0);
 
     // Para produtos finais, usar o custo médio sincronizado se disponível
-    const finalProductTotalValue =
-      averageCostPerTire > 0
-        ? finalProductTotalQuantity * averageCostPerTire
-        : finalProductStockItems.reduce((sum, item) => {
-            const unitCost = Number(item.unit_cost) || 0;
-            const quantity = Number(item.quantity) || 0;
-            const calculatedValue = unitCost * quantity;
-            console.log(
-              `💰 Produto Final ${item.item_name}: ${quantity} × R$ ${unitCost.toFixed(2)} = R$ ${calculatedValue.toFixed(2)} (stored: R$ ${(item.total_value || 0).toFixed(2)})`,
-            );
-            return sum + calculatedValue;
-          }, 0);
+    console.log(`🔍 [StockDashboard] DEBUG - Cálculo do valor dos produtos finais:`, {
+      averageCostPerTire,
+      finalProductTotalQuantity,
+      synchronizedCostData,
+      willUseSynchronizedCost: averageCostPerTire > 0,
+      expectedValue: averageCostPerTire > 0 ? finalProductTotalQuantity * averageCostPerTire : 'Calculando individualmente...'
+    });
+
+    // DEBUG: Verificar dados dos produtos finais
+    console.log(`🔍 [StockDashboard] PRODUTOS FINAIS - Total de itens: ${finalProductStockItems.length}`);
+    console.log(`🔍 [StockDashboard] PRODUTOS FINAIS - Dados completos:`, finalProductStockItems);
+    
+    // Cálculo dinâmico em tempo real para produtos finais - USAR CUSTOS ESPECÍFICOS POR PRODUTO
+    const finalProductTotalValue = finalProductStockItems.reduce((sum, item, index) => {
+      const quantity = Number(item.quantity) || 0;
+      
+      // BUSCAR CUSTO ESPECÍFICO para cada produto (igual ao FinalProductsStock)
+      let unitCost = 0;
+      let costSource = 'FALLBACK ESTOQUE';
+      
+      // Buscar custo específico no localStorage (EXATO método do FinalProductsStock)
+      const productKey = `tireAnalysis_${item.item_name.toLowerCase().replace(/\s+/g, '_')}`;
+      const specificCostData = localStorage.getItem(productKey);
+      
+      console.log(`🔍 [${index + 1}/${finalProductStockItems.length}] Buscando custo para "${item.item_name}" com chave: ${productKey}`);
+      
+      if (specificCostData) {
+        try {
+          const parsedData = JSON.parse(specificCostData);
+          console.log(`📊 Dados encontrados para ${item.item_name}:`, parsedData);
+          
+          // USAR MESMA PROPRIEDADE QUE O FinalProductsStock: costPerTire
+          if (parsedData && parsedData.costPerTire > 0) {
+            unitCost = parsedData.costPerTire;
+            costSource = 'CUSTO ESPECÍFICO';
+            console.log(`✨ [${index + 1}/${finalProductStockItems.length}] ${item.item_name} - ${costSource}:`);
+          } else {
+            console.log(`⚠️ Dados encontrados mas costPerTire inválido:`, parsedData.costPerTire);
+          }
+        } catch (error) {
+          console.warn(`⚠️ Erro ao buscar custo específico para ${item.item_name}:`, error);
+        }
+      } else {
+        console.log(`❌ Não encontrado custo específico para ${item.item_name} (chave: ${productKey})`);
+      }
+      
+      // Fallbacks se não encontrou custo específico
+      if (unitCost === 0) {
+        if (synchronizedCostData && synchronizedCostData.averageCostPerTire > 0) {
+          unitCost = synchronizedCostData.averageCostPerTire;
+          costSource = 'CUSTO MÉDIO SINCRONIZADO';
+        } else if (averageCostPerTire > 0) {
+          unitCost = averageCostPerTire;
+          costSource = 'CUSTO MÉDIO LOCAL';
+        } else {
+          unitCost = Number(item.unit_cost) || 0;
+          costSource = 'FALLBACK ESTOQUE';
+        }
+        console.log(`🔄 [${index + 1}/${finalProductStockItems.length}] ${item.item_name} - ${costSource}:`);
+      }
+      
+      const calculatedValue = unitCost * quantity;
+      
+      console.log(`   - Quantidade: ${quantity}`);
+      console.log(`   - Custo usado: R$ ${unitCost.toFixed(2)} (${costSource})`);
+      console.log(`   - Custo estoque: R$ ${(Number(item.unit_cost) || 0).toFixed(2)}`);
+      console.log(`   - Valor calculado: R$ ${calculatedValue.toFixed(2)}`);
+      console.log(`   - Soma acumulada: R$ ${(sum + calculatedValue).toFixed(2)}`);
+      
+      return sum + calculatedValue;
+    }, 0);
+
+    console.log(`✅ [StockDashboard] VALOR FINAL CALCULADO dos produtos finais: R$ ${finalProductTotalValue.toFixed(2)}`, {
+      method: 'Soma individual de todos os produtos',
+      calculation: 'Soma dos valores individuais (quantidade × custo unitário)'
+    });
 
     console.log(`📊 [StockDashboard] TOTAIS CALCULADOS - Quantidades:`, {
       materialTotalQuantity,
@@ -926,7 +1106,16 @@ const StockDashboard = ({
     return result;
   };
 
-  const metrics = calculateMetrics();
+  // Incluir lastCostUpdate para forçar recálculo quando custos são atualizados
+  const metrics = useMemo(() => {
+    console.log('🔄 [StockDashboard] Recalculando métricas:', {
+      stockItemsLength: stockItems.length,
+      averageCostPerTire,
+      lastCostUpdate: lastCostUpdate?.toISOString(),
+      synchronizedCostData: synchronizedCostData ? 'Presente' : 'Ausente'
+    });
+    return calculateMetrics();
+  }, [stockItems, materials, products, resaleProducts, averageCostPerTire, synchronizedCostData, lastCostUpdate]);
 
   // Update card values with current metrics
   const updatedCards = cards.map((card) => {
@@ -1186,16 +1375,17 @@ const StockDashboard = ({
                     Finais: {new Intl.NumberFormat("pt-BR", {
                       style: "currency",
                       currency: "BRL",
-                      minimumFractionDigits: 0,
-                      maximumFractionDigits: 0,
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
                     }).format(metrics.finalProductTotalValue)} | 
                     Revenda: {new Intl.NumberFormat("pt-BR", {
                       style: "currency",
                       currency: "BRL",
-                      minimumFractionDigits: 0,
-                      maximumFractionDigits: 0,
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
                     }).format(metrics.resaleProductTotalValue)}
                   </p>
+
                 </div>
                 <div className="text-neon-green">
                   <span className="text-3xl">💎</span>
@@ -1270,7 +1460,7 @@ const StockDashboard = ({
             <RawMaterialStock
               isLoading={materialsLoading || stockLoading}
               materials={materials}
-              stockItems={getMaterialStockItems()}
+              stockItems={stockItems}
               onStockUpdate={handleStockUpdate}
               onSetMinLevel={handleSetMinLevel}
             />

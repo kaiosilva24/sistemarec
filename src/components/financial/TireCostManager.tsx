@@ -58,6 +58,7 @@ import {
   WarrantyEntry,
 } from "@/types/financial";
 import { useCostSimulations } from "@/hooks/useDataPersistence";
+import { dataManager } from "@/utils/dataManager";
 import {
   Dialog,
   DialogContent,
@@ -1619,6 +1620,24 @@ const TireCostManager = ({
         },
       );
     });
+
+    // ===== SINCRONIZAÇÃO COM SUPABASE EM TEMPO REAL =====
+    // Salvar custo médio por pneu no Supabase para sincronização em tempo real
+    const saveToSupabase = async () => {
+      try {
+        const success = await dataManager.saveAverageTireCost(averageAnalysis.averageCostPerTire);
+        if (success) {
+          console.log('✅ [TireCostManager] Custo médio por pneu salvo no Supabase com sucesso');
+        } else {
+          console.warn('⚠️ [TireCostManager] Falha ao salvar custo médio por pneu no Supabase');
+        }
+      } catch (error) {
+        console.error('❌ [TireCostManager] Erro ao salvar no Supabase:', error);
+      }
+    };
+    
+    // Salvar no Supabase de forma assíncrona
+    saveToSupabase();
 
     // Disparar evento customizado para notificar o dashboard sobre a mudança
     window.dispatchEvent(

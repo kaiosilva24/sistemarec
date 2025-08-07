@@ -294,6 +294,7 @@ const CashFlowManager = ({
 
   // Handle delete transaction
   const handleDeleteTransaction = async (entry: CashFlowEntry) => {
+    console.log('🔥 [DEBUG] handleDeleteTransaction called with:', entry);
     const confirmMessage = `Tem certeza que deseja excluir esta transação?\n\nTipo: ${entry.type === "income" ? "Entrada" : "Saída"}\nValor: ${formatCurrency(entry.amount)}\nReferência: ${entry.reference_name}\nData: ${new Date(entry.transaction_date).toLocaleDateString("pt-BR")}`;
 
     if (confirm(confirmMessage)) {

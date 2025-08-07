@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,6 +24,8 @@ import {
   Search,
   Settings,
   AlertTriangle,
+  CheckCircle,
+  XCircle,
 } from "lucide-react";
 import { RawMaterial, StockItem } from "@/types/financial";
 
@@ -60,22 +62,95 @@ const RawMaterialStock = ({
   const [selectedItemForLevels, setSelectedItemForLevels] =
     useState<string>("");
   const [minLevel, setMinLevel] = useState("");
+  const [notification, setNotification] = useState<{
+    show: boolean;
+    type: 'success' | 'error';
+    message: string;
+  }>({ show: false, type: 'success', message: '' });
+  const [forceUpdate, setForceUpdate] = useState(0);
 
   const activeMaterials = materials.filter((m) => !m.archived);
 
+  // Debug: monitorar quando stockItems muda
+  useEffect(() => {
+    console.log(`🔍 [RawMaterialStock] stockItems prop mudou:`, {
+      length: stockItems.length,
+      timestamp: Date.now(),
+      stockItems: stockItems.map(item => ({
+        id: item.id,
+        item_name: item.item_name,
+        item_type: item.item_type,
+        quantity: item.quantity
+      }))
+    });
+  }, [stockItems]);
+
   const handleStockOperation = (operation: "add" | "remove") => {
     if (selectedMaterial && quantity && parseFloat(quantity) > 0) {
-      const price =
-        operation === "add" && unitPrice ? parseFloat(unitPrice) : undefined;
-      onStockUpdate(
+      try {
+        const selectedMaterialData = activeMaterials.find(m => m.id === selectedMaterial);
+        const price =
+          operation === "add" && unitPrice ? parseFloat(unitPrice) : undefined;
+        
+        console.log(`🔄 [RawMaterialStock] INICIANDO operação de estoque:`, {
+          material: selectedMaterialData?.name,
+          materialId: selectedMaterial,
+          quantity: parseFloat(quantity),
+          operation,
+          price,
+          timestamp: new Date().toISOString()
+        });
+        
+        // Executar a operação de estoque
+        console.log(`🚀 [RawMaterialStock] Chamando onStockUpdate...`);
+        const result = onStockUpdate(
+          selectedMaterial,
+          "material",
+          parseFloat(quantity),
+          operation,
+          price,
+        );
+        
+        console.log(`📝 [RawMaterialStock] Resultado do onStockUpdate:`, result);
+        
+        // Mostrar notificação de confirmação da operação
+        const operationText = operation === "add" ? "adicionada" : "removida";
+        const materialName = selectedMaterialData?.name || "Material";
+        setNotification({
+          show: true,
+          type: 'success',
+          message: `Solicitação enviada: ${parseFloat(quantity)} ${selectedMaterialData?.unit || 'un'} de ${materialName} para ser ${operationText}`
+        });
+        
+        // Limpar campos
+        setQuantity("");
+        setUnitPrice("");
+        
+        // Aguardar um pouco e verificar se o evento foi disparado
+        setTimeout(() => {
+          console.log(`⏰ [RawMaterialStock] Após 3s - Eventos recebidos: ${eventCounterRef.current}`);
+          setNotification(prev => ({ ...prev, show: false }));
+        }, 3000);
+        
+      } catch (error) {
+        console.error('❌ [RawMaterialStock] Erro na operação de estoque:', error);
+        setNotification({
+          show: true,
+          type: 'error',
+          message: 'Erro ao realizar operação de estoque. Tente novamente.'
+        });
+        
+        // Ocultar notificação de erro após 4 segundos
+        setTimeout(() => {
+          setNotification(prev => ({ ...prev, show: false }));
+        }, 4000);
+      }
+    } else {
+      console.warn(`⚠️ [RawMaterialStock] Operação não executada - dados insuficientes:`, {
         selectedMaterial,
-        "material",
-        parseFloat(quantity),
-        operation,
-        price,
-      );
-      setQuantity("");
-      setUnitPrice("");
+        quantity,
+        quantityParsed: quantity ? parseFloat(quantity) : null
+      });
     }
   };
 
@@ -120,26 +195,25 @@ const RawMaterialStock = ({
     material.name.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
+  // Filtrar apenas itens de material
+  const materialStockItems = useMemo(() => {
+    const filtered = stockItems.filter((item) => item.item_type === "material");
+    console.log(`🔄 [RawMaterialStock] materialStockItems atualizado:`, {
+      totalStockItems: stockItems.length,
+      materialItems: filtered.length,
+      timestamp: Date.now()
+    });
+    return filtered;
+  }, [stockItems]);
+
   // Calculate metrics for raw materials
   const calculateMaterialMetrics = () => {
-    // Get material stock items only
-    const materialStockItems = stockItems.filter(
-      (item) => item.item_type === "material",
-    );
 
-    console.log("🔍 [RawMaterialStock] Calculando métricas de matéria-prima:", {
-      totalStockItems: stockItems.length,
-      materialStockItems: materialStockItems.length,
-      activeMaterials: activeMaterials.length,
-      stockItemsDetails: materialStockItems.map((item) => ({
-        id: item.id,
-        item_id: item.item_id,
-        item_name: item.item_name,
-        quantity: item.quantity,
-        unit_cost: item.unit_cost,
-        total_value: item.total_value,
-      })),
-    });
+    // Log apenas se houver mudanças significativas
+    const hasItems = materialStockItems.length > 0;
+    if (hasItems && Math.random() < 0.1) { // Log apenas 10% das vezes para reduzir spam
+      console.log("🔍 [RawMaterialStock] Calculando:", materialStockItems.length, "itens");
+    }
 
     // Calculate total quantity of materials in stock
     const totalQuantity = materialStockItems.reduce((sum, item) => {
@@ -158,6 +232,21 @@ const RawMaterialStock = ({
       return sum + calculatedValue;
     }, 0);
 
+    // Calculate total quantity of materials with unit "un" (unidade)
+    const unitaryMaterialsQuantity = materialStockItems.reduce((sum, item) => {
+      // Find the corresponding material to get its unit
+      const material = activeMaterials.find(m => m.id === item.item_id);
+      const itemUnit = material?.unit || item.unit;
+      
+      if (itemUnit === "un") {
+        const numericQuantity = Number(item.quantity);
+        if (!isNaN(numericQuantity) && numericQuantity >= 0) {
+          return sum + numericQuantity;
+        }
+      }
+      return sum;
+    }, 0);
+
     // Count unique material types in stock (materials that have stock > 0)
     const materialTypesInStock = materialStockItems.filter(
       (item) => Number(item.quantity) > 0,
@@ -166,22 +255,108 @@ const RawMaterialStock = ({
     // Count total registered material types (active materials)
     const totalMaterialTypes = activeMaterials.length;
 
-    console.log("📊 [RawMaterialStock] Métricas calculadas:", {
-      totalQuantity,
-      totalValue: `R$ ${totalValue.toFixed(2)}`,
-      materialTypesInStock,
-      totalMaterialTypes,
-    });
+    // Count materials with unit "un" that have stock > 0
+    const unitaryMaterialsInStock = materialStockItems.filter((item) => {
+      const material = activeMaterials.find(m => m.id === item.item_id);
+      const itemUnit = material?.unit || item.unit;
+      return itemUnit === "un" && Number(item.quantity) > 0;
+    }).length;
+
+    // Log final apenas ocasionalmente
+    if (totalQuantity > 0 && Math.random() < 0.1) {
+      console.log("📊 Métricas:", totalQuantity, "total,", materialTypesInStock, "tipos");
+    }
 
     return {
       totalQuantity,
       totalValue,
       materialTypesInStock,
       totalMaterialTypes,
+      unitaryMaterialsQuantity,
+      unitaryMaterialsInStock,
     };
   };
 
-  const metrics = calculateMaterialMetrics();
+  // Usar apenas useMemo - sem estado separado para evitar loops
+  const metrics = useMemo(() => {
+    // Log apenas quando realmente recalcular
+    const timestamp = Date.now();
+    console.log(`🔄 [RawMaterialStock] Recalculando métricas [${timestamp}]`);
+    const result = calculateMaterialMetrics();
+    console.log(`📊 [RawMaterialStock] Valores para interface:`, {
+      totalQuantity: result.totalQuantity,
+      totalValue: result.totalValue,
+      materialTypes: result.materialTypesInStock,
+      unitaryQuantity: result.unitaryMaterialsQuantity
+    });
+    return result;
+  }, [materialStockItems, activeMaterials, forceUpdate]);
+
+  // Ref para acessar activeMaterials sem causar re-renders
+  const activeMaterialsRef = useRef(activeMaterials);
+  
+  // Atualizar ref sempre que activeMaterials mudar
+  useEffect(() => {
+    activeMaterialsRef.current = activeMaterials;
+  }, [activeMaterials]);
+
+  // Contador de eventos para debug
+  const eventCounterRef = useRef(0);
+
+  // Listener para eventos de atualização de estoque - registrado apenas uma vez
+  useEffect(() => {
+    const handleStockItemsUpdate = (event: CustomEvent) => {
+      eventCounterRef.current += 1;
+      console.log(`📡 [RawMaterialStock] Evento stockItemsUpdated #${eventCounterRef.current} recebido:`, {
+        timestamp: new Date().toISOString(),
+        eventDetail: event.detail,
+        currentActiveMaterials: activeMaterialsRef.current.length
+      });
+      
+      // Forçar recálculo das métricas quando houver atualizações
+      console.log(`🔄 [RawMaterialStock] Forçando recalculo de métricas...`);
+      setForceUpdate(prev => {
+        const newValue = prev + 1;
+        console.log(`📊 [RawMaterialStock] forceUpdate: ${prev} -> ${newValue}`);
+        return newValue;
+      });
+      
+      // Mostrar notificação adicional se for uma atualização de material
+      if (event.detail.item && event.detail.item.item_type === 'material') {
+        const item = event.detail.item;
+        console.log(`🔍 [RawMaterialStock] Procurando material com ID: ${item.item_id}`);
+        const material = activeMaterialsRef.current.find(m => m.id === item.item_id);
+        
+        if (material) {
+          console.log(`✅ [RawMaterialStock] Material encontrado:`, material.name);
+          console.log(`🔄 [RawMaterialStock] Atualização: ${material.name} -> ${item.quantity} ${material.unit}`);
+          setNotification({
+            show: true,
+            type: 'success',
+            message: `Estoque de ${material.name} atualizado! Nova quantidade: ${item.quantity} ${material.unit}`
+          });
+          
+          // Ocultar notificação após 2 segundos
+          setTimeout(() => {
+            setNotification(prev => ({ ...prev, show: false }));
+          }, 2000);
+        } else {
+          console.warn(`⚠️ [RawMaterialStock] Material não encontrado com ID: ${item.item_id}`);
+          console.log(`📋 [RawMaterialStock] Materiais disponíveis:`, activeMaterialsRef.current.map(m => ({ id: m.id, name: m.name })));
+        }
+      } else {
+        console.log(`🔕 [RawMaterialStock] Evento não é de material ou item não encontrado`);
+      }
+    };
+
+    console.log('🔔 [RawMaterialStock] Registrando listener para stockItemsUpdated (uma única vez)');
+    window.addEventListener('stockItemsUpdated', handleStockItemsUpdate as EventListener);
+
+    return () => {
+      console.log('🚫 [RawMaterialStock] Removendo listener para stockItemsUpdated');
+      window.removeEventListener('stockItemsUpdated', handleStockItemsUpdate as EventListener);
+    };
+  }, []); // ✅ Array vazio - registra apenas uma vez
 
   return (
     <div className="w-full max-w-7xl mx-auto p-6 bg-factory-900/90 backdrop-blur-md rounded-2xl border border-tire-700/30">
@@ -195,8 +370,24 @@ const RawMaterialStock = ({
         </p>
       </div>
 
+      {/* Notification */}
+      {notification.show && (
+        <div className={`mb-6 p-4 rounded-lg border flex items-center gap-3 transition-all duration-300 ${
+          notification.type === 'success' 
+            ? 'bg-green-900/30 border-green-500/30 text-green-300'
+            : 'bg-red-900/30 border-red-500/30 text-red-300'
+        }`}>
+          {notification.type === 'success' ? (
+            <CheckCircle className="h-5 w-5 text-green-400" />
+          ) : (
+            <XCircle className="h-5 w-5 text-red-400" />
+          )}
+          <span className="font-medium">{notification.message}</span>
+        </div>
+      )}
+
       {/* Material Metrics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <Card className="bg-factory-800/50 border-tire-600/30">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -233,6 +424,25 @@ const RawMaterialStock = ({
               </div>
               <div className="text-neon-cyan">
                 <span className="text-2xl">💎</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-factory-800/50 border-tire-600/30">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-tire-300 text-sm">Matéria Prima Unitária</p>
+                <p className="text-2xl font-bold text-neon-orange">
+                  {metrics.unitaryMaterialsQuantity}
+                </p>
+                <p className="text-xs text-tire-400 mt-1">
+                  {metrics.unitaryMaterialsInStock} tipos em estoque
+                </p>
+              </div>
+              <div className="text-neon-orange">
+                <span className="text-2xl">📦</span>
               </div>
             </div>
           </CardContent>
