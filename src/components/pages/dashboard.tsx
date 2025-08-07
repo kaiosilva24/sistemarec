@@ -231,6 +231,10 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
   const [finalProductTotalQuantity, setFinalProductTotalQuantity] = useState<number | null>(null);
   const [isLoadingFinalProductTotalQuantity, setIsLoadingFinalProductTotalQuantity] = useState(true);
 
+  // Estado para Quantidade Total de Produtos Revenda - sincronização em tempo real
+  const [resaleProductTotalQuantity, setResaleProductTotalQuantity] = useState<number | null>(null);
+  const [isLoadingResaleProductTotalQuantity, setIsLoadingResaleProductTotalQuantity] = useState(true);
+
 
   // Estados para o sistema de checkpoint
   const [isCreatingCheckpoint, setIsCreatingCheckpoint] = useState(false);
@@ -1190,6 +1194,46 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
     };
   }, []);
 
+  // Effect para sincronização em tempo real da quantidade total de produtos revenda
+  useEffect(() => {
+    let unsubscribe: (() => void) | null = null;
+
+    const initializeResaleProductTotalQuantitySync = async () => {
+      try {
+        console.log('🔄 [Dashboard] Inicializando sincronização da quantidade total de produtos revenda...');
+
+        // Carregar valor inicial do Supabase
+        const initialQuantity = await dataManager.loadResaleProductTotalQuantity();
+        console.log(`🛍️ [Dashboard] Valor inicial da quantidade total de revenda: ${initialQuantity}`);
+
+        setResaleProductTotalQuantity(initialQuantity);
+        setIsLoadingResaleProductTotalQuantity(false);
+
+        // Configurar subscription em tempo real
+        unsubscribe = dataManager.subscribeToResaleProductTotalQuantityChanges((newQuantity) => {
+          console.log(`📡 [Dashboard] Nova quantidade total de revenda recebida via subscription: ${newQuantity}`);
+          setResaleProductTotalQuantity(newQuantity);
+        });
+
+        console.log('🔔 [Dashboard] Subscription ativa para quantidade total de produtos revenda');
+
+      } catch (error) {
+        console.error('❌ [Dashboard] Erro ao inicializar sincronização da quantidade total de revenda:', error);
+        setIsLoadingResaleProductTotalQuantity(false);
+      }
+    };
+
+    initializeResaleProductTotalQuantitySync();
+
+    // Cleanup subscription
+    return () => {
+      if (unsubscribe) {
+        console.log('🔕 [Dashboard] Cancelando subscription da quantidade total de produtos revenda');
+        unsubscribe();
+      }
+    };
+  }, []);
+
   // Listener para evento customizado de atualização do saldo de matéria-prima
   useEffect(() => {
     const handleRawMaterialStockUpdate = (event: CustomEvent) => {
@@ -1228,12 +1272,25 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       setIsLoadingFinalProductTotalQuantity(false);
     };
 
+    const handleResaleProductTotalQuantityUpdate = (event: CustomEvent) => {
+      const { quantity, timestamp, source } = event.detail;
+      console.log(`🛍️ [Dashboard] Evento 'resaleProductTotalQuantityUpdated' recebido:`);
+      console.log(`  - Quantidade Total Revenda: ${quantity}`);
+      console.log(`  - Timestamp: ${new Date(timestamp).toLocaleString()}`);
+      console.log(`  - Source: ${source}`);
+
+      // Atualizar estado imediatamente
+      setResaleProductTotalQuantity(quantity);
+      setIsLoadingResaleProductTotalQuantity(false);
+    };
+
     console.log('🎯 [Dashboard] Registrando listeners para eventos de matéria-prima e produtos finais');
 
     // Adicionar listeners para os eventos customizados
     window.addEventListener('rawMaterialBalanceUpdated', handleRawMaterialStockUpdate as EventListener);
     window.addEventListener('rawMaterialUnitaryQuantityUpdated', handleRawMaterialUnitaryQuantityUpdate as EventListener);
     window.addEventListener('finalProductTotalQuantityUpdated', handleFinalProductTotalQuantityUpdate as EventListener);
+    window.addEventListener('resaleProductTotalQuantityUpdated', handleResaleProductTotalQuantityUpdate as EventListener);
 
     // Cleanup
     return () => {
@@ -1241,6 +1298,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       window.removeEventListener('rawMaterialBalanceUpdated', handleRawMaterialStockUpdate as EventListener);
       window.removeEventListener('rawMaterialUnitaryQuantityUpdated', handleRawMaterialUnitaryQuantityUpdate as EventListener);
       window.removeEventListener('finalProductTotalQuantityUpdated', handleFinalProductTotalQuantityUpdate as EventListener);
+      window.removeEventListener('resaleProductTotalQuantityUpdated', handleResaleProductTotalQuantityUpdate as EventListener);
     };
   }, []);
 
@@ -1677,13 +1735,57 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
           console.log(`✅ [Dashboard] Quantidade total já atualizada: ${totalFinalProductQuantity}`);
         }
 
+        // ===== CALCULAR QUANTIDADE TOTAL DE PRODUTOS REVENDA =====
+        console.log('🔍 [Dashboard] Calculando quantidade total de produtos revenda...');
+
+        // Filtrar apenas produtos de revenda
+        const resaleProductItems = productItems.filter(item => resaleProductIds.has(item.item_id));
+
+        console.log(`🛍️ [Dashboard] Produtos revenda encontrados: ${resaleProductItems.length}`);
+
+        // Calcular quantidade total
+        const totalResaleProductQuantity = resaleProductItems.reduce((total, item) => {
+          const quantity = Number(item.quantity) || 0;
+          console.log(`🛍️ [Dashboard] Produto Revenda: ${item.item_name} - Qtd: ${quantity}`);
+          return total + quantity;
+        }, 0);
+
+        console.log(`🛍️ [Dashboard] Quantidade total de produtos revenda calculada: ${totalResaleProductQuantity}`);
+
+        // Só atualizar se houver diferença significativa
+        if (resaleProductTotalQuantity === null || resaleProductTotalQuantity !== totalResaleProductQuantity) {
+          console.log(`🔄 [Dashboard] Atualizando quantidade total de produtos revenda: ${totalResaleProductQuantity}`);
+
+          // Salvar no Supabase
+          const success = await dataManager.saveResaleProductTotalQuantity(totalResaleProductQuantity);
+          if (success) {
+            console.log(`✅ [Dashboard] Quantidade total de revenda salva com sucesso no Supabase: ${totalResaleProductQuantity}`);
+
+            // Disparar evento de atualização
+            const updateEvent = new CustomEvent('resaleProductTotalQuantityUpdated', {
+              detail: {
+                quantity: totalResaleProductQuantity,
+                timestamp: Date.now(),
+                source: 'Dashboard-StockItemsMonitor'
+              }
+            });
+            window.dispatchEvent(updateEvent);
+          }
+
+          // Atualizar estado local
+          setResaleProductTotalQuantity(totalResaleProductQuantity);
+          setIsLoadingResaleProductTotalQuantity(false);
+        } else {
+          console.log(`✅ [Dashboard] Quantidade total de revenda já atualizada: ${totalResaleProductQuantity}`);
+        }
+
       }, 300); // Aguardar 300ms para garantir que os dados foram processados
 
       return () => {
         clearTimeout(timeoutId);
       };
     }
-  }, [stockItems, stockItemsLoading, rawMaterialStockBalance, materials, materialsLoading, resaleProducts, finalProductTotalQuantity]);
+  }, [stockItems, stockItemsLoading, rawMaterialStockBalance, materials, materialsLoading, resaleProducts, finalProductTotalQuantity, resaleProductTotalQuantity]);
 
   // Log de comparação entre cálculo local e valor sincronizado
   useEffect(() => {
@@ -2181,17 +2283,31 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
             </CardContent>
           </Card>
 
-          {/* Card 9 - Placeholder para futura métrica */}
-          <Card className="bg-factory-800/50 border-tire-600/30 hover:shadow-lg transition-all duration-200 opacity-50">
+          {/* Card 9 - Quantidade Total Produtos Revenda */}
+          <Card className="bg-factory-800/50 border-tire-600/30 hover:shadow-lg transition-all duration-200">
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-tire-300 text-sm font-medium">Métrica Futura</p>
-                  <p className="text-2xl font-bold text-tire-400">--</p>
-                  <p className="text-xs text-tire-400 mt-1">Em desenvolvimento</p>
+                  <p className="text-tire-300 text-sm">Qtd. Total Produtos Revenda</p>
+                  <p className="text-2xl font-bold text-neon-green">
+                    {isLoadingResaleProductTotalQuantity || resaleProductTotalQuantity === null ? (
+                      <span className="animate-pulse">Carregando...</span>
+                    ) : (
+                      resaleProductTotalQuantity
+                    )}
+                  </p>
+                  <p className="text-xs text-tire-400 mt-1">
+                    {resaleProductTotalQuantity === null || resaleProductTotalQuantity === 0 ? (
+                      'Nenhuma unidade em estoque'
+                    ) : resaleProductTotalQuantity === 1 ? (
+                      '1 unidade total'
+                    ) : (
+                      `${resaleProductTotalQuantity} unidades totais`
+                    )}
+                  </p>
                 </div>
-                <div className="p-2 rounded-full bg-gray-500/20">
-                  <span className="text-lg">⏳</span>
+                <div className="text-neon-green">
+                  <span className="text-2xl">🛍️</span>
                 </div>
               </div>
             </CardContent>
