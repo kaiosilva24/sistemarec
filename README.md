@@ -65,6 +65,10 @@ Um sistema completo de gestão empresarial desenvolvido em React + TypeScript co
 - **ESLint** - Linting
 - **Prettier** - Formatação de código
 - **PostCSS** - Processamento CSS
+- **Jest** - Testes unitários
+- **Testing Library** - Testes de componentes
+- **Husky** - Git hooks
+- **lint-staged** - Linting em arquivos staged
 
 ## 🛠️ Instalação e Configuração
 
@@ -77,6 +81,24 @@ Um sistema completo de gestão empresarial desenvolvido em React + TypeScript co
 ```bash
 git clone https://github.com/seu-usuario/sistema-gestao.git
 cd sistema-gestao
+```
+
+### Ou após criar seu próprio repositório:
+```bash
+# Inicialize um novo repositório Git
+git init
+
+# Adicione o repositório remoto
+git remote add origin https://github.com/seu-usuario/seu-repositorio.git
+
+# Adicione todos os arquivos
+git add .
+
+# Faça o commit inicial
+git commit -m "Commit inicial"
+
+# Envie para o GitHub
+git push -u origin main
 ```
 
 ### 2. Instale as dependências
@@ -204,6 +226,39 @@ npm run build
 cp -r dist/* /var/www/html/
 ```
 
+## 🧪 Testes
+
+O projeto utiliza Jest e Testing Library para testes unitários e de componentes.
+
+### Executando testes
+
+```bash
+# Executar todos os testes
+npm test
+
+# Executar testes em modo watch
+npm run test:watch
+
+# Gerar relatório de cobertura
+npm run test:coverage
+```
+
+Para mais informações sobre testes, consulte o arquivo [README-TESTS.md](README-TESTS.md).
+
+## 🔍 Linting e Formatação
+
+O projeto utiliza ESLint e Prettier para garantir a qualidade do código.
+
+```bash
+# Verificar problemas de linting
+npm run lint
+
+# Formatar código com Prettier
+npx prettier --write .
+```
+
+Os hooks do Git (via Husky) garantem que o código seja verificado antes de cada commit.
+
 ## 🤝 Contribuição
 
 1. Fork o projeto
@@ -211,6 +266,8 @@ cp -r dist/* /var/www/html/
 3. Commit suas mudanças (`git commit -m 'Add some AmazingFeature'`)
 4. Push para a branch (`git push origin feature/AmazingFeature`)
 5. Abra um Pull Request
+
+Para mais detalhes, consulte o arquivo [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## 📝 Licença
 

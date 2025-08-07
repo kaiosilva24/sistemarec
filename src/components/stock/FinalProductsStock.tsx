@@ -885,7 +885,7 @@ const FinalProductsStock: React.FC<FinalProductsStockProps> = ({ isLoading = fal
 
         <Select value={productTypeFilter} onValueChange={(value: "all" | "final" | "resale") => setProductTypeFilter(value)}>
           <SelectTrigger className="w-48 bg-factory-700/50 border-tire-600/30 text-white">
-            <SelectValue />
+            <SelectValue placeholder="Tipo de Produto" />
           </SelectTrigger>
           <SelectContent className="bg-factory-800 border-tire-600/30">
             <SelectItem value="all" className="text-white hover:bg-tire-700/50">
