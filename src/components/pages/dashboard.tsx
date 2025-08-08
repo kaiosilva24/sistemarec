@@ -2234,8 +2234,8 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-tire-300 text-sm">Matéria Prima Unitária</p>
-                  <p className="text-2xl font-bold text-neon-orange">
+                  <p className="text-tire-300 text-sm font-medium">Matéria Prima Unitária</p>
+                  <p className="text-2xl font-bold text-tire-200">
                     {isLoadingRawMaterialUnitaryQuantity ? (
                       <span className="animate-pulse">Carregando...</span>
                     ) : (
@@ -2246,8 +2246,8 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                     {rawMaterialUnitaryQuantity === 1 ? '1 tipo em estoque' : `${rawMaterialUnitaryQuantity > 0 ? 'tipos' : '0 tipos'} em estoque`}
                   </p>
                 </div>
-                <div className="text-neon-orange">
-                  <span className="text-2xl">📦</span>
+                <div className="p-2 rounded-full bg-orange-500/20">
+                  <Calculator className="h-5 w-5 text-orange-400" />
                 </div>
               </div>
             </CardContent>
@@ -2258,8 +2258,8 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-tire-300 text-sm">Qtd. Total Produtos Finais</p>
-                  <p className="text-2xl font-bold text-neon-cyan">
+                  <p className="text-tire-300 text-sm font-medium">Qtd. Total Produtos Finais</p>
+                  <p className="text-2xl font-bold text-tire-200">
                     {isLoadingFinalProductTotalQuantity || finalProductTotalQuantity === null ? (
                       <span className="animate-pulse">Carregando...</span>
                     ) : (
@@ -2276,8 +2276,8 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                     )}
                   </p>
                 </div>
-                <div className="text-neon-cyan">
-                  <span className="text-2xl">🏭</span>
+                <div className="p-2 rounded-full bg-orange-500/20">
+                  <Calculator className="h-5 w-5 text-orange-400" />
                 </div>
               </div>
             </CardContent>
@@ -2288,8 +2288,8 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-tire-300 text-sm">Qtd. Total Produtos Revenda</p>
-                  <p className="text-2xl font-bold text-neon-green">
+                  <p className="text-tire-300 text-sm font-medium">Qtd. Total Produtos Revenda</p>
+                  <p className="text-2xl font-bold text-tire-200">
                     {isLoadingResaleProductTotalQuantity || resaleProductTotalQuantity === null ? (
                       <span className="animate-pulse">Carregando...</span>
                     ) : (
@@ -2306,8 +2306,8 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                     )}
                   </p>
                 </div>
-                <div className="text-neon-green">
-                  <span className="text-2xl">🛍️</span>
+                <div className="p-2 rounded-full bg-orange-500/20">
+                  <Calculator className="h-5 w-5 text-orange-400" />
                 </div>
               </div>
             </CardContent>
