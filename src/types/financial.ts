@@ -324,3 +324,26 @@ export interface ResaleProduct {
   created_at: string;
   updated_at?: string;
 }
+
+export interface InstallmentSale {
+  id: string;
+  type: "final" | "resale";
+  customer_id: string;
+  customer_name: string;
+  salesperson_id: string;
+  salesperson_name: string;
+  product_id: string;
+  product_name: string;
+  quantity: number;
+  unit_price: number;
+  total_amount: number;
+  unit: string;
+  description?: string;
+  sale_date: string;
+  due_date?: string;
+  received_date?: string;
+  status: "pending" | "received";
+  cash_flow_entry_id?: string;
+  created_at: string;
+  updated_at?: string;
+}
