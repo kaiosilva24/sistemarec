@@ -34,6 +34,7 @@ import {
   AlertTriangle,
   BarChart3,
   ChevronDown,
+  Banknote, // Import Banknote icon
 } from "lucide-react";
 import {
   BarChart,
@@ -128,13 +129,8 @@ const SalesDashboard = ({
     updateCustomer,
     isLoading: customersLoading,
   } = useCustomers();
-  const {
-    stockItems,
-    updateStockItem,
-    isLoading: stockLoading,
-  } = useStockItems();
-  const { cashFlowEntries, addCashFlowEntry, deleteCashFlowEntry } =
-    useCashFlow();
+  const { stockItems, updateStockItem, deleteStockItem, isLoading: stockLoading } = useStockItems(); // Added deleteStockItem
+  const { cashFlowEntries, addCashFlowEntry, deleteCashFlowEntry, updateCashFlowEntry } = useCashFlow(); // Added updateCashFlowEntry
   const { addProductionEntry } = useProductionEntries();
   const {
     warrantyEntries,
@@ -836,6 +832,41 @@ const SalesDashboard = ({
     }
   }, [unitPrice, quantity, productType]);
 
+  // Function to handle launching a sale to cash
+  const handleLaunchToCash = async (saleId: string, saleName: string) => {
+    console.log('🔥 [handleLaunchToCash] called with:', { saleId, saleName });
+
+    // Find the sale from cashFlowEntries
+    const sale = cashFlowEntries.find(entry => entry.id === saleId);
+
+    if (!sale) {
+      alert('Erro: Venda não encontrada para lançar no caixa.');
+      return;
+    }
+
+    // Confirm the action
+    if (!confirm(`Tem certeza que deseja lançar a venda "${saleName}" no caixa?`)) {
+      return;
+    }
+
+    try {
+      // Update the cash flow entry: change category from 'venda_a_prazo' to 'venda' and set amount
+      await updateCashFlowEntry(saleId, {
+        ...sale,
+        category: 'venda',
+        amount: extractRealValueFromSale(sale), // Use the actual real value
+        description: sale.description?.replace(/VENDA_A_PRAZO: true \|/, 'VENDA_A_PRAZO: false |') || sale.description, // Mark as no longer 'a prazo'
+      });
+
+      alert(`Venda "${saleName}" lançada no caixa com sucesso!`);
+      onRefresh(); // Trigger a refresh of the data
+    } catch (error) {
+      console.error("Erro ao lançar venda no caixa:", error);
+      alert("Erro ao lançar a venda no caixa. Tente novamente.");
+    }
+  };
+
+
   // Handle sale/warranty confirmation
   const handleConfirmSale = async () => {
     // Validation for warranty vs regular sale
@@ -1164,7 +1195,7 @@ const SalesDashboard = ({
     }
   };
 
-  
+
 
   // Test function to verify onClick works
   const testClick = () => {
@@ -1284,6 +1315,7 @@ const SalesDashboard = ({
           `Venda excluída com sucesso!\n\n` +
             `📦 Os produtos foram devolvidos ao estoque automaticamente.`,
         );
+        onRefresh(); // Trigger a refresh of the data
       } catch (error) {
         console.error("Erro ao excluir venda:", error);
         alert("Erro ao excluir a venda. Tente novamente.");
@@ -1430,6 +1462,7 @@ const SalesDashboard = ({
             `📦 Os produtos foram devolvidos ao estoque automaticamente.\n` +
             `👤 Contador de garantias do cliente foi atualizado.`,
         );
+        onRefresh(); // Trigger a refresh of the data
       } catch (error) {
         console.error("Erro ao excluir garantia:", error);
         alert("Erro ao excluir a garantia. Tente novamente.");
@@ -3037,17 +3070,32 @@ const SalesDashboard = ({
                             </div>
                           </div>
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() =>
-                            handleDeleteSale(sale.id, sale.reference_name)
-                          }
-                          className="text-red-400 hover:text-red-300 hover:bg-red-900/20 p-2 h-8 w-8"
-                          title="Excluir venda"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          {sale.category === "venda_a_prazo" && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() =>
+                                handleLaunchToCash(sale.id, sale.reference_name)
+                              }
+                              className="text-neon-green hover:text-neon-green hover:bg-neon-green/20 p-2 h-8 w-8"
+                              title="Lançar no Caixa"
+                            >
+                              <Banknote className="h-4 w-4" />
+                            </Button>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() =>
+                              handleDeleteSale(sale.id, sale.reference_name)
+                            }
+                            className="text-red-400 hover:text-red-300 hover:bg-red-900/20 p-2 h-8 w-8"
+                            title="Excluir venda"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
                       {sale.description && (
                         <div className="mt-2 p-2 bg-factory-700/20 rounded text-tire-300 text-sm">
@@ -3562,17 +3610,32 @@ const SalesDashboard = ({
                             </div>
                           </div>
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() =>
-                            handleDeleteSale(sale.id, sale.reference_name)
-                          }
-                          className="text-red-400 hover:text-red-300 hover:bg-red-900/20 p-2 h-8 w-8"
-                          title="Excluir venda"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          {sale.category === "venda_a_prazo" && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() =>
+                                handleLaunchToCash(sale.id, sale.reference_name)
+                              }
+                              className="text-neon-green hover:text-neon-green hover:bg-neon-green/20 p-2 h-8 w-8"
+                              title="Lançar no Caixa"
+                            >
+                              <Banknote className="h-4 w-4" />
+                            </Button>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() =>
+                              handleDeleteSale(sale.id, sale.reference_name)
+                            }
+                            className="text-red-400 hover:text-red-300 hover:bg-red-900/20 p-2 h-8 w-8"
+                            title="Excluir venda"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
                       {sale.description && (
                         <div className="mt-2 p-2 bg-factory-700/20 rounded text-tire-300 text-sm">
