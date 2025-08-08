@@ -2220,16 +2220,10 @@ const SalesDashboard = ({
                         PIX
                       </SelectItem>
                       <SelectItem
-                        value="transfer"
+                        value="installment"
                         className="text-white hover:bg-tire-700/50"
                       >
-                        Transferência
-                      </SelectItem>
-                      <SelectItem
-                        value="other"
-                        className="text-white hover:bg-tire-700/50"
-                      >
-                        Outros
+                        À Prazo
                       </SelectItem>
                     </SelectContent>
                   </Select>
@@ -2309,8 +2303,7 @@ const SalesDashboard = ({
                               case "cash": return "Dinheiro";
                               case "card": return "Cartão";
                               case "pix": return "PIX";
-                              case "transfer": return "Transferência";
-                              case "other": return "Outros";
+                              case "installment": return "À Prazo";
                               default: return "Não especificado";
                             }
                           })()}
