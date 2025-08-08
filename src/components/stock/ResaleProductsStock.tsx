@@ -91,7 +91,7 @@ const ResaleProductsStock = ({ isLoading = false }: ResaleProductsStockProps) =>
       const quantity = stockItem?.quantity || 0;
       const minLevel = stockItem?.min_level || 0;
       const totalValue = stockItem?.total_value || 0;
-      
+
       // Calcular valor médio sempre como total_value / quantity
       const averageUnitValue = quantity > 0 ? totalValue / quantity : 0;
 
@@ -230,7 +230,7 @@ const ResaleProductsStock = ({ isLoading = false }: ResaleProductsStockProps) =>
         });
 
         const result = await updateStockItem(product.stockId, updateData);
-        
+
         if (!result) {
           throw new Error("Falha ao atualizar item no banco de dados");
         }
@@ -260,7 +260,7 @@ const ResaleProductsStock = ({ isLoading = false }: ResaleProductsStockProps) =>
         console.log("🆕 Criando novo registro de estoque:", newStockData);
 
         const result = await createStockItem(newStockData);
-        
+
         if (!result) {
           throw new Error("Falha ao criar novo item no banco de dados");
         }
@@ -278,7 +278,7 @@ const ResaleProductsStock = ({ isLoading = false }: ResaleProductsStockProps) =>
       setSelectedProduct("");
       setQuantity("");
       setUnitPrice("");
-      
+
     } catch (error) {
       console.error("❌ Erro ao atualizar estoque:", {
         error: error instanceof Error ? error.message : error,
@@ -288,12 +288,12 @@ const ResaleProductsStock = ({ isLoading = false }: ResaleProductsStockProps) =>
         quantity: quantityValue,
         price: priceValue
       });
-      
+
       let errorMessage = "Não foi possível atualizar o estoque.";
-      
+
       if (error instanceof Error) {
         console.log("Erro detalhado:", error.message);
-        
+
         if (error.message.includes("duplicate") || error.message.includes("unique")) {
           errorMessage = "Este item já existe no estoque.";
         } else if (error.message.includes("foreign") || error.message.includes("violates")) {
@@ -389,19 +389,33 @@ const ResaleProductsStock = ({ isLoading = false }: ResaleProductsStockProps) =>
         productsInStock,
         timestamp: new Date().toLocaleString()
       });
-      
-      // Salvar no localStorage para compatibilidade
-      const stockData = {
-        value: totalStockValue,
-        timestamp: Date.now(),
-        source: 'ResaleProductsStock'
-      };
-      
+
+      // Salvar valor total no localStorage
       try {
-        localStorage.setItem('resale_total_stock_value', JSON.stringify(stockData));
-        console.log('💾 [ResaleProductsStock] Valor salvo no localStorage:', stockData);
+        localStorage.setItem('resale_total_stock_value', JSON.stringify({
+          value: totalStockValue,
+          timestamp: Date.now(),
+          source: 'ResaleProductsStock',
+          breakdown: {
+            totalProducts,
+            productsInStock,
+            lowStockProducts
+          }
+        }));
+        console.log(`✅ [ResaleProductsStock] Valor total salvo no localStorage: R$ ${totalStockValue.toFixed(2)}`);
       } catch (error) {
         console.warn('⚠️ [ResaleProductsStock] Erro ao salvar no localStorage:', error);
+      }
+
+      // Salvar valor total no Supabase via dataManager
+      try {
+        const { dataManager } = await import('@/utils/dataManager');
+        const success = await dataManager.saveResaleProductStockBalance(totalStockValue);
+        if (success) {
+          console.log(`✅ [ResaleProductsStock] Valor total salvo no Supabase: R$ ${totalStockValue.toFixed(2)}`);
+        }
+      } catch (error) {
+        console.warn('⚠️ [ResaleProductsStock] Erro ao salvar valor total no Supabase:', error);
       }
 
       // Salvar quantidade total no Supabase
@@ -410,7 +424,7 @@ const ResaleProductsStock = ({ isLoading = false }: ResaleProductsStockProps) =>
         const success = await dataManager.saveResaleProductTotalQuantity(totalQuantity);
         if (success) {
           console.log(`✅ [ResaleProductsStock] Quantidade total salva no Supabase: ${totalQuantity}`);
-          
+
           // Disparar evento específico para quantidade total
           const quantityUpdateEvent = new CustomEvent('resaleProductTotalQuantityUpdated', {
             detail: {
@@ -428,7 +442,7 @@ const ResaleProductsStock = ({ isLoading = false }: ResaleProductsStockProps) =>
       } catch (error) {
         console.warn('⚠️ [ResaleProductsStock] Erro ao salvar quantidade total no Supabase:', error);
       }
-      
+
       // Disparar evento customizado para notificar o dashboard sobre valor total
       const updateEvent = new CustomEvent('resaleTotalStockUpdated', {
         detail: {
@@ -441,16 +455,16 @@ const ResaleProductsStock = ({ isLoading = false }: ResaleProductsStockProps) =>
           source: 'ResaleProductsStock'
         }
       });
-      
+
       window.dispatchEvent(updateEvent);
       console.log('📡 [ResaleProductsStock] Evento resaleTotalStockUpdated disparado:', {
         totalValue: totalStockValue.toFixed(2),
         totalQuantity: totalQuantity,
         source: 'ResaleProductsStock'
       });
-      
+
     }, 300); // Delay de 300ms para estabilizar cálculos
-    
+
     return () => clearTimeout(timeoutId);
   }, [totalStockValue, totalQuantity, totalProducts, productsInStock, lowStockProducts]); // Monitora mudanças nas métricas
 

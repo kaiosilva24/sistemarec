@@ -493,7 +493,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
   const [isCreatingCheckpoint, setIsCreatingCheckpoint] = useState(false);
   const [checkpointStatus, setCheckpointStatus] = useState<string | null>(null);
 
-  // Função de debounce para evitar oscilações
+  // Função de debounce para evitar múltiplas atualizações
   const updateResaleProfitWithDebounce = (newProfit: number, source: string) => {
     const now = Date.now();
     const timeSinceLastUpdate = now - lastUpdateTimestamp;
@@ -1017,8 +1017,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
           console.log(`  - Cálculo local: R$ ${simpleCalculation.toFixed(2)}`);
           console.log(`  - Estado sincronizado: R$ ${finalProductStockBalance.toFixed(2)}`);
           console.log(`  - Diferença: R$ ${Math.abs(finalProductStockBalance - simpleCalculation).toFixed(2)}`);
-          console.log(`  - Produtos finais encontrados: ${productItems.length}`);
-          console.log(`  - FinalProductsStock fará o cálculo correto automaticamente`);
+          console.log(`  - ProductsStock fará o cálculo correto automaticamente`);
         }
       }, 300);
 
@@ -1183,9 +1182,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
         setIsLoadingFinalProductStock(false);
 
         // Configurar subscription em tempo real para mudanças no Supabase
-        // Note: O hook useDataPersistence já gerencia subscriptions, este effect pode ser redundante.
-        // Se necessário, o subscription pode ser configurado aqui ou confiado no hook.
-        // O `dataManager.subscribeToFinalProductStockChanges` é um wrapper que pode ser usado.
+        // Note: O `dataManager.subscribeToFinalProductStockChanges` é um wrapper que pode ser usado.
 
       } catch (error) {
         console.error('❌ [Dashboard] Erro ao inicializar sincronização do saldo de produtos finais:', error);
@@ -2023,7 +2020,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       rawMaterialStockBalance !== null &&
       resaleProductStockBalance !== null
     ) {
-      const timeoutId = setTimeout(() => {
+      const timeoutId = setTimeout(async () => {
         console.log('💰 [Dashboard] Calculando valor empresarial total...');
         console.log(`  - Saldo de Caixa: R$ ${(cashBalanceState || 0).toFixed(2)}`);
         console.log(`  - Saldo Produtos Finais: R$ ${(finalProductStockBalance || 0).toFixed(2)}`);
@@ -2061,7 +2058,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
           }
         });
 
-        // Atualizar estado local sempre
+        // Atualizar estado local
         setEmpresarialValue(totalValue);
         setIsLoadingEmpresarialValue(false);
       }, 100); // Reduzir delay para sincronização mais rápida
@@ -2602,7 +2599,9 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                 </span>
               </div>
               <div className="flex justify-between items-center pt-2 border-t border-tire-600/30">
-                <span className="text-white font-medium">Saldo Atual:</span>
+                <span className="text-white font-medium">
+                  Saldo Atual:
+                </span>
                 <span
                   className={`font-bold text-lg ${
                     cashBalance >= 0
