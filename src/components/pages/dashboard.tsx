@@ -2153,8 +2153,6 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
     };
   }, []);
 
-  // Definições de métricas e cores removidas
-
   if (isDataLoading) {
     return (
       <div className="space-y-6">
@@ -2220,6 +2218,66 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       setIsCreatingCheckpoint(false);
     }
   };
+
+  // Effect para sincronização automática do valor empresarial
+  useEffect(() => {
+    const syncBusinessValue = async () => {
+      try {
+        setIsLoadingEmpresarialValue(true);
+
+        // Calcular valor empresarial baseado nos dados atuais
+        const valorEmpresarial = cashBalanceState + finalProductStockBalance + rawMaterialStockBalance + resaleProductStockBalance;
+
+        console.log(`💼 [Dashboard] Calculando Valor Empresarial TOTAL:`);
+        console.log(`  - Saldo Caixa: R$ ${cashBalanceState.toFixed(2)}`);
+        console.log(`  - Produtos Finais: R$ ${finalProductStockBalance.toFixed(2)}`);
+        console.log(`  - Matéria Prima: R$ ${rawMaterialStockBalance.toFixed(2)}`);
+        console.log(`  - Produtos Revenda: R$ ${resaleProductStockBalance.toFixed(2)}`);
+        console.log(`  = TOTAL: R$ ${valorEmpresarial.toFixed(2)}`);
+
+        // Salvar valor sincronizado no Supabase
+        await dataManager.saveBusinessValue(valorEmpresarial);
+
+        setEmpresarialValue(valorEmpresarial);
+
+        // Disparar evento de atualização do valor empresarial
+        const updateEvent = new CustomEvent('businessValueUpdated', {
+          detail: {
+            value: valorEmpresarial,
+            timestamp: Date.now(),
+            source: 'Dashboard-AutoSync',
+            breakdown: {
+              cashBalance: cashBalanceState,
+              finalProducts: finalProductStockBalance,
+              rawMaterials: rawMaterialStockBalance,
+              resaleProducts: resaleProductStockBalance
+            }
+          }
+        });
+        window.dispatchEvent(updateEvent);
+
+        console.log(`✅ [Dashboard] Valor empresarial sincronizado: R$ ${valorEmpresarial.toFixed(2)}`);
+
+      } catch (error) {
+        console.error('❌ [Dashboard] Erro ao sincronizar valor empresarial:', error);
+        // Tentar carregar valor salvo como fallback
+        try {
+          const savedValue = await dataManager.loadBusinessValue();
+          setEmpresarialValue(savedValue);
+        } catch (fallbackError) {
+          console.error('❌ [Dashboard] Erro no fallback também:', fallbackError);
+          setEmpresarialValue(0);
+        }
+      } finally {
+        setIsLoadingEmpresarialValue(false);
+      }
+    };
+
+    // Sincronizar quando qualquer valor componente mudar
+    if (!isLoadingCashBalance && !isLoadingFinalProductStock && !isLoadingRawMaterialStock && !isLoadingResaleProductStock) {
+      syncBusinessValue();
+    }
+  }, [cashBalanceState, finalProductStockBalance, rawMaterialStockBalance, resaleProductStockBalance, isLoadingCashBalance, isLoadingFinalProductStock, isLoadingRawMaterialStock, isLoadingResaleProductStock]);
 
   return (
     <div className="space-y-6">
