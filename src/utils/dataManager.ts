@@ -934,6 +934,32 @@ export class DataManager {
     return this.loadFromDatabase<CashFlowEntry>("cash_flow_entries");
   }
 
+  async updateCashFlowEntry(id: string, updates: Partial<CashFlowEntry>): Promise<boolean> {
+    try {
+      console.log('💰 [DataManager] Atualizando entrada de cash flow:', {
+        id: id,
+        updates: updates,
+        timestamp: new Date().toISOString()
+      });
+
+      const success = await this.updateInDatabase("cash_flow_entries", id, updates);
+      
+      if (success) {
+        console.log('✅ [DataManager] Entrada de cash flow atualizada com sucesso:', {
+          id: id,
+          updatedFields: Object.keys(updates)
+        });
+      } else {
+        console.error('❌ [DataManager] Falha ao atualizar entrada de cash flow:', id);
+      }
+
+      return success;
+    } catch (error) {
+      console.error('❌ [DataManager] Erro ao atualizar entrada de cash flow:', error);
+      return false;
+    }
+  }
+
   async deleteCashFlowEntry(id: string): Promise<boolean> {
     return this.deleteFromDatabase("cash_flow_entries", id);
   }
