@@ -105,6 +105,7 @@ const SalesDashboard = ({
   const [unitPrice, setUnitPrice] = useState("");
   const [quantity, setQuantity] = useState("");
   const [saleValue, setSaleValue] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState(""); // Added for payment method
   const [isProcessingSale, setIsProcessingSale] = useState(false);
   const [productType, setProductType] = useState<
     "final" | "resale" | "warranty"
@@ -715,6 +716,7 @@ const SalesDashboard = ({
     setUnitPrice("");
     setQuantity("");
     setSaleValue("");
+    setPaymentMethod(""); // Reset payment method
     setShowProductDropdown(false);
   }, [productType]);
 
@@ -762,7 +764,8 @@ const SalesDashboard = ({
         !saleValue ||
         parseFloat(unitPrice) <= 0 ||
         parseFloat(quantity) <= 0 ||
-        parseFloat(saleValue) <= 0
+        parseFloat(saleValue) <= 0 ||
+        !paymentMethod // Added validation for payment method
       ) {
         alert("Por favor, preencha todos os campos corretamente.");
         return;
@@ -884,6 +887,7 @@ const SalesDashboard = ({
         setQuantity("");
         setSaleValue("");
         setProductType("final");
+        setPaymentMethod(""); // Reset payment method
 
         alert(
           `Garantia registrada com sucesso!\n\n` +
@@ -985,6 +989,7 @@ const SalesDashboard = ({
         setQuantity("");
         setSaleValue("");
         setProductType("final");
+        setPaymentMethod(""); // Reset payment method
 
         const productName =
           productType === "final" ? product?.item_name : resaleProduct?.name;
@@ -1045,18 +1050,18 @@ const SalesDashboard = ({
 
   // Handle delete sale
   const handleDeleteSale = async (saleId: string, saleName: string) => {
-    console.log('🔥 [DEBUG] handleDeleteSale called with:', { saleId, saleName });
-    
+    console.log('🔥 [handleDeleteSale] called with:', { saleId, saleName });
+
     // Temporarily removing confirm dialog for testing
-    console.log('🔥 [DEBUG] Skipping confirmation dialog for testing');
-    
+    console.log('🔥 [handleDeleteSale] Skipping confirmation dialog for testing');
+
     if (true) { // Always proceed for testing
-      console.log('🔥 [DEBUG] User confirmed deletion, proceeding...');
+      console.log('🔥 [handleDeleteSale] User confirmed deletion, proceeding...');
       try {
-        console.log('🔥 [DEBUG] Starting deletion process...');
+        console.log('🔥 [handleDeleteSale] Starting deletion process...');
         // Find the sale to get product information
         const sale = cashFlowEntries.find((entry) => entry.id === saleId);
-        console.log('🔥 [DEBUG] Found sale:', sale);
+        console.log('🔥 [handleDeleteSale] Found sale:', sale);
 
         if (sale && sale.description) {
           // Extract product info from sale description
@@ -1147,9 +1152,9 @@ const SalesDashboard = ({
         }
 
         // Delete the sale from cash flow
-        console.log('🔥 [DEBUG] About to call deleteCashFlowEntry with saleId:', saleId);
+        console.log('🔥 [handleDeleteSale] About to call deleteCashFlowEntry with saleId:', saleId);
         await deleteCashFlowEntry(saleId);
-        console.log('🔥 [DEBUG] deleteCashFlowEntry completed successfully');
+        console.log('🔥 [handleDeleteSale] deleteCashFlowEntry completed successfully');
 
         alert(
           `Venda excluída com sucesso!\n\n` +
@@ -1451,7 +1456,6 @@ const SalesDashboard = ({
     };
   }, [resaleProductSalesHistory]);
 
-  // Custom tooltip for the chart
   // Filter functions for autocomplete
   const filteredSalespeople = activeSalespeople.filter((person) =>
     person.name.toLowerCase().includes(salespersonSearch.toLowerCase()),
@@ -2183,6 +2187,55 @@ const SalesDashboard = ({
                 </div>
               )}
 
+              {/* Payment Method Selection */}
+              {selectedProduct && productType !== "warranty" && (
+                <div className="space-y-2">
+                  <Label className="text-tire-300 font-medium">
+                    {productType === "warranty" ? "5" : "7"}. Forma de Pagamento *
+                  </Label>
+                  <Select
+                    value={paymentMethod}
+                    onValueChange={setPaymentMethod}
+                  >
+                    <SelectTrigger className="bg-factory-700/50 border-tire-600/30 text-white h-12 text-lg">
+                      <SelectValue placeholder="Selecione a forma de pagamento" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-factory-800 border-tire-600/30">
+                      <SelectItem
+                        value="cash"
+                        className="text-white hover:bg-tire-700/50"
+                      >
+                        Dinheiro
+                      </SelectItem>
+                      <SelectItem
+                        value="card"
+                        className="text-white hover:bg-tire-700/50"
+                      >
+                        Cartão
+                      </SelectItem>
+                      <SelectItem
+                        value="pix"
+                        className="text-white hover:bg-tire-700/50"
+                      >
+                        PIX
+                      </SelectItem>
+                      <SelectItem
+                        value="transfer"
+                        className="text-white hover:bg-tire-700/50"
+                      >
+                        Transferência
+                      </SelectItem>
+                      <SelectItem
+                        value="other"
+                        className="text-white hover:bg-tire-700/50"
+                      >
+                        Outros
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
               {/* Summary for Regular Sale */}
               {productType !== "warranty" &&
                 selectedSalesperson &&
@@ -2190,7 +2243,8 @@ const SalesDashboard = ({
                 selectedProduct &&
                 unitPrice &&
                 quantity &&
-                saleValue && (
+                saleValue &&
+                paymentMethod && (
                   <div className="p-4 bg-neon-green/10 rounded-lg border border-neon-green/30">
                     <h4 className="text-neon-green font-medium mb-3">
                       Resumo da Venda:
@@ -2245,6 +2299,21 @@ const SalesDashboard = ({
                         <span className="text-tire-300">Preço Unitário:</span>
                         <span className="text-white">
                           {formatCurrency(parseFloat(unitPrice))}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-tire-300">Pagamento:</span>
+                        <span className="text-white">
+                          {(() => {
+                            switch (paymentMethod) {
+                              case "cash": return "Dinheiro";
+                              case "card": return "Cartão";
+                              case "pix": return "PIX";
+                              case "transfer": return "Transferência";
+                              case "other": return "Outros";
+                              default: return "Não especificado";
+                            }
+                          })()}
                         </span>
                       </div>
                       <div className="flex justify-between border-t border-neon-green/30 pt-2">
@@ -2358,7 +2427,8 @@ const SalesDashboard = ({
                     (!unitPrice ||
                       !saleValue ||
                       parseFloat(unitPrice) <= 0 ||
-                      parseFloat(saleValue) <= 0))
+                      parseFloat(saleValue) <= 0 ||
+                      !paymentMethod)) // Check paymentMethod
                 }
                 className={`w-full h-14 text-lg font-medium text-white ${
                   productType === "warranty"
@@ -2730,7 +2800,8 @@ const SalesDashboard = ({
                         produtos finais com maior quantidade vendida
                       </p>
                       <p className="text-tire-500 text-xs mt-1">
-                        🔵 Azul: Quantidade Vendida | 💰 Valor Médio por Unidade
+                        🔵 Azul: Quantidade Vendida | 💰 Valor Médio por
+                        Unidade
                       </p>
                     </div>
                   </div>
