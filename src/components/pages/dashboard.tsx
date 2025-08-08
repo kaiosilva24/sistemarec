@@ -33,9 +33,20 @@ import {
   ShoppingBag,
   Calculator,
   Save,
+  Calendar,
+  Filter,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
 import { dataManager } from '../../utils/dataManager';
 import { autoSetupSupabase } from '../../utils/setupSupabaseTable';
 import { ensureSystemDataExists } from '../../utils/initializeSupabaseData';
@@ -243,6 +254,21 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
   // Estados para o sistema de checkpoint
   const [isCreatingCheckpoint, setIsCreatingCheckpoint] = useState(false);
   const [checkpointStatus, setCheckpointStatus] = useState<string | null>(null);
+
+  // Estados para o gráfico de lucro empresarial
+  const [empresarialProfitData, setEmpresarialProfitData] = useState<Array<{
+    date: string;
+    lucro: number;
+    saldoCaixa: number;
+    saldoMateriaPrima: number;
+    saldoProdutosFinais: number;
+    saldoProdutosRevenda: number;
+    valorEmpresarial: number;
+  }>>([]);
+  const [dateFilter, setDateFilter] = useState({
+    startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 dias atrás
+    endDate: new Date().toISOString().split('T')[0] // hoje
+  });
 
   // Função de debounce para evitar oscilações
   const updateResaleProfitWithDebounce = (newProfit: number, source: string) => {
@@ -1987,6 +2013,9 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
 
         setEmpresarialValue(totalValue);
         setIsLoadingEmpresarialValue(false);
+
+        // Atualizar dados históricos para o gráfico
+        updateEmpresarialProfitData(totalValue, cashBalanceState, rawMaterialStockBalance, finalProductStockBalance, resaleProductStockBalance);
       } else {
         console.log('⏳ [Dashboard] Aguardando todos os valores para calcular Valor Empresarial...');
         console.log(`  - Saldo Caixa: ${cashBalanceState !== null ? 'OK' : 'LOADING'}`);
@@ -1999,6 +2028,69 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
     // Calcular sempre que qualquer valor mudar
     calculateEmpresarialValue();
   }, [cashBalanceState, rawMaterialStockBalance, finalProductStockBalance, resaleProductStockBalance]);
+
+  // Função para atualizar dados históricos do lucro empresarial
+  const updateEmpresarialProfitData = (
+    valorEmpresarial: number,
+    saldoCaixa: number,
+    saldoMateriaPrima: number,
+    saldoProdutosFinais: number,
+    saldoProdutosRevenda: number
+  ) => {
+    const today = new Date().toISOString().split('T')[0];
+    
+    setEmpresarialProfitData(prevData => {
+      const existingIndex = prevData.findIndex(item => item.date === today);
+      const newEntry = {
+        date: today,
+        lucro: valorEmpresarial, // Usando valor empresarial como lucro
+        saldoCaixa,
+        saldoMateriaPrima,
+        saldoProdutosFinais,
+        saldoProdutosRevenda,
+        valorEmpresarial
+      };
+
+      if (existingIndex >= 0) {
+        // Atualizar entrada existente
+        const updatedData = [...prevData];
+        updatedData[existingIndex] = newEntry;
+        return updatedData;
+      } else {
+        // Adicionar nova entrada e manter apenas os últimos 30 dias
+        const updatedData = [...prevData, newEntry].slice(-30);
+        return updatedData;
+      }
+    });
+  };
+
+  // Effect para carregar dados históricos do localStorage
+  useEffect(() => {
+    try {
+      const storedData = localStorage.getItem('empresarialProfitData');
+      if (storedData) {
+        const parsedData = JSON.parse(storedData);
+        if (Array.isArray(parsedData) && parsedData.length > 0) {
+          setEmpresarialProfitData(parsedData);
+          console.log('📊 [Dashboard] Dados históricos do lucro empresarial carregados:', parsedData.length, 'registros');
+        }
+      }
+    } catch (error) {
+      console.error('❌ [Dashboard] Erro ao carregar dados históricos:', error);
+    }
+  }, []);
+
+  // Effect para salvar dados históricos no localStorage
+  useEffect(() => {
+    if (empresarialProfitData.length > 0) {
+      try {
+        localStorage.setItem('empresarialProfitData', JSON.stringify(empresarialProfitData));
+        console.log('💾 [Dashboard] Dados históricos salvos:', empresarialProfitData.length, 'registros');
+      } catch (error) {
+        console.error('❌ [Dashboard] Erro ao salvar dados históricos:', error);
+      }
+    }
+  }, [empresarialProfitData]);
 
   // Listeners para eventos de checkpoint - restauração de dados
   useEffect(() => {
@@ -2085,6 +2177,48 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
     );
   }
 
+  // Função para filtrar dados do gráfico por data
+  const getFilteredProfitData = () => {
+    return empresarialProfitData.filter(item => {
+      const itemDate = new Date(item.date);
+      const startDate = new Date(dateFilter.startDate);
+      const endDate = new Date(dateFilter.endDate);
+      return itemDate >= startDate && itemDate <= endDate;
+    });
+  };
+
+  // Componente de tooltip customizado para o gráfico
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      return (
+        <div className="bg-factory-800/95 border border-tire-600/30 rounded-lg p-4 shadow-lg">
+          <p className="text-tire-300 text-sm mb-2">
+            {new Date(label).toLocaleDateString('pt-BR')}
+          </p>
+          <div className="space-y-1">
+            <p className="text-neon-purple font-bold">
+              Lucro Empresarial: {formatCurrency(data.lucro)}
+            </p>
+            <p className="text-green-400 text-sm">
+              Saldo Caixa: {formatCurrency(data.saldoCaixa)}
+            </p>
+            <p className="text-blue-400 text-sm">
+              Matéria-Prima: {formatCurrency(data.saldoMateriaPrima)}
+            </p>
+            <p className="text-purple-400 text-sm">
+              Produtos Finais: {formatCurrency(data.saldoProdutosFinais)}
+            </p>
+            <p className="text-yellow-400 text-sm">
+              Produtos Revenda: {formatCurrency(data.saldoProdutosRevenda)}
+            </p>
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
+
   // Função para criar checkpoint incluindo todos os saldos
   const handleCreateCheckpoint = async () => {
     try {
@@ -2131,11 +2265,8 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
 
   return (
     <div className="space-y-6">
-      {/* Header com Cards de Saldo e Receita */}
-      <div className="flex justify-between items-center mb-6">
-        <div>
-        </div>
-        <div className="flex gap-6">
+      {/* Header com Cards de Saldo e Gráfico de Lucro */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-6">
           {/* Card Saldo Caixa - Maior */}
           <Card className="bg-factory-900/30 border-tire-600/30 hover:shadow-lg transition-all duration-200">
             <CardContent className="p-6">
@@ -2187,6 +2318,121 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                     )}
                   </p>
 
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Gráfico de Lucro Empresarial */}
+          <Card className="bg-factory-900/30 border-tire-600/30 hover:shadow-lg transition-all duration-200 col-span-2">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-full bg-neon-purple/20">
+                    <BarChart3 className="h-5 w-5 text-neon-purple" />
+                  </div>
+                  <div>
+                    <h3 className="text-white font-semibold">Gráfico de Lucro Empresarial</h3>
+                    <p className="text-tire-300 text-sm">Evolução do valor empresarial ao longo do tempo</p>
+                  </div>
+                </div>
+                
+                {/* Filtros de Data */}
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-tire-400" />
+                    <input
+                      type="date"
+                      value={dateFilter.startDate}
+                      onChange={(e) => setDateFilter(prev => ({ ...prev, startDate: e.target.value }))}
+                      className="bg-factory-700/50 border border-tire-600/30 rounded px-2 py-1 text-white text-sm"
+                    />
+                  </div>
+                  <span className="text-tire-400">até</span>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="date"
+                      value={dateFilter.endDate}
+                      onChange={(e) => setDateFilter(prev => ({ ...prev, endDate: e.target.value }))}
+                      className="bg-factory-700/50 border border-tire-600/30 rounded px-2 py-1 text-white text-sm"
+                    />
+                    <Filter className="h-4 w-4 text-tire-400" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="h-64">
+                {getFilteredProfitData().length === 0 ? (
+                  <div className="flex items-center justify-center h-full">
+                    <div className="text-center">
+                      <BarChart3 className="h-12 w-12 text-tire-500 mx-auto mb-3" />
+                      <p className="text-tire-400 font-medium">Nenhum dado encontrado</p>
+                      <p className="text-tire-500 text-sm">Aguarde a coleta de dados históricos ou ajuste o filtro de datas</p>
+                    </div>
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart
+                      data={getFilteredProfitData()}
+                      margin={{
+                        top: 20,
+                        right: 30,
+                        left: 20,
+                        bottom: 20,
+                      }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.3} />
+                      <XAxis 
+                        dataKey="date" 
+                        stroke="#9CA3AF" 
+                        fontSize={12}
+                        tickFormatter={(value) => new Date(value).toLocaleDateString('pt-BR', {
+                          day: '2-digit',
+                          month: '2-digit'
+                        })}
+                      />
+                      <YAxis 
+                        stroke="#9CA3AF" 
+                        fontSize={12}
+                        tickFormatter={(value) => `R$ ${(value / 1000).toFixed(0)}k`}
+                      />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Line
+                        type="monotone"
+                        dataKey="lucro"
+                        stroke="#A855F7"
+                        strokeWidth={3}
+                        dot={{
+                          fill: "#A855F7",
+                          strokeWidth: 2,
+                          r: 4,
+                        }}
+                        activeDot={{
+                          r: 6,
+                          fill: "#A855F7",
+                          stroke: "#ffffff",
+                          strokeWidth: 2,
+                        }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+
+              {/* Legenda e informações adicionais */}
+              <div className="mt-4 flex items-center justify-between text-sm">
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 bg-neon-purple rounded-full"></div>
+                    <span className="text-tire-300">Lucro Empresarial</span>
+                  </div>
+                  <span className="text-tire-500">|</span>
+                  <span className="text-tire-400">
+                    {getFilteredProfitData().length} registros
+                  </span>
+                </div>
+                <div className="text-tire-400">
+                  Atualização automática em tempo real
                 </div>
               </div>
             </CardContent>
