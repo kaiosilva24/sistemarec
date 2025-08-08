@@ -307,33 +307,20 @@ export interface CostSimulation {
 export interface ResaleProduct {
   id: string;
   name: string;
-  description?: string;
+  sku?: string; // Código do produto
+  barcode?: string; // Código de barras
   supplier_id?: string;
-  supplier_name?: string;
-  purchase_price: number;
-  selling_price: number;
-  unit: string;
-  min_level?: number;
+  supplier_name: string;
+  purchase_price: number; // Preço de compra
+  sale_price: number; // Preço de venda
+  profit_margin: number; // Margem de lucro calculada
+  unit: "un" | "kg" | "L" | "m" | "g" | "ml";
   category?: string;
-  archived: boolean;
-  created_at: string;
-}
-
-export interface AccountsReceivableEntry {
-  id: string;
-  customer_id: string;
-  customer_name: string;
-  salesperson_id: string;
-  salesperson_name: string;
-  product_type: "final" | "resale";
-  product_id: string;
-  product_name: string;
-  quantity: number;
-  unit_price: number;
-  total_amount: number;
-  sale_date: string;
-  status: "pending" | "received" | "cancelled";
-  received_date?: string;
   description?: string;
+  min_stock_level?: number;
+  max_stock_level?: number;
+  current_stock?: number;
+  archived?: boolean;
   created_at: string;
+  updated_at?: string;
 }

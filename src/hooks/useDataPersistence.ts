@@ -17,7 +17,6 @@ import type {
   CostSimulation,
   WarrantyEntry,
   ResaleProduct,
-  AccountsReceivableEntry, // Import AccountsReceivableEntry type
 } from "@/types/financial";
 
 interface UseDataPersistenceOptions<T> {
@@ -171,22 +170,16 @@ export function useDataPersistence<T>(options: UseDataPersistenceOptions<T>) {
   );
 
   // Reset to default
-  const reset = useCallback(
-    () => {
-      setData(defaultValue);
-      saveData(defaultValue, true);
-    },
-    [defaultValue, saveData],
-  );
+  const reset = useCallback(() => {
+    setData(defaultValue);
+    saveData(defaultValue, true);
+  }, [defaultValue, saveData]);
 
   // Reload from storage
-  const reload = useCallback(
-    () => {
-      const loadedData = dataManager.loadData(key, defaultValue);
-      setData(loadedData);
-    },
-    [key, defaultValue],
-  );
+  const reload = useCallback(() => {
+    const loadedData = dataManager.loadData(key, defaultValue);
+    setData(loadedData);
+  }, [key, defaultValue]);
 
   return {
     data,
@@ -513,7 +506,7 @@ export const useStockItems = () => {
     const handleForceReload = (event: CustomEvent) => {
       const { updatedStockItems } = event.detail;
       console.log('🔄 [useStockItems] Evento de recarga forçada recebido');
-
+      
       if (updatedStockItems && Array.isArray(updatedStockItems)) {
         console.log(`📦 [useStockItems] Atualizando estado com ${updatedStockItems.length} itens`);
         setStockItems(updatedStockItems);
@@ -532,7 +525,7 @@ export const useStockItems = () => {
     };
 
     console.log('🎯 [useStockItems] Registrando listener para evento forceStockItemsReload');
-
+    
     // Adicionar listener para o evento customizado
     window.addEventListener('forceStockItemsReload', handleForceReload as EventListener);
 
@@ -564,7 +557,7 @@ export const useStockItems = () => {
         "✅ [useStockItems] Item adicionado com sucesso:",
         newStockItem,
       );
-
+      
       // Disparar evento customizado para notificar dashboard
       const stockUpdateEvent = new CustomEvent('stockItemsUpdated', {
         detail: {
@@ -668,7 +661,7 @@ export const useStockItems = () => {
         "✅ [useStockItems] Item atualizado com sucesso:",
         updatedStockItem,
       );
-
+      
       // Disparar evento customizado para notificar dashboard
       const stockUpdateEvent = new CustomEvent('stockItemsUpdated', {
         detail: {
@@ -705,7 +698,7 @@ export const useStockItems = () => {
         console.log(
           `✅ [useStockItems] Item removido do estoque com sucesso: ${itemId}`,
         );
-
+        
         // Disparar evento customizado para notificar dashboard
         const stockUpdateEvent = new CustomEvent('stockItemsUpdated', {
           detail: {
@@ -1629,59 +1622,54 @@ export const useCostSimulations = () => {
 export const useResaleProducts = () => {
   const [resaleProducts, setResaleProducts] = useState<ResaleProduct[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-
-  const loadResaleProducts = useCallback(async () => {
-    try {
-      const data = await dataManager.loadResaleProducts();
-      setResaleProducts(data);
-    } catch (error) {
-      console.error("Erro ao carregar produtos de revenda:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
+    const loadResaleProducts = async () => {
+      setIsLoading(true);
+      const data = await dataManager.loadResaleProducts();
+      setResaleProducts(data);
+      setIsLoading(false);
+    };
     loadResaleProducts();
-  }, [loadResaleProducts]);
+  }, []);
 
-  const addResaleProduct = async (productData: Omit<ResaleProduct, "id" | "created_at">) => {
-    const newProduct = await dataManager.addResaleProduct(productData);
+  const addResaleProduct = async (
+    productData: Omit<ResaleProduct, "id" | "created_at" | "updated_at">,
+  ) => {
+    setIsSaving(true);
+    const newProduct = await dataManager.saveResaleProduct(productData);
     if (newProduct) {
-      setResaleProducts(prev => [...prev, newProduct]);
+      setResaleProducts((prev) => [...prev, newProduct]);
     }
+    setIsSaving(false);
     return newProduct;
   };
 
-  const updateResaleProduct = async (id: string, updates: Partial<ResaleProduct>) => {
+  const updateResaleProduct = async (
+    id: string,
+    updates: Partial<ResaleProduct>,
+  ) => {
+    setIsSaving(true);
     const updatedProduct = await dataManager.updateResaleProduct(id, updates);
     if (updatedProduct) {
-      setResaleProducts(prev =>
-        prev.map(product => product.id === id ? updatedProduct : product)
+      setResaleProducts((prev) =>
+        prev.map((p) => (p.id === id ? updatedProduct : p)),
       );
     }
+    setIsSaving(false);
     return updatedProduct;
-  };
-
-  const deleteResaleProduct = async (id: string) => {
-    const success = await dataManager.deleteResaleProduct(id);
-    if (success) {
-      setResaleProducts(prev => prev.filter(product => product.id !== id));
-    }
-    return success;
   };
 
   return {
     resaleProducts,
-    isLoading,
     addResaleProduct,
     updateResaleProduct,
-    deleteResaleProduct,
-    refreshResaleProducts: loadResaleProducts,
+    isLoading,
+    isSaving,
   };
 };
 
-// Hook for managing accounts receivable
 export const useWarrantyEntries = () => {
   const [warrantyEntries, setWarrantyEntries] = useState<WarrantyEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -1692,13 +1680,14 @@ export const useWarrantyEntries = () => {
       setIsLoading(true);
       try {
         const data = await dataManager.loadWarrantyEntries();
-        setWarrantyEntries(data);
         console.log(
-          `✅ [useWarrantyEntries] Entradas de garantia carregadas: ${data.length} entradas.`,
+          "🔄 [useWarrantyEntries] Carregando entradas de garantia:",
+          data.length,
         );
+        setWarrantyEntries(data);
       } catch (error) {
         console.error(
-          "❌ [useWarrantyEntries] Erro ao carregar entradas de garantia:",
+          "❌ [useWarrantyEntries] Erro ao carregar garantias:",
           error,
         );
         setWarrantyEntries([]);
@@ -1710,266 +1699,120 @@ export const useWarrantyEntries = () => {
   }, []);
 
   const addWarrantyEntry = async (
-    entryData: Omit<WarrantyEntry, "id" | "created_at">,
+    warrantyData: Omit<WarrantyEntry, "id" | "created_at">,
   ) => {
-    console.log("📝 [useWarrantyEntries] Adicionando nova entrada:", entryData);
+    console.log("📝 [useWarrantyEntries] INICIANDO registro de garantia:", {
+      customer_name: warrantyData.customer_name,
+      product_name: warrantyData.product_name,
+      warranty_date: warrantyData.warranty_date,
+      salesperson_name: warrantyData.salesperson_name,
+      quantity: warrantyData.quantity,
+    });
     setIsSaving(true);
-    try {
-      const newEntry = await dataManager.saveWarrantyEntry(entryData);
-      if (newEntry) {
-        setWarrantyEntries((prev) => [...prev, newEntry]);
-        console.log(
-          "✅ [useWarrantyEntries] Entrada adicionada com sucesso:",
-          newEntry,
-        );
-      } else {
-        console.error(
-          "❌ [useWarrantyEntries] Falha ao adicionar entrada - retorno nulo.",
-        );
-      }
-      return newEntry;
-    } catch (error) {
-      console.error("❌ [useWarrantyEntries] Erro ao adicionar entrada:", error);
-      throw error;
-    } finally {
-      setIsSaving(false);
-    }
-  };
 
-  const updateWarrantyEntry = async (
-    id: string,
-    updates: Partial<WarrantyEntry>,
-  ) => {
-    console.log(`🔄 [useWarrantyEntries] Atualizando entrada ${id}:`, updates);
-    setIsSaving(true);
+    let newWarranty: WarrantyEntry | null = null;
+
     try {
-      const updatedEntry = await dataManager.updateWarrantyEntry(id, updates);
-      if (updatedEntry) {
-        setWarrantyEntries((prev) =>
-          prev.map((entry) => (entry.id === id ? updatedEntry : entry)),
-        );
-        console.log(
-          "✅ [useWarrantyEntries] Entrada atualizada com sucesso:",
-          updatedEntry,
-        );
-      } else {
-        console.error(
-          `❌ [useWarrantyEntries] Falha ao atualizar entrada ${id} - retorno nulo.`,
-        );
+      console.log(
+        "🔄 [useWarrantyEntries] Salvando garantia no banco de dados...",
+      );
+      newWarranty = await dataManager.saveWarrantyEntry(warrantyData);
+
+      if (!newWarranty) {
+        throw new Error("DataManager retornou null - falha ao salvar garantia");
       }
-      return updatedEntry;
+
+      console.log("✅ [useWarrantyEntries] Garantia salva no banco:", {
+        id: newWarranty.id,
+        customer_name: newWarranty.customer_name,
+        product_name: newWarranty.product_name,
+        warranty_date: newWarranty.warranty_date,
+        created_at: newWarranty.created_at,
+      });
+
+      // Update local state immediately
+      setWarrantyEntries((prev) => {
+        const updated = [newWarranty!, ...prev];
+        console.log("✅ [useWarrantyEntries] Estado local atualizado:", {
+          garantias_anteriores: prev.length,
+          garantias_atuais: updated.length,
+          nova_garantia_id: newWarranty!.id,
+        });
+        return updated;
+      });
+
+      console.log(
+        "🎉 [useWarrantyEntries] PROCESSO COMPLETO - Garantia registrada com sucesso!",
+      );
     } catch (error) {
       console.error(
-        `❌ [useWarrantyEntries] Erro ao atualizar entrada ${id}:`,
-        error,
+        "❌ [useWarrantyEntries] ERRO CRÍTICO ao salvar garantia:",
+        {
+          error: error instanceof Error ? error.message : error,
+          stack: error instanceof Error ? error.stack : undefined,
+          warrantyData,
+        },
       );
       throw error;
     } finally {
       setIsSaving(false);
+    }
+
+    return newWarranty;
+  };
+
+  const loadWarrantyEntriesByCustomer = async (customerId: string) => {
+    try {
+      console.log(
+        `🔄 [useWarrantyEntries] Carregando garantias do cliente: ${customerId}`,
+      );
+      const data = await dataManager.loadWarrantyEntriesByCustomer(customerId);
+      console.log(
+        `✅ [useWarrantyEntries] Garantias do cliente carregadas:`,
+        data.length,
+      );
+      return data;
+    } catch (error) {
+      console.error(
+        "❌ [useWarrantyEntries] Erro ao carregar garantias do cliente:",
+        error,
+      );
+      return [];
     }
   };
 
   const deleteWarrantyEntry = async (id: string) => {
-    console.log(`🗑️ [useWarrantyEntries] Deletando entrada ${id}`);
+    console.log("🗑️ [useWarrantyEntries] Deletando entrada de garantia:", id);
     setIsSaving(true);
+
     try {
       const success = await dataManager.deleteWarrantyEntry(id);
       if (success) {
-        setWarrantyEntries((prev) => prev.filter((entry) => entry.id !== id));
         console.log(
-          `✅ [useWarrantyEntries] Entrada ${id} deletada com sucesso.`,
+          "✅ [useWarrantyEntries] Garantia deletada, atualizando estado local",
         );
+        setWarrantyEntries((prev) => prev.filter((entry) => entry.id !== id));
       } else {
-        console.error(`❌ [useWarrantyEntries] Falha ao deletar entrada ${id}.`);
+        console.error(
+          "❌ [useWarrantyEntries] Falha ao deletar entrada de garantia",
+        );
       }
       return success;
     } catch (error) {
-      console.error(
-        `❌ [useWarrantyEntries] Erro ao deletar entrada ${id}:`,
-        error,
-      );
-      throw error;
+      console.error("❌ [useWarrantyEntries] Erro ao deletar garantia:", error);
+      return false;
     } finally {
       setIsSaving(false);
-    }
-  };
-
-  const refreshWarrantyEntries = async () => {
-    console.log(
-      "🔄 [useWarrantyEntries] REFRESH MANUAL - Atualizando entradas de garantia...",
-    );
-    setIsLoading(true);
-    try {
-      const data = await dataManager.loadWarrantyEntries();
-      console.log("✅ [useWarrantyEntries] REFRESH MANUAL concluído:", {
-        total: data.length,
-      });
-      setWarrantyEntries(data);
-    } catch (error) {
-      console.error("❌ [useWarrantyEntries] Erro no refresh manual:", error);
-    } finally {
-      setIsLoading(false);
     }
   };
 
   return {
     warrantyEntries,
+    addWarrantyEntry,
+    deleteWarrantyEntry,
+    loadWarrantyEntriesByCustomer,
     isLoading,
     isSaving,
-    addWarrantyEntry,
-    updateWarrantyEntry,
-    deleteWarrantyEntry,
-    refreshWarrantyEntries,
-  };
-};
-
-export const useAccountsReceivable = () => {
-  const [accountsReceivableEntries, setAccountsReceivableEntries] = useState<AccountsReceivableEntry[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false); // Added isSaving state
-
-  const loadAccountsReceivable = useCallback(async () => {
-    setIsLoading(true); // Set loading to true at the start of loading
-    try {
-      const data = await dataManager.loadAccountsReceivable();
-      setAccountsReceivableEntries(data);
-      console.log(`✅ [useAccountsReceivable] Contas a receber carregadas: ${data.length} entradas.`);
-    } catch (error) {
-      console.error("❌ [useAccountsReceivable] Erro ao carregar contas a receber:", error);
-      setAccountsReceivableEntries([]); // Reset to empty array on error
-    } finally {
-      setIsLoading(false); // Set loading to false after loading is attempted
-    }
-  }, []);
-
-  useEffect(() => {
-    loadAccountsReceivable();
-  }, [loadAccountsReceivable]);
-
-  const addAccountsReceivableEntry = async (entryData: Omit<AccountsReceivableEntry, "id" | "created_at">) => {
-    console.log("📝 [useAccountsReceivable] Adicionando nova entrada:", entryData);
-    setIsSaving(true);
-    try {
-      const newEntry = await dataManager.addAccountsReceivableEntry(entryData);
-      if (newEntry) {
-        setAccountsReceivableEntries(prev => [...prev, newEntry]);
-        console.log("✅ [useAccountsReceivable] Entrada adicionada com sucesso:", newEntry);
-      } else {
-        console.error("❌ [useAccountsReceivable] Falha ao adicionar entrada - retorno nulo.");
-      }
-      return newEntry;
-    } catch (error) {
-      console.error("❌ [useAccountsReceivable] Erro ao adicionar entrada:", error);
-      throw error; // Re-throw the error to be handled by the caller
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const updateAccountsReceivableEntry = async (id: string, updates: Partial<AccountsReceivableEntry>) => {
-    console.log(`🔄 [useAccountsReceivable] Atualizando entrada ${id}:`, updates);
-    setIsSaving(true);
-    try {
-      const updatedEntry = await dataManager.updateAccountsReceivableEntry(id, updates);
-      if (updatedEntry) {
-        setAccountsReceivableEntries(prev =>
-          prev.map(entry => entry.id === id ? updatedEntry : entry)
-        );
-        console.log("✅ [useAccountsReceivable] Entrada atualizada com sucesso:", updatedEntry);
-      } else {
-        console.error(`❌ [useAccountsReceivable] Falha ao atualizar entrada ${id} - retorno nulo.`);
-      }
-      return updatedEntry;
-    } catch (error) {
-      console.error(`❌ [useAccountsReceivable] Erro ao atualizar entrada ${id}:`, error);
-      throw error;
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const deleteAccountsReceivableEntry = async (id: string) => {
-    console.log(`🗑️ [useAccountsReceivable] Deletando entrada ${id}`);
-    setIsSaving(true);
-    try {
-      const success = await dataManager.deleteAccountsReceivableEntry(id);
-      if (success) {
-        setAccountsReceivableEntries(prev => prev.filter(entry => entry.id !== id));
-        console.log(`✅ [useAccountsReceivable] Entrada ${id} deletada com sucesso.`);
-      } else {
-        console.error(`❌ [useAccountsReceivable] Falha ao deletar entrada ${id}.`);
-      }
-      return success;
-    } catch (error) {
-      console.error(`❌ [useAccountsReceivable] Erro ao deletar entrada ${id}:`, error);
-      throw error;
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  // Function to mark an entry as paid and move it to cash flow
-  const markAsPaid = async (entryId: string) => {
-    console.log(`💰 [useAccountsReceivable] Marcando entrada ${entryId} como paga.`);
-    setIsSaving(true);
-
-    try {
-      // 1. Fetch the entry details
-      const entry = await dataManager.getAccountsReceivableEntry(entryId); // Assuming a new method in dataManager
-      if (!entry) {
-        throw new Error("Entrada de conta a receber não encontrada.");
-      }
-
-      // 2. Create a cash flow entry
-      const cashFlowEntryData: Omit<CashFlowEntry, "id" | "created_at"> = {
-        amount: entry.amount,
-        type: "income", // Assuming this is always income
-        description: `Pagamento recebido: ${entry.description || 'Venda a Prazo'}`,
-        date: new Date().toISOString(), // Use current date for the cash flow entry
-        category: entry.category || 'Vendas',
-        // Add other relevant fields if they exist in CashFlowEntry
-      };
-      const newCashFlowEntry = await dataManager.saveCashFlowEntry(cashFlowEntryData);
-      if (!newCashFlowEntry) {
-        throw new Error("Falha ao criar entrada no fluxo de caixa.");
-      }
-      console.log(`✅ [useAccountsReceivable] Entrada de fluxo de caixa criada: ${newCashFlowEntry.id}`);
-
-      // 3. Update the accounts receivable entry (e.g., mark as paid)
-      const updatedEntry = await dataManager.updateAccountsReceivableEntry(entryId, {
-        status: 'paid', // Assuming a 'status' field and 'paid' value
-        paid_at: new Date().toISOString(),
-      });
-      if (!updatedEntry) {
-        throw new Error("Falha ao atualizar entrada de conta a receber.");
-      }
-      console.log(`✅ [useAccountsReceivable] Entrada ${entryId} marcada como paga.`);
-
-      // 4. Update local state
-      setAccountsReceivableEntries(prev => prev.filter(e => e.id !== entryId)); // Remove the paid entry
-      console.log(`✅ [useAccountsReceivable] Entrada ${entryId} removida do estado local.`);
-
-      // Optionally, refresh cash flow data or notify other parts of the app
-
-      return { success: true, newCashFlowEntry, updatedEntry };
-
-    } catch (error) {
-      console.error(`❌ [useAccountsReceivable] Erro ao marcar entrada ${entryId} como paga:`, error);
-      throw error;
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  return {
-    accountsReceivableEntries,
-    isLoading,
-    isSaving, // Include isSaving state
-    addAccountsReceivableEntry,
-    updateAccountsReceivableEntry,
-    deleteAccountsReceivableEntry,
-    markAsPaid, // Expose the markAsPaid function
-    refreshAccountsReceivable: loadAccountsReceivable,
   };
 };
 

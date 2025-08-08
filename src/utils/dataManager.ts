@@ -17,7 +17,6 @@ import type {
   CostSimulation,
   WarrantyEntry,
   ResaleProduct,
-  AccountsReceivableEntry,
 } from "@/types/financial";
 
 export class DataManager {
@@ -1418,128 +1417,6 @@ export class DataManager {
     return this.saveToDatabase("resale_products", { ...updates, id });
   }
 
-  // Delete resale product
-  async deleteResaleProduct(id: string): Promise<boolean> {
-    try {
-      const { error } = await supabase
-        .from("resale_products")
-        .delete()
-        .eq("id", id);
-
-      if (error) {
-        console.error("Erro ao excluir produto de revenda:", error);
-        return false;
-      }
-
-      console.log(`✅ Produto de revenda excluído: ${id}`);
-      return true;
-    } catch (error) {
-      console.error("Erro ao excluir produto de revenda:", error);
-      return false;
-    }
-  }
-
-  // ==================== ACCOUNTS RECEIVABLE METHODS ====================
-
-  // Load accounts receivable
-  async loadAccountsReceivable(): Promise<AccountsReceivableEntry[]> {
-    try {
-      console.log("🔄 [DataManager] Carregando contas a receber...");
-
-      const { data, error } = await supabase
-        .from("accounts_receivable")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (error) {
-        console.error("❌ [DataManager] Erro ao carregar contas a receber:", error);
-        return [];
-      }
-
-      const entries = (data || []) as AccountsReceivableEntry[];
-      console.log(`✅ [DataManager] ${entries.length} contas a receber carregadas`);
-
-      return entries;
-    } catch (error) {
-      console.error("❌ [DataManager] Erro ao carregar contas a receber:", error);
-      return [];
-    }
-  }
-
-  // Add accounts receivable entry
-  async addAccountsReceivableEntry(entryData: Omit<AccountsReceivableEntry, "id" | "created_at">): Promise<AccountsReceivableEntry | null> {
-    try {
-      console.log("🔄 [DataManager] Adicionando conta a receber:", entryData);
-
-      const { data, error } = await supabase
-        .from("accounts_receivable")
-        .insert([entryData])
-        .select()
-        .single();
-
-      if (error) {
-        console.error("❌ [DataManager] Erro ao adicionar conta a receber:", error);
-        return null;
-      }
-
-      const newEntry = data as AccountsReceivableEntry;
-      console.log(`✅ [DataManager] Conta a receber adicionada: ${newEntry.id}`);
-
-      return newEntry;
-    } catch (error) {
-      console.error("❌ [DataManager] Erro ao adicionar conta a receber:", error);
-      return null;
-    }
-  }
-
-  // Update accounts receivable entry
-  async updateAccountsReceivableEntry(id: string, updates: Partial<AccountsReceivableEntry>): Promise<AccountsReceivableEntry | null> {
-    try {
-      console.log(`🔄 [DataManager] Atualizando conta a receber ${id}:`, updates);
-
-      const { data, error } = await supabase
-        .from("accounts_receivable")
-        .update(updates)
-        .eq("id", id)
-        .select()
-        .single();
-
-      if (error) {
-        console.error("❌ [DataManager] Erro ao atualizar conta a receber:", error);
-        return null;
-      }
-
-      const updatedEntry = data as AccountsReceivableEntry;
-      console.log(`✅ [DataManager] Conta a receber atualizada: ${updatedEntry.id}`);
-
-      return updatedEntry;
-    } catch (error) {
-      console.error("❌ [DataManager] Erro ao atualizar conta a receber:", error);
-      return null;
-    }
-  }
-
-  // Delete accounts receivable entry
-  async deleteAccountsReceivableEntry(id: string): Promise<boolean> {
-    try {
-      const { error } = await supabase
-        .from("accounts_receivable")
-        .delete()
-        .eq("id", id);
-
-      if (error) {
-        console.error("Erro ao excluir conta a receber:", error);
-        return false;
-      }
-
-      console.log(`✅ Conta a receber excluída: ${id}`);
-      return true;
-    } catch (error) {
-      console.error("Erro ao excluir conta a receber:", error);
-      return false;
-    }
-  }
-
   // Warranty Entry methods
   async saveWarrantyEntry(
     warrantyEntry: Omit<WarrantyEntry, "id" | "created_at">,
@@ -2095,7 +1972,6 @@ export class DataManager {
 
   /**
    * Configura subscription em tempo real para mudanças no lucro médio por pneu
-   */
   subscribeToTireProfitChanges(callback: (newProfit: number) => void): () => void {
     console.log('🔔 [DataManager] Iniciando subscription para lucro médio por pneu...');
 
@@ -3121,7 +2997,7 @@ export class DataManager {
 
           if (payload.new && typeof payload.new === 'object' && 'value' in payload.new) {
             const newQuantity = Number(payload.new.value) || 0;
-            console.log(`📦 [DataManager] Nova quantidade total de produtos finais: ${newQuantity}`);
+            console.log(`📦 [DataManager] Nova quantidade total de produtos finais recebida: ${newQuantity}`);
 
             callback(newQuantity);
           }
