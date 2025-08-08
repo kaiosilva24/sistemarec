@@ -57,6 +57,10 @@ const SettingsDashboard = ({
     stock: 'idle',
   });
 
+  // Estado para valor empresarial
+  const [businessValue, setBusinessValue] = useState<number>(0);
+  const [isLoadingBusinessValue, setIsLoadingBusinessValue] = useState(true);
+
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
       style: "currency",
@@ -71,7 +75,21 @@ const SettingsDashboard = ({
   // Carregar configurações iniciais
   useEffect(() => {
     loadInitialSettings();
+    loadBusinessValue();
   }, []);
+
+  // Carregar valor empresarial
+  const loadBusinessValue = async () => {
+    setIsLoadingBusinessValue(true);
+    try {
+      const value = await dataManager.loadBusinessValue();
+      setBusinessValue(value);
+    } catch (error) {
+      console.error('❌ [SettingsDashboard] Erro ao carregar valor empresarial:', error);
+    } finally {
+      setIsLoadingBusinessValue(false);
+    }
+  };
 
   const loadInitialSettings = async () => {
     setLoadingStates({
@@ -100,6 +118,33 @@ const SettingsDashboard = ({
       });
     }
   };
+
+  // Effect para sincronização em tempo real do valor empresarial
+  useEffect(() => {
+    let unsubscribe: (() => void) | null = null;
+
+    const initializeBusinessValueSync = async () => {
+      try {
+        // Configurar subscription em tempo real
+        unsubscribe = dataManager.subscribeToBusinessValueChanges((newValue) => {
+          setBusinessValue(newValue);
+          console.log('🔄 [SettingsDashboard] Valor empresarial atualizado em tempo real:', newValue);
+        });
+
+      } catch (error) {
+        console.error('❌ [SettingsDashboard] Erro ao configurar sincronização do valor empresarial:', error);
+      }
+    };
+
+    initializeBusinessValueSync();
+
+    // Cleanup subscription
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, []);
 
   // Salvar configurações de custo
   const saveCostConfig = async () => {
@@ -216,7 +261,7 @@ const SettingsDashboard = ({
       </div>
 
       <Tabs defaultValue="cost" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2 bg-factory-800/50">
+        <TabsList className="grid w-full grid-cols-3 bg-factory-800/50">
           <TabsTrigger value="cost" className="data-[state=active]:bg-neon-blue/20">
             <Calculator className="h-4 w-4 mr-2" />
             Custos
@@ -224,6 +269,10 @@ const SettingsDashboard = ({
           <TabsTrigger value="stock" className="data-[state=active]:bg-neon-green/20">
             <Package className="h-4 w-4 mr-2" />
             Estoque
+          </TabsTrigger>
+          <TabsTrigger value="business" className="data-[state=active]:bg-neon-purple/20">
+            <TrendingUp className="h-4 w-4 mr-2" />
+            Lucro Empresarial
           </TabsTrigger>
         </TabsList>
 
@@ -464,6 +513,49 @@ const SettingsDashboard = ({
                   )}
                   Salvar Configurações de Estoque
                 </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Tab de Lucro Empresarial */}
+        <TabsContent value="business">
+          <Card className="bg-factory-800/50 border-tire-600/30">
+            <CardHeader>
+              <CardTitle className="text-tire-200 flex items-center">
+                <TrendingUp className="h-5 w-5 mr-2 text-neon-purple" />
+                Valor Empresarial
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="flex justify-center">
+                <Card className="bg-factory-700/50 border-tire-600/30 hover:shadow-lg transition-all duration-200 w-full max-w-md">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <p className="text-tire-300 text-sm font-medium">Valor Empresarial</p>
+                        <p className="text-2xl font-bold text-tire-200">
+                          {isLoadingBusinessValue ? (
+                            <span className="animate-pulse">Carregando...</span>
+                          ) : (
+                            formatCurrency(businessValue)
+                          )}
+                        </p>
+                        <p className="text-tire-400 text-xs mt-1">
+                          Sincronizado em tempo real
+                        </p>
+                      </div>
+                      <div className="p-3 rounded-full bg-neon-purple/20">
+                        <DollarSign className="h-6 w-6 text-neon-purple" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <div className="text-center text-tire-400 text-sm">
+                <p>Este valor é sincronizado automaticamente com o dashboard principal.</p>
+                <p>Qualquer alteração será refletida em tempo real.</p>
               </div>
             </CardContent>
           </Card>

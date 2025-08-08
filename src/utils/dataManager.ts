@@ -943,7 +943,7 @@ export class DataManager {
       });
 
       const success = await this.updateInDatabase("cash_flow_entries", id, updates);
-      
+
       if (success) {
         console.log('✅ [DataManager] Entrada de cash flow atualizada com sucesso:', {
           id: id,
@@ -2049,7 +2049,6 @@ export class DataManager {
 
       console.warn('⚠️ [DataManager] Supabase não retornou valor válido, usando valor padrão');
       return 78.77; // Valor padrão
-
     } catch (error) {
       console.error('❌ [DataManager] Erro ao carregar lucro médio por pneu:', error);
       return 78.77; // Valor padrão em caso de erro
@@ -2307,7 +2306,7 @@ export class DataManager {
 
           if (payload.new && typeof payload.new === 'object' && 'value' in payload.new) {
             let value = payload.new.value;
-            
+
             // Try to parse as number first, then string
             const numValue = Number(value);
             if (!isNaN(numValue)) {
@@ -3303,6 +3302,119 @@ export class DataManager {
     return () => {
       console.log('🔌 [DataManager] Cancelando subscription da quantidade total de produtos revenda');
       this.supabase.removeChannel(subscription);
+    };
+  }
+
+  // Função para carregar valor empresarial
+  async loadBusinessValue(): Promise<number> {
+    try {
+      const { data, error } = await supabase
+        .from('system_settings')
+        .select('value')
+        .eq('key', 'business_value')
+        .single();
+
+      if (error) {
+        console.warn('⚠️ [DataManager] Valor empresarial não encontrado, usando padrão 0');
+        return 0;
+      }
+
+      const value = parseFloat(data.value) || 0;
+      console.log('✅ [DataManager] Valor empresarial carregado:', value);
+      return value;
+    } catch (error) {
+      console.error('❌ [DataManager] Erro ao carregar valor empresarial:', error);
+      return 0;
+    }
+  }
+
+  // Função para salvar valor empresarial
+  async saveBusinessValue(value: number): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('system_settings')
+        .upsert({
+          key: 'business_value',
+          value: value.toString(),
+          updated_at: new Date().toISOString()
+        });
+
+      if (error) {
+        console.error('❌ [DataManager] Erro ao salvar valor empresarial:', error);
+        return false;
+      }
+
+      console.log('✅ [DataManager] Valor empresarial salvo com sucesso:', value);
+      return true;
+    } catch (error) {
+      console.error('❌ [DataManager] Erro ao salvar valor empresarial:', error);
+      return false;
+    }
+  }
+
+  // Função para subscrever mudanças no valor empresarial em tempo real
+  subscribeToBusinessValueChanges(callback: (value: number) => void): () => void {
+    console.log('🔔 [DataManager] Configurando subscription para valor empresarial');
+
+    const subscription = supabase
+      .channel('business_value_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'system_settings',
+          filter: 'key=eq.business_value'
+        },
+        (payload) => {
+          console.log('🔄 [DataManager] Mudança detectada no valor empresarial:', payload);
+
+          if (payload.new && 'value' in payload.new) {
+            const newValue = parseFloat(payload.new.value as string) || 0;
+            callback(newValue);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      console.log('🔕 [DataManager] Removendo subscription do valor empresarial');
+      subscription.unsubscribe();
+    };
+  }
+
+  // Função para subscrever mudanças no lucro de revenda em tempo real
+  subscribeToResaleProfitChanges(callback: (profit: number) => void): () => void {
+    console.log('🔔 [DataManager] Iniciando subscription para lucro médio de produtos de revenda...');
+
+    const subscription = this.supabase
+      .channel('resale_profit_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'system_settings',
+          filter: 'key=eq.average_resale_profit'
+        },
+        (payload) => {
+          console.log('🔄 [DataManager] Mudança detectada no lucro médio de produtos de revenda:', payload);
+
+          if (payload.new && typeof payload.new === 'object' && 'value' in payload.new) {
+            const newProfit = Number(payload.new.value) || 23.61;
+            console.log(`📡 [DataManager] Novo lucro médio de produtos de revenda recebido: R$ ${newProfit.toFixed(2)}`);
+
+            // Chama callback
+            callback(newProfit);
+          }
+        }
+      )
+      .subscribe();
+
+    // Retorna função para cancelar subscription
+    return () => {
+      console.log('🔕 [DataManager] Cancelando subscription do lucro médio de produtos de revenda');
+      subscription.unsubscribe();
     };
   }
 }
