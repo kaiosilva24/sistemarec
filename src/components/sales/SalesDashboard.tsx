@@ -161,6 +161,40 @@ const SalesDashboard = ({
     return `${value.toFixed(2)}%`;
   };
 
+  // Extract payment method from sale description
+  const extractPaymentMethodFromSale = (description: string) => {
+    try {
+      const paymentMatch = description.match(/Pagamento: ([^|]+)/);
+      if (paymentMatch) {
+        return paymentMatch[1].trim();
+      }
+      // Se não encontrar forma de pagamento, assume "À Vista" (para vendas antigas)
+      return "À Vista";
+    } catch (error) {
+      console.error("Erro ao extrair forma de pagamento:", error);
+      return "À Vista";
+    }
+  };
+
+  // Extract product info from sale description
+  const extractProductInfoFromSale = (description: string) => {
+    try {
+      // Extract product ID from description
+      const productIdMatch = description.match(/ID_Produto: ([^\s|]+)/);
+      const quantityMatch = description.match(/Qtd: ([0-9.]+)/);
+
+      if (productIdMatch && quantityMatch) {
+        return {
+          productId: productIdMatch[1],
+          quantity: parseFloat(quantityMatch[1]),
+        };
+      }
+    } catch (error) {
+      console.error("Erro ao extrair informações do produto:", error);
+    }
+    return null;
+  };
+
   // Get resale product IDs to exclude them from final products
   const resaleProductIds = new Set(resaleProducts.map((p) => p.id));
 
@@ -1087,39 +1121,7 @@ const SalesDashboard = ({
     }
   };
 
-  // Extract product info from sale description
-  const extractProductInfoFromSale = (description: string) => {
-    try {
-      // Extract product ID from description
-      const productIdMatch = description.match(/ID_Produto: ([^\s|]+)/);
-      const quantityMatch = description.match(/Qtd: ([0-9.]+)/);
-
-      if (productIdMatch && quantityMatch) {
-        return {
-          productId: productIdMatch[1],
-          quantity: parseFloat(quantityMatch[1]),
-        };
-      }
-    } catch (error) {
-      console.error("Erro ao extrair informações do produto:", error);
-    }
-    return null;
-  };
-
-  // Extract payment method from sale description
-  const extractPaymentMethodFromSale = (description: string) => {
-    try {
-      const paymentMatch = description.match(/Pagamento: ([^|]+)/);
-      if (paymentMatch) {
-        return paymentMatch[1].trim();
-      }
-      // Se não encontrar forma de pagamento, assume "À Vista" (para vendas antigas)
-      return "À Vista";
-    } catch (error) {
-      console.error("Erro ao extrair forma de pagamento:", error);
-      return "À Vista";
-    }
-  };
+  
 
   // Test function to verify onClick works
   const testClick = () => {
