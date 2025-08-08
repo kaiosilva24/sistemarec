@@ -1059,7 +1059,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       }
     }
 
-    console.warn('⚠️ [Dashboard] Nenhum valor válido de lucro encontrado no localStorage, usando padrão');
+    console.log('⚠️ [Dashboard] Nenhum valor válido de lucro encontrado no localStorage, usando padrão');
     return 0; // Valor padrão para lucro
   };
 
@@ -1332,7 +1332,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
 
   // Listener para evento customizado de atualização do saldo de matéria-prima
   useEffect(() => {
-    const handleRawMaterialStockUpdate = (event: CustomEvent) => {
+    const handleRawMaterialStockUpdate = async (event: CustomEvent) => {
       const { balance, timestamp, source } = event.detail;
       console.log(`🏥 [Dashboard] Evento 'rawMaterialBalanceUpdated' recebido:`);
       console.log(`  - Saldo: R$ ${balance.toFixed(2)}`);
@@ -2015,141 +2015,125 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
     return () => clearTimeout(timeoutId);
   }, [stockItems, stockItemsLoading]);
 
-  // Effect para calcular valor empresarial em tempo real
+  // Effect para cálculo e sincronização automática do valor empresarial
   useEffect(() => {
-    const calculateBusinessValue = async () => {
-      // Aguardar que todos os valores estejam carregados
-      if (
-        isLoadingCashBalance ||
-        isLoadingFinalProductStock ||
-        isLoadingRawMaterialStock ||
-        isLoadingResaleProductStock
-      ) {
-        return;
-      }
+    // Aguardar até que todos os valores estejam carregados
+    const allValuesLoaded = !isLoadingCashBalance && 
+                           !isLoadingFinalProductStock && 
+                           !isLoadingRawMaterialStock && 
+                           !isLoadingResaleProductStock;
 
-      const cashValue = cashBalanceState || 0;
-      const finalProductValue = finalProductStockBalance || 0;
-      const rawMaterialValue = rawMaterialStockBalance || 0;
-      const resaleProductValue = resaleProductStockBalance || 0;
+    if (allValuesLoaded) {
+      const timeoutId = setTimeout(() => {
+        // Calcular valor empresarial como soma de todos os saldos
+        const cashBalance = cashBalanceState || 0;
+        const finalProductBalance = finalProductStockBalance || 0;
+        const rawMaterialBalance = rawMaterialStockBalance || 0;
+        const resaleProductBalance = resaleProductStockBalance || 0;
 
-      const totalBusinessValue = cashValue + finalProductValue + rawMaterialValue + resaleProductValue;
+        const calculatedBusinessValue = cashBalance + finalProductBalance + rawMaterialBalance + resaleProductBalance;
 
-      console.log('💰 [Dashboard] Calculando valor empresarial:', {
-        saldoCaixa: `R$ ${cashValue.toFixed(2)}`,
-        produtosFinais: `R$ ${finalProductValue.toFixed(2)}`,
-        materiaPrima: `R$ ${rawMaterialValue.toFixed(2)}`,
-        produtosRevenda: `R$ ${resaleProductValue.toFixed(2)}`,
-        valorTotal: `R$ ${totalBusinessValue.toFixed(2)}`
-      });
+        console.log('🔄 [Dashboard] Calculando valor empresarial:');
+        console.log(`  - Saldo de Caixa: R$ ${cashBalance.toFixed(2)}`);
+        console.log(`  - Saldo Produtos Finais: R$ ${finalProductBalance.toFixed(2)}`);
+        console.log(`  - Saldo Matéria-Prima: R$ ${rawMaterialBalance.toFixed(2)}`);
+        console.log(`  - Saldo Produtos Revenda: R$ ${resaleProductBalance.toFixed(2)}`);
+        console.log(`  - TOTAL (Valor Empresarial): R$ ${calculatedBusinessValue.toFixed(2)}`);
 
-      // Só atualizar se houver diferença significativa
-      if (empresarialValue === null || Math.abs((empresarialValue || 0) - totalBusinessValue) > 0.01) {
-        console.log(`🔄 [Dashboard] Atualizando valor empresarial: R$ ${totalBusinessValue.toFixed(2)}`);
+        // Só atualizar se houver diferença significativa
+        if (empresarialValue === null || Math.abs((empresarialValue || 0) - calculatedBusinessValue) > 0.01) {
+          console.log(`🔄 [Dashboard] Atualizando valor empresarial: R$ ${calculatedBusinessValue.toFixed(2)}`);
 
-        // Salvar no Supabase
-        const success = await dataManager.saveBusinessValue(totalBusinessValue);
-        if (success) {
-          console.log(`✅ [Dashboard] Valor empresarial salvo com sucesso no Supabase: R$ ${totalBusinessValue.toFixed(2)}`);
+          // Salvar no Supabase
+          dataManager.saveBusinessValue(calculatedBusinessValue).then(success => {
+            if (success) {
+              console.log(`✅ [Dashboard] Valor empresarial salvo com sucesso: R$ ${calculatedBusinessValue.toFixed(2)}`);
 
-          // Disparar evento de atualização
-          const updateEvent = new CustomEvent('businessValueUpdated', {
-            detail: {
-              value: totalBusinessValue,
-              timestamp: Date.now(),
-              source: 'Dashboard-AutoCalculation'
+              // Atualizar estado local
+              setEmpresarialValue(calculatedBusinessValue);
+              setIsLoadingEmpresarialValue(false);
+
+              // Disparar evento de atualização
+              const updateEvent = new CustomEvent('businessValueUpdated', {
+                detail: {
+                  value: calculatedBusinessValue,
+                  timestamp: Date.now(),
+                  source: 'Dashboard-AutoCalculation'
+                }
+              });
+              window.dispatchEvent(updateEvent);
             }
           });
-          window.dispatchEvent(updateEvent);
+        } else {
+          console.log(`✅ [Dashboard] Valor empresarial já atualizado: R$ ${calculatedBusinessValue.toFixed(2)}`);
+          setIsLoadingEmpresarialValue(false);
         }
+      }, 300);
 
-        // Atualizar estado local
-        setEmpresarialValue(totalBusinessValue);
-        setIsLoadingEmpresarialValue(false);
-      } else {
-        console.log(`✅ [Dashboard] Valor empresarial já atualizado: R$ ${totalBusinessValue.toFixed(2)}`);
-        setIsLoadingEmpresarialValue(false);
-      }
-    };
-
-    // Aguardar um pouco para garantir que os valores estejam estabilizados
-    const timeoutId = setTimeout(() => {
-      calculateBusinessValue();
-    }, 500);
-
-    return () => {
-      clearTimeout(timeoutId);
-    };
+      return () => clearTimeout(timeoutId);
+    }
   }, [
+    cashBalanceState, 
+    finalProductStockBalance, 
+    rawMaterialStockBalance, 
+    resaleProductStockBalance,
     isLoadingCashBalance,
     isLoadingFinalProductStock,
     isLoadingRawMaterialStock,
     isLoadingResaleProductStock,
-    cashBalanceState,
-    finalProductStockBalance,
-    rawMaterialStockBalance,
-    resaleProductStockBalance,
     empresarialValue
   ]);
 
-  // Listeners para eventos de checkpoint - restauração de dados
+  // Effect para subscription em tempo real do valor empresarial
   useEffect(() => {
-    const handleResaleProductStockRestore = (event: CustomEvent) => {
-      const { balance, source } = event.detail;
-      console.log(`🔄 [Dashboard] Evento 'resaleProductStockUpdated' de checkpoint recebido:`);
-      console.log(`  - Saldo: R$ ${balance.toFixed(2)}`);
+    let unsubscribe: (() => void) | null = null;
+
+    const initializeBusinessValueSync = async () => {
+      try {
+        console.log('🔄 [Dashboard] Inicializando subscription do valor empresarial...');
+
+        // Configurar subscription em tempo real
+        unsubscribe = dataManager.subscribeToBusinessValueChanges((newValue) => {
+          console.log(`📡 [Dashboard] Novo valor empresarial recebido via subscription: R$ ${newValue.toFixed(2)}`);
+          setEmpresarialValue(newValue);
+        });
+
+        console.log('🔔 [Dashboard] Subscription ativa para mudanças de valor empresarial');
+
+      } catch (error) {
+        console.error('❌ [Dashboard] Erro ao configurar subscription do valor empresarial:', error);
+      }
+    };
+
+    // Listener para evento customizado de atualização do valor empresarial
+    const handleBusinessValueUpdate = (event: CustomEvent) => {
+      const { value, timestamp, source } = event.detail;
+      console.log(`💰 [Dashboard] Evento 'businessValueUpdated' recebido:`);
+      console.log(`  - Valor Empresarial: R$ ${value.toFixed(2)}`);
+      console.log(`  - Timestamp: ${new Date(timestamp).toLocaleString()}`);
       console.log(`  - Source: ${source}`);
 
       // Atualizar estado imediatamente
-      setResaleProductStockBalance(balance);
-      setIsLoadingResaleProductStock(false);
+      setEmpresarialValue(value);
+      setIsLoadingEmpresarialValue(false);
     };
 
-    const handleRawMaterialStockRestore = (event: CustomEvent) => {
-      const { balance, source } = event.detail;
-      console.log(`🔄 [Dashboard] Evento 'rawMaterialStockUpdated' de checkpoint recebido:`);
-      console.log(`  - Saldo: R$ ${balance.toFixed(2)}`);
-      console.log(`  - Source: ${source}`);
+    console.log('🎯 [Dashboard] Registrando listener para evento businessValueUpdated');
 
-      // Atualizar estado imediatamente
-      setRawMaterialStockBalance(balance);
-      setIsLoadingRawMaterialStock(false);
-    };
+    // Adicionar listener para o evento customizado
+    window.addEventListener('businessValueUpdated', handleBusinessValueUpdate as EventListener);
 
-    const handleCashBalanceRestore = (event: CustomEvent) => {
-      const { balance, source } = event.detail;
-      console.log(`🔄 [Dashboard] Evento 'cashBalanceUpdated' de checkpoint recebido:`);
-      console.log(`  - Saldo: R$ ${balance.toFixed(2)}`);
-      console.log(`  - Source: ${source}`);
+    initializeBusinessValueSync();
 
-      // Atualizar estado imediatamente
-      setCashBalanceState(balance);
-      setIsLoadingCashBalance(false);
-    };
-
-    const handleSystemRestore = (event: CustomEvent) => {
-      const { timestamp, source, version } = event.detail;
-      console.log(`🔄 [Dashboard] Sistema restaurado de checkpoint:`);
-      console.log(`  - Timestamp: ${new Date(timestamp).toLocaleString('pt-BR')}`);
-      console.log(`  - Source: ${source}`);
-      console.log(`  - Version: ${version}`);
-    };
-
-    console.log('🎯 [Dashboard] Registrando listeners para eventos de checkpoint');
-
-    // Adicionar listeners para os eventos de checkpoint
-    window.addEventListener('resaleProductStockUpdated', handleResaleProductStockRestore as EventListener);
-    window.addEventListener('rawMaterialStockUpdated', handleRawMaterialStockRestore as EventListener);
-    window.addEventListener('cashBalanceUpdated', handleCashBalanceRestore as EventListener);
-    window.addEventListener('systemRestored', handleSystemRestore as EventListener);
-
-    // Cleanup
+    // Cleanup subscription e listener
     return () => {
-      console.log('🚫 [Dashboard] Removendo listeners para eventos de checkpoint');
-      window.removeEventListener('resaleProductStockUpdated', handleResaleProductStockRestore as EventListener);
-      window.removeEventListener('rawMaterialStockUpdated', handleRawMaterialStockRestore as EventListener);
-      window.removeEventListener('cashBalanceUpdated', handleCashBalanceRestore as EventListener);
-      window.removeEventListener('systemRestored', handleSystemRestore as EventListener);
+      if (unsubscribe) {
+        console.log('🔕 [Dashboard] Cancelando subscription do valor empresarial');
+        unsubscribe();
+      }
+
+      console.log('🚫 [Dashboard] Removendo listener para evento businessValueUpdated');
+      window.removeEventListener('businessValueUpdated', handleBusinessValueUpdate as EventListener);
     };
   }, []);
 
