@@ -33,9 +33,20 @@ import {
   ShoppingBag,
   Calculator,
   Save,
+  Calendar,
+  Filter,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
 import { dataManager } from '../../utils/dataManager';
 import { autoSetupSupabase } from '../../utils/setupSupabaseTable';
 import { ensureSystemDataExists } from '../../utils/initializeSupabaseData';
@@ -58,6 +69,243 @@ import {
 // Imports de drag-and-drop removidos - não são mais necessários
 
 // Seção de Métricas Principais removida completamente conforme solicitado
+
+// Componente para Gráfico de Lucro Empresarial
+interface EmpresarialProfitChartProps {
+  cashFlowEntries: any[];
+  isLoading: boolean;
+}
+
+const EmpresarialProfitChart = ({ cashFlowEntries, isLoading }: EmpresarialProfitChartProps) => {
+  const [dateFilter, setDateFilter] = useState("30"); // 30 dias por padrão
+  const [customStartDate, setCustomStartDate] = useState("");
+  const [customEndDate, setCustomEndDate] = useState("");
+
+  // Função para calcular lucro empresarial por dia
+  const calculateDailyProfit = () => {
+    if (!cashFlowEntries || cashFlowEntries.length === 0) return [];
+
+    // Determinar período baseado no filtro
+    let startDate = new Date();
+    let endDate = new Date();
+
+    if (dateFilter === "custom") {
+      if (customStartDate && customEndDate) {
+        startDate = new Date(customStartDate);
+        endDate = new Date(customEndDate);
+      } else {
+        startDate.setDate(startDate.getDate() - 30);
+      }
+    } else {
+      const days = parseInt(dateFilter);
+      startDate.setDate(startDate.getDate() - days);
+    }
+
+    // Filtrar entradas por período
+    const filteredEntries = cashFlowEntries.filter(entry => {
+      const entryDate = new Date(entry.transaction_date || entry.created_at);
+      return entryDate >= startDate && entryDate <= endDate;
+    });
+
+    // Agrupar por data e calcular lucro diário
+    const dailyData: { [key: string]: { income: number; expense: number; date: Date } } = {};
+
+    filteredEntries.forEach(entry => {
+      const entryDate = new Date(entry.transaction_date || entry.created_at);
+      const dateKey = entryDate.toISOString().split('T')[0];
+
+      if (!dailyData[dateKey]) {
+        dailyData[dateKey] = { income: 0, expense: 0, date: entryDate };
+      }
+
+      if (entry.type === 'income') {
+        dailyData[dateKey].income += entry.amount;
+      } else if (entry.type === 'expense') {
+        dailyData[dateKey].expense += entry.amount;
+      }
+    });
+
+    // Converter para array e calcular lucro acumulado
+    const chartData = Object.keys(dailyData)
+      .sort()
+      .map(dateKey => {
+        const data = dailyData[dateKey];
+        const profit = data.income - data.expense;
+        return {
+          date: dateKey,
+          displayDate: data.date.toLocaleDateString('pt-BR'),
+          profit: profit,
+          income: data.income,
+          expense: data.expense,
+        };
+      });
+
+    // Calcular lucro acumulado
+    let accumulated = 0;
+    return chartData.map(item => {
+      accumulated += item.profit;
+      return {
+        ...item,
+        accumulatedProfit: accumulated,
+      };
+    });
+  };
+
+  const chartData = calculateDailyProfit();
+
+  // Tooltip customizado
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      return (
+        <div className="bg-factory-800/95 border border-tire-600/50 rounded-lg p-3 shadow-lg">
+          <p className="text-white font-medium">{data.displayDate}</p>
+          <p className="text-green-400">
+            Receitas: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(data.income)}
+          </p>
+          <p className="text-red-400">
+            Despesas: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(data.expense)}
+          </p>
+          <p className="text-neon-purple font-bold">
+            Lucro: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(data.profit)}
+          </p>
+          <p className="text-neon-blue">
+            Acumulado: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(data.accumulatedProfit)}
+          </p>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  return (
+    <Card className="bg-factory-800/50 border-tire-600/30">
+      <CardHeader>
+        <div className="flex justify-between items-center">
+          <CardTitle className="text-tire-200 text-xl flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-r from-neon-purple to-neon-blue flex items-center justify-center">
+              <TrendingUp className="h-4 w-4 text-white" />
+            </div>
+            Lucro Empresarial
+          </CardTitle>
+          
+          {/* Filtros de Data */}
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Filter className="h-4 w-4 text-tire-400" />
+              <select
+                value={dateFilter}
+                onChange={(e) => setDateFilter(e.target.value)}
+                className="bg-factory-700/50 border border-tire-600/30 text-white rounded px-3 py-1 text-sm"
+              >
+                <option value="7">Últimos 7 dias</option>
+                <option value="15">Últimos 15 dias</option>
+                <option value="30">Últimos 30 dias</option>
+                <option value="60">Últimos 60 dias</option>
+                <option value="90">Últimos 90 dias</option>
+                <option value="custom">Período Customizado</option>
+              </select>
+            </div>
+
+            {dateFilter === "custom" && (
+              <div className="flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-tire-400" />
+                <input
+                  type="date"
+                  value={customStartDate}
+                  onChange={(e) => setCustomStartDate(e.target.value)}
+                  className="bg-factory-700/50 border border-tire-600/30 text-white rounded px-2 py-1 text-sm"
+                />
+                <span className="text-tire-400">até</span>
+                <input
+                  type="date"
+                  value={customEndDate}
+                  onChange={(e) => setCustomEndDate(e.target.value)}
+                  className="bg-factory-700/50 border border-tire-600/30 text-white rounded px-2 py-1 text-sm"
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="w-full" style={{ width: '790px', height: '260px' }}>
+          {isLoading ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-neon-purple"></div>
+            </div>
+          ) : chartData.length === 0 ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="text-center">
+                <TrendingUp className="h-12 w-12 text-tire-500 mx-auto mb-3" />
+                <p className="text-tire-400">Nenhum dado encontrado para o período selecionado</p>
+              </div>
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart
+                data={chartData}
+                margin={{
+                  top: 20,
+                  right: 30,
+                  left: 20,
+                  bottom: 20,
+                }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.3} />
+                <XAxis
+                  dataKey="displayDate"
+                  stroke="#9CA3AF"
+                  fontSize={10}
+                  angle={-45}
+                  textAnchor="end"
+                  height={60}
+                />
+                <YAxis
+                  stroke="#9CA3AF"
+                  fontSize={12}
+                  tickFormatter={(value) => `R$ ${value.toLocaleString("pt-BR")}`}
+                />
+                <Tooltip content={<CustomTooltip />} />
+                <Line
+                  type="monotone"
+                  dataKey="accumulatedProfit"
+                  name="Lucro Acumulado"
+                  stroke="#8B5CF6"
+                  strokeWidth={3}
+                  dot={{
+                    fill: "#8B5CF6",
+                    strokeWidth: 2,
+                    r: 4,
+                  }}
+                  activeDot={{
+                    r: 6,
+                    fill: "#8B5CF6",
+                    stroke: "#ffffff",
+                    strokeWidth: 2,
+                  }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="profit"
+                  name="Lucro Diário"
+                  stroke="#10B981"
+                  strokeWidth={2}
+                  strokeDasharray="5 5"
+                  dot={{
+                    fill: "#10B981",
+                    strokeWidth: 1,
+                    r: 3,
+                  }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
 
 // Main Dashboard Component with Financial Metrics
 const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
@@ -2195,6 +2443,12 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
           
         </div>
       </div>
+
+      {/* Gráfico de Lucro Empresarial */}
+      <EmpresarialProfitChart 
+        cashFlowEntries={cashFlowEntries}
+        isLoading={cashFlowLoading}
+      />
 
       {/* Seção de Cards de Métricas - Layout 3x3 */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
