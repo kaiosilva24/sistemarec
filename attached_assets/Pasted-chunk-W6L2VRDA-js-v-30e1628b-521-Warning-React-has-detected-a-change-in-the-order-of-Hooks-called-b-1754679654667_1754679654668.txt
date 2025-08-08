@@ -1,0 +1,163 @@
+chunk-W6L2VRDA.js?v=30e1628b:521 Warning: React has detected a change in the order of Hooks called by MainDashboard. This will lead to bugs and errors if not fixed. For more information, read the Rules of Hooks: https://reactjs.org/link/rules-of-hooks
+
+   Previous render            Next render
+   ------------------------------------------------------
+1. useState                   useState
+2. useState                   useState
+3. useState                   useState
+4. useCallback                useCallback
+5. useCallback                useCallback
+6. useCallback                useCallback
+7. useCallback                useCallback
+8. useEffect                  useEffect
+9. useState                   useState
+10. useState                  useState
+11. useState                  useState
+12. useEffect                 useEffect
+13. useState                  useState
+14. useState                  useState
+15. useState                  useState
+16. useEffect                 useEffect
+17. useState                  useState
+18. useState                  useState
+19. useState                  useState
+20. useEffect                 useEffect
+21. useState                  useState
+22. useState                  useState
+23. useState                  useState
+24. useEffect                 useEffect
+25. useState                  useState
+26. useState                  useState
+27. useState                  useState
+28. useEffect                 useEffect
+29. useState                  useState
+30. useState                  useState
+31. useState                  useState
+32. useEffect                 useEffect
+33. useEffect                 useEffect
+34. useState                  useState
+35. useState                  useState
+36. useState                  useState
+37. useEffect                 useEffect
+38. useState                  useState
+39. useState                  useState
+40. useState                  useState
+41. useEffect                 useEffect
+42. useState                  useState
+43. useState                  useState
+44. useState                  useState
+45. useEffect                 useEffect
+46. useState                  useState
+47. useState                  useState
+48. useState                  useState
+49. useEffect                 useEffect
+50. useState                  useState
+51. useState                  useState
+52. useState                  useState
+53. useEffect                 useEffect
+54. useState                  useState
+55. useState                  useState
+56. useEffect                 useEffect
+57. useState                  useState
+58. useEffect                 useEffect
+59. useState                  useState
+60. useState                  useState
+61. useState                  useState
+62. useState                  useState
+63. useState                  useState
+64. useState                  useState
+65. useState                  useState
+66. useState                  useState
+67. useState                  useState
+68. useState                  useState
+69. useState                  useState
+70. useState                  useState
+71. useState                  useState
+72. useState                  useState
+73. useState                  useState
+74. useState                  useState
+75. useState                  useState
+76. useState                  useState
+77. useState                  useState
+78. useState                  useState
+79. useState                  useState
+80. useState                  useState
+81. useState                  useState
+82. useState                  useState
+83. useState                  useState
+84. useState                  useState
+85. useEffect                 useEffect
+86. useEffect                 useEffect
+87. useEffect                 useEffect
+88. useEffect                 useEffect
+89. useEffect                 useEffect
+90. useEffect                 useEffect
+91. useMemo                   useMemo
+92. useEffect                 useEffect
+93. useEffect                 useEffect
+94. useEffect                 useEffect
+95. useEffect                 useEffect
+96. useEffect                 useEffect
+97. useEffect                 useEffect
+98. useEffect                 useEffect
+99. useEffect                 useEffect
+100. useEffect                useEffect
+101. useEffect                useEffect
+102. useEffect                useEffect
+103. useEffect                useEffect
+104. useEffect                useEffect
+105. useEffect                useEffect
+106. useEffect                useEffect
+107. useEffect                useEffect
+108. useEffect                useEffect
+109. useEffect                useEffect
+110. useEffect                useEffect
+111. useEffect                useEffect
+112. undefined                useEffect
+   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+    at MainDashboard (https://ac4f79b0-b367-45e4-bc58-0e2bb6d06d86-00-jusvt8ketc6r.worf.replit.dev/src/components/pages/dashboard.tsx?t=1754679589278:533:26)
+    at div
+    at main
+    at div
+    at div
+    at Home (https://ac4f79b0-b367-45e4-bc58-0e2bb6d06d86-00-jusvt8ketc6r.worf.replit.dev/src/components/pages/dashboard.tsx?t=1754679589278:3659:19)
+    at PrivateRoute (https://ac4f79b0-b367-45e4-bc58-0e2bb6d06d86-00-jusvt8ketc6r.worf.replit.dev/src/App.tsx?t=1754679589278:22:25)
+    at RenderedRoute (https://ac4f79b0-b367-45e4-bc58-0e2bb6d06d86-00-jusvt8ketc6r.worf.replit.dev/node_modules/.vite/deps/react-router-dom.js?v=30e1628b:3989:5)
+    at Routes (https://ac4f79b0-b367-45e4-bc58-0e2bb6d06d86-00-jusvt8ketc6r.worf.replit.dev/node_modules/.vite/deps/react-router-dom.js?v=30e1628b:4423:5)
+    at AppRoutes
+    at Suspense
+    at AuthProvider (https://ac4f79b0-b367-45e4-bc58-0e2bb6d06d86-00-jusvt8ketc6r.worf.replit.dev/supabase/auth.tsx:14:32)
+    at QueryClientProvider (https://ac4f79b0-b367-45e4-bc58-0e2bb6d06d86-00-jusvt8ketc6r.worf.replit.dev/node_modules/.vite/deps/chunk-ENT363IH.js?v=30e1628b:2934:3)
+    at QueryProvider (https://ac4f79b0-b367-45e4-bc58-0e2bb6d06d86-00-jusvt8ketc6r.worf.replit.dev/src/providers/QueryProvider.tsx:14:33)
+    at App
+    at Router (https://ac4f79b0-b367-45e4-bc58-0e2bb6d06d86-00-jusvt8ketc6r.worf.replit.dev/node_modules/.vite/deps/react-router-dom.js?v=30e1628b:4366:15)
+    at BrowserRouter (https://ac4f79b0-b367-45e4-bc58-0e2bb6d06d86-00-jusvt8ketc6r.worf.replit.dev/node_modules/.vite/deps/react-router-dom.js?v=30e1628b:5109:5)
+
+2
+chunk-W6L2VRDA.js?v=30e1628b:11678 Uncaught Error: Rendered more hooks than during the previous render.
+    at MainDashboard (dashboard.tsx:2223:3)
+chunk-W6L2VRDA.js?v=30e1628b:14032 The above error occurred in the <MainDashboard> component:
+
+    at MainDashboard (https://ac4f79b0-b367-45e4-bc58-0e2bb6d06d86-00-jusvt8ketc6r.worf.replit.dev/src/components/pages/dashboard.tsx?t=1754679589278:533:26)
+    at div
+    at main
+    at div
+    at div
+    at Home (https://ac4f79b0-b367-45e4-bc58-0e2bb6d06d86-00-jusvt8ketc6r.worf.replit.dev/src/components/pages/dashboard.tsx?t=1754679589278:3659:19)
+    at PrivateRoute (https://ac4f79b0-b367-45e4-bc58-0e2bb6d06d86-00-jusvt8ketc6r.worf.replit.dev/src/App.tsx?t=1754679589278:22:25)
+    at RenderedRoute (https://ac4f79b0-b367-45e4-bc58-0e2bb6d06d86-00-jusvt8ketc6r.worf.replit.dev/node_modules/.vite/deps/react-router-dom.js?v=30e1628b:3989:5)
+    at Routes (https://ac4f79b0-b367-45e4-bc58-0e2bb6d06d86-00-jusvt8ketc6r.worf.replit.dev/node_modules/.vite/deps/react-router-dom.js?v=30e1628b:4423:5)
+    at AppRoutes
+    at Suspense
+    at AuthProvider (https://ac4f79b0-b367-45e4-bc58-0e2bb6d06d86-00-jusvt8ketc6r.worf.replit.dev/supabase/auth.tsx:14:32)
+    at QueryClientProvider (https://ac4f79b0-b367-45e4-bc58-0e2bb6d06d86-00-jusvt8ketc6r.worf.replit.dev/node_modules/.vite/deps/chunk-ENT363IH.js?v=30e1628b:2934:3)
+    at QueryProvider (https://ac4f79b0-b367-45e4-bc58-0e2bb6d06d86-00-jusvt8ketc6r.worf.replit.dev/src/providers/QueryProvider.tsx:14:33)
+    at App
+    at Router (https://ac4f79b0-b367-45e4-bc58-0e2bb6d06d86-00-jusvt8ketc6r.worf.replit.dev/node_modules/.vite/deps/react-router-dom.js?v=30e1628b:4366:15)
+    at BrowserRouter (https://ac4f79b0-b367-45e4-bc58-0e2bb6d06d86-00-jusvt8ketc6r.worf.replit.dev/node_modules/.vite/deps/react-router-dom.js?v=30e1628b:5109:5)
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.
+chunk-W6L2VRDA.js?v=30e1628b:19413 Uncaught Error: Rendered more hooks than during the previous render.
+    at MainDashboard (dashboard.tsx:2223:3)
