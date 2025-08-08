@@ -943,7 +943,7 @@ export class DataManager {
       });
 
       const success = await this.updateInDatabase("cash_flow_entries", id, updates);
-      
+
       if (success) {
         console.log('✅ [DataManager] Entrada de cash flow atualizada com sucesso:', {
           id: id,
@@ -2307,7 +2307,7 @@ export class DataManager {
 
           if (payload.new && typeof payload.new === 'object' && 'value' in payload.new) {
             let value = payload.new.value;
-            
+
             // Try to parse as number first, then string
             const numValue = Number(value);
             if (!isNaN(numValue)) {
@@ -3173,37 +3173,12 @@ export class DataManager {
   subscribeToRawMaterialUnitaryQuantityChanges(callback: (newQuantity: number) => void): () => void {
     console.log('🔔 [DataManager] Iniciando subscription para mudanças na quantidade unitária de matéria-prima...');
 
-    const subscription = this.supabase
-      .channel('raw_material_unitary_quantity_changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'system_settings',
-          filter: 'key=eq.raw_material_unitary_quantity'
-        },
-        (payload) => {
-          console.log('📡 [DataManager] Mudança detectada na quantidade unitária de matéria-prima:', payload);
+    console.log('⚠️ [DataManager] TEMPORÁRIO: Subscription desabilitada (tabela system_settings não existe)');
 
-          if (payload.new && payload.new.value) {
-            const newQuantity = Number(payload.new.value) || 0;
-
-            if (newQuantity >= 0) {
-              console.log(`📦 [DataManager] Nova quantidade unitária de matéria-prima: ${newQuantity}`);
-              callback(newQuantity);
-            }
-          }
-        }
-      )
-      .subscribe();
-
-    console.log('✅ [DataManager] Subscription ativa para mudanças na quantidade unitária de matéria-prima');
-
-    // Retornar função de cleanup
+    // TODO: Implementar Supabase Realtime quando tabela system_settings for criada
+    // Por enquanto, retornar função vazia
     return () => {
-      console.log('🔌 [DataManager] Cancelando subscription da quantidade unitária de matéria-prima');
-      this.supabase.removeChannel(subscription);
+      console.log('🔌 [DataManager] Cleanup de subscription de matéria-prima (vazia)');
     };
   }
 
@@ -3305,6 +3280,70 @@ export class DataManager {
       this.supabase.removeChannel(subscription);
     };
   }
+
+  // Load average resale profit
+  async loadAverageResaleProfit(): Promise<number> {
+    try {
+      const value = await this.loadSystemSetting('average_resale_profit');
+      return parseFloat(value) || 0;
+    } catch (error) {
+      console.error('❌ [DataManager] Erro ao carregar lucro médio de revenda:', error);
+      return 0;
+    }
+  },
+
+  // Save average resale profit
+  async saveAverageResaleProfit(profit: number): Promise<boolean> {
+    try {
+      return await this.saveSystemSetting('average_resale_profit', profit);
+    } catch (error) {
+      console.error('❌ [DataManager] Erro ao salvar lucro médio de revenda:', error);
+      return false;
+    }
+  },
+
+  // Load empresarial balance
+  async loadEmpresarialBalance(): Promise<number> {
+    try {
+      const value = await this.loadSystemSetting('empresarial_current_balance');
+      return parseFloat(value) || 0;
+    } catch (error) {
+      console.error('❌ [DataManager] Erro ao carregar balanço empresarial:', error);
+      return 0;
+    }
+  },
+
+  // Save empresarial balance
+  async saveEmpresarialBalance(balance: number): Promise<boolean> {
+    try {
+      const registrationDate = new Date().toISOString();
+      const balanceSaved = await this.saveSystemSetting('empresarial_current_balance', balance);
+      const dateSaved = await this.saveSystemSetting('empresarial_last_registration_date', registrationDate);
+
+      console.log('📊 [DataManager] Balanço empresarial salvo:', {
+        balance,
+        registrationDate,
+        balanceSaved,
+        dateSaved
+      });
+
+      return balanceSaved && dateSaved;
+    } catch (error) {
+      console.error('❌ [DataManager] Erro ao salvar balanço empresarial:', error);
+      return false;
+    }
+  },
+
+  // Load empresarial registration date
+  async loadEmpresarialRegistrationDate(): Promise<string> {
+    try {
+      const value = await this.loadSystemSetting('empresarial_last_registration_date');
+      return value || '';
+    } catch (error) {
+      console.error('❌ [DataManager] Erro ao carregar data de registro empresarial:', error);
+      return '';
+    }
+  },
 }
 
 // Export singleton instance

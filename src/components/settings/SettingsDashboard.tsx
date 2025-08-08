@@ -17,6 +17,10 @@ import {
   TrendingUp,
   AlertCircle,
   CheckCircle,
+  PlusCircle,
+  Building,
+  BarChart3,
+  Calendar,
 } from "lucide-react";
 import { dataManager } from "../../utils/dataManager";
 
@@ -29,13 +33,10 @@ const SettingsDashboard = ({
   onRefresh = () => {},
   isLoading = false,
 }: SettingsDashboardProps) => {
-  // Estados para configurações de lucro empresarial
-  const [empresarialProfitConfig, setEmpresarialProfitConfig] = useState({
-    tireProfitPercentage: 78.77,
-    resaleProfitPercentage: 23.61,
-    productionCostMultiplier: 1.15,
-    marketingCostPercentage: 2.5,
-    operationalCostPercentage: 5.0,
+  // Estados para configurações de valor empresarial
+  const [empresarialValueConfig, setEmpresarialValueConfig] = useState({
+    currentBalance: 0,
+    lastRegistrationDate: "",
   });
 
   // Estados para configurações de custo
@@ -56,14 +57,14 @@ const SettingsDashboard = ({
 
   // Estados de loading para cada seção
   const [loadingStates, setLoadingStates] = useState({
-    empresarialProfit: false,
+    empresarialValue: false,
     cost: false,
     stock: false,
   });
 
   // Estados de status de salvamento
   const [saveStatus, setSaveStatus] = useState<{[key: string]: 'idle' | 'saving' | 'success' | 'error'}>({
-    empresarialProfit: 'idle',
+    empresarialValue: 'idle',
     cost: 'idle',
     stock: 'idle',
   });
@@ -86,21 +87,20 @@ const SettingsDashboard = ({
 
   const loadInitialSettings = async () => {
     setLoadingStates({
-      empresarialProfit: true,
+      empresarialValue: true,
       cost: true,
       stock: true,
     });
 
     try {
-      // Carregar configurações de lucro empresarial
-      const tireProfitValue = await dataManager.loadAverageTireProfit();
-      const resaleProfitValue = await dataManager.loadAverageResaleProfit();
+      // Carregar configurações de valor empresarial
+      const currentBalance = await dataManager.loadSystemSetting('empresarial_current_balance') || 0;
+      const lastRegistrationDate = await dataManager.loadSystemSetting('empresarial_last_registration_date') || '';
       
-      setEmpresarialProfitConfig(prev => ({
-        ...prev,
-        tireProfitPercentage: tireProfitValue,
-        resaleProfitPercentage: resaleProfitValue,
-      }));
+      setEmpresarialValueConfig({
+        currentBalance: parseFloat(currentBalance),
+        lastRegistrationDate: lastRegistrationDate,
+      });
 
       // Carregar configurações de custo
       const averageTireCost = await dataManager.loadAverageTireCost();
@@ -110,8 +110,8 @@ const SettingsDashboard = ({
       }));
 
       console.log('✅ [SettingsDashboard] Configurações carregadas:', {
-        tireProfitValue,
-        resaleProfitValue,
+        currentBalance,
+        lastRegistrationDate,
         averageTireCost
       });
 
@@ -119,71 +119,72 @@ const SettingsDashboard = ({
       console.error('❌ [SettingsDashboard] Erro ao carregar configurações:', error);
     } finally {
       setLoadingStates({
-        empresarialProfit: false,
+        empresarialValue: false,
         cost: false,
         stock: false,
       });
     }
   };
 
-  // Salvar configurações de lucro empresarial
-  const saveEmpresarialProfitConfig = async () => {
-    setSaveStatus(prev => ({ ...prev, empresarialProfit: 'saving' }));
+  // Registrar novo balanço empresarial
+  const registerEmpresarialBalance = async () => {
+    setSaveStatus(prev => ({ ...prev, empresarialValue: 'saving' }));
 
     try {
-      // Salvar lucro médio por pneu
-      await dataManager.saveAverageTireProfit(empresarialProfitConfig.tireProfitPercentage);
+      // Calcular o balanço atual baseado no fluxo de caixa
+      const cashFlowEntries = await dataManager.getCashFlowEntries();
       
-      // Salvar lucro médio de produtos de revenda
-      await dataManager.saveAverageResaleProfit(empresarialProfitConfig.resaleProfitPercentage);
+      const totalIncome = cashFlowEntries
+        .filter(entry => entry.type === 'income')
+        .reduce((sum, entry) => sum + entry.amount, 0);
 
-      // Salvar outras configurações no Supabase
-      const configData = {
-        production_cost_multiplier: empresarialProfitConfig.productionCostMultiplier,
-        marketing_cost_percentage: empresarialProfitConfig.marketingCostPercentage,
-        operational_cost_percentage: empresarialProfitConfig.operationalCostPercentage,
-      };
+      const totalExpense = cashFlowEntries
+        .filter(entry => entry.type === 'expense')
+        .reduce((sum, entry) => sum + entry.amount, 0);
 
-      // Salvar cada configuração individualmente
-      for (const [key, value] of Object.entries(configData)) {
-        await dataManager.saveSystemSetting(key, value);
-      }
+      const currentBalance = totalIncome - totalExpense;
+      const registrationDate = new Date().toISOString();
 
-      setSaveStatus(prev => ({ ...prev, empresarialProfit: 'success' }));
+      // Salvar o balanço empresarial atual
+      await dataManager.saveSystemSetting('empresarial_current_balance', currentBalance);
+      await dataManager.saveSystemSetting('empresarial_last_registration_date', registrationDate);
 
-      // Disparar eventos para atualizar outros componentes
-      const tireProfitEvent = new CustomEvent('tireProfitUpdated', {
+      // Atualizar o estado local
+      setEmpresarialValueConfig({
+        currentBalance: currentBalance,
+        lastRegistrationDate: registrationDate,
+      });
+
+      setSaveStatus(prev => ({ ...prev, empresarialValue: 'success' }));
+
+      // Disparar evento para atualizar outros componentes
+      const balanceEvent = new CustomEvent('empresarialBalanceUpdated', {
         detail: {
-          profit: empresarialProfitConfig.tireProfitPercentage,
+          balance: currentBalance,
+          registrationDate: registrationDate,
           timestamp: Date.now(),
           source: 'SettingsDashboard'
         }
       });
-      window.dispatchEvent(tireProfitEvent);
+      window.dispatchEvent(balanceEvent);
 
-      const resaleProfitEvent = new CustomEvent('resaleProfitUpdated', {
-        detail: {
-          profit: empresarialProfitConfig.resaleProfitPercentage,
-          timestamp: Date.now(),
-          source: 'SettingsDashboard'
-        }
+      console.log('✅ [SettingsDashboard] Balanço empresarial registrado com sucesso:', {
+        currentBalance,
+        registrationDate
       });
-      window.dispatchEvent(resaleProfitEvent);
-
-      console.log('✅ [SettingsDashboard] Configurações de lucro empresarial salvas com sucesso');
       
       // Reset status após 3 segundos
       setTimeout(() => {
-        setSaveStatus(prev => ({ ...prev, empresarialProfit: 'idle' }));
+        setSaveStatus(prev => ({ ...prev, empresarialValue: 'idle' }));
       }, 3000);
 
     } catch (error) {
-      console.error('❌ [SettingsDashboard] Erro ao salvar configurações de lucro:', error);
-      setSaveStatus(prev => ({ ...prev, empresarialProfit: 'error' }));
+      console.error('❌ [SettingsDashboard] Erro ao registrar balanço empresarial:', error);
+      setSaveStatus(prev => ({ ...prev, empresarialValue: 'error' }));
       
       // Reset status após 5 segundos
       setTimeout(() => {
-        setSaveStatus(prev => ({ ...prev, empresarialProfit: 'idle' }));
+        setSaveStatus(prev => ({ ...prev, empresarialValue: 'idle' }));
       }, 5000);
     }
   };
@@ -302,11 +303,11 @@ const SettingsDashboard = ({
         </p>
       </div>
 
-      <Tabs defaultValue="empresarial-profit" className="space-y-6">
+      <Tabs defaultValue="empresarial-value" className="space-y-6">
         <TabsList className="grid w-full grid-cols-3 bg-factory-800/50">
-          <TabsTrigger value="empresarial-profit" className="data-[state=active]:bg-neon-purple/20">
-            <TrendingUp className="h-4 w-4 mr-2" />
-            Lucro Empresarial
+          <TabsTrigger value="empresarial-value" className="data-[state=active]:bg-neon-purple/20">
+            <Building className="h-4 w-4 mr-2" />
+            Valor Empresarial
           </TabsTrigger>
           <TabsTrigger value="cost" className="data-[state=active]:bg-neon-blue/20">
             <Calculator className="h-4 w-4 mr-2" />
@@ -318,147 +319,79 @@ const SettingsDashboard = ({
           </TabsTrigger>
         </TabsList>
 
-        {/* Tab de Lucro Empresarial */}
-        <TabsContent value="empresarial-profit">
+        {/* Tab de Valor Empresarial */}
+        <TabsContent value="empresarial-value">
           <Card className="bg-factory-800/50 border-tire-600/30">
             <CardHeader>
               <CardTitle className="text-tire-200 flex items-center">
-                <TrendingUp className="h-5 w-5 mr-2 text-neon-purple" />
-                Configuração de Lucro Empresarial
-                <SaveStatus status={saveStatus.empresarialProfit} />
+                <Building className="h-5 w-5 mr-2 text-neon-purple" />
+                Valor Empresarial
+                <SaveStatus status={saveStatus.empresarialValue} />
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Lucro por Pneu */}
-                <div className="space-y-2">
-                  <Label className="text-tire-300">Lucro Médio por Pneu</Label>
-                  <div className="flex items-center space-x-2">
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={empresarialProfitConfig.tireProfitPercentage}
-                      onChange={(e) =>
-                        setEmpresarialProfitConfig(prev => ({
-                          ...prev,
-                          tireProfitPercentage: parseFloat(e.target.value) || 0
-                        }))
-                      }
-                      className="bg-factory-700/50 border-tire-600/30 text-white"
-                    />
-                    <span className="text-tire-300 text-sm">R$</span>
-                  </div>
-                  <p className="text-tire-400 text-xs">
-                    Valor: {formatCurrency(empresarialProfitConfig.tireProfitPercentage)}
-                  </p>
-                </div>
+                {/* Card de Valor Empresarial Atual */}
+                <Card className="bg-factory-700/50 border-neon-purple/30">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-neon-purple text-lg flex items-center">
+                      <BarChart3 className="h-5 w-5 mr-2" />
+                      Balanço Empresarial Atual
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-center">
+                      <div className={`text-3xl font-bold ${empresarialValueConfig.currentBalance >= 0 ? 'text-neon-green' : 'text-red-400'}`}>
+                        {formatCurrency(empresarialValueConfig.currentBalance)}
+                      </div>
+                      {empresarialValueConfig.lastRegistrationDate && (
+                        <div className="mt-2 flex items-center justify-center text-sm text-tire-300">
+                          <Calendar className="h-4 w-4 mr-1" />
+                          Último registro: {new Date(empresarialValueConfig.lastRegistrationDate).toLocaleString('pt-BR')}
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
 
-                {/* Lucro de Produtos de Revenda */}
-                <div className="space-y-2">
-                  <Label className="text-tire-300">Lucro Médio Produtos de Revenda</Label>
-                  <div className="flex items-center space-x-2">
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={empresarialProfitConfig.resaleProfitPercentage}
-                      onChange={(e) =>
-                        setEmpresarialProfitConfig(prev => ({
-                          ...prev,
-                          resaleProfitPercentage: parseFloat(e.target.value) || 0
-                        }))
-                      }
-                      className="bg-factory-700/50 border-tire-600/30 text-white"
-                    />
-                    <span className="text-tire-300 text-sm">R$</span>
-                  </div>
-                  <p className="text-tire-400 text-xs">
-                    Valor: {formatCurrency(empresarialProfitConfig.resaleProfitPercentage)}
-                  </p>
-                </div>
-
-                {/* Multiplicador de Custo de Produção */}
-                <div className="space-y-2">
-                  <Label className="text-tire-300">Multiplicador de Custo de Produção</Label>
-                  <div className="flex items-center space-x-2">
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={empresarialProfitConfig.productionCostMultiplier}
-                      onChange={(e) =>
-                        setEmpresarialProfitConfig(prev => ({
-                          ...prev,
-                          productionCostMultiplier: parseFloat(e.target.value) || 1
-                        }))
-                      }
-                      className="bg-factory-700/50 border-tire-600/30 text-white"
-                    />
-                    <span className="text-tire-300 text-sm">×</span>
-                  </div>
-                  <p className="text-tire-400 text-xs">
-                    Fator: {empresarialProfitConfig.productionCostMultiplier.toFixed(2)}×
-                  </p>
-                </div>
-
-                {/* Custo de Marketing */}
-                <div className="space-y-2">
-                  <Label className="text-tire-300">Custo de Marketing</Label>
-                  <div className="flex items-center space-x-2">
-                    <Input
-                      type="number"
-                      step="0.1"
-                      value={empresarialProfitConfig.marketingCostPercentage}
-                      onChange={(e) =>
-                        setEmpresarialProfitConfig(prev => ({
-                          ...prev,
-                          marketingCostPercentage: parseFloat(e.target.value) || 0
-                        }))
-                      }
-                      className="bg-factory-700/50 border-tire-600/30 text-white"
-                    />
-                    <span className="text-tire-300 text-sm">%</span>
-                  </div>
-                  <p className="text-tire-400 text-xs">
-                    Percentual: {formatPercentage(empresarialProfitConfig.marketingCostPercentage)}
-                  </p>
-                </div>
-
-                {/* Custo Operacional */}
-                <div className="space-y-2">
-                  <Label className="text-tire-300">Custo Operacional</Label>
-                  <div className="flex items-center space-x-2">
-                    <Input
-                      type="number"
-                      step="0.1"
-                      value={empresarialProfitConfig.operationalCostPercentage}
-                      onChange={(e) =>
-                        setEmpresarialProfitConfig(prev => ({
-                          ...prev,
-                          operationalCostPercentage: parseFloat(e.target.value) || 0
-                        }))
-                      }
-                      className="bg-factory-700/50 border-tire-600/30 text-white"
-                    />
-                    <span className="text-tire-300 text-sm">%</span>
-                  </div>
-                  <p className="text-tire-400 text-xs">
-                    Percentual: {formatPercentage(empresarialProfitConfig.operationalCostPercentage)}
-                  </p>
-                </div>
+                {/* Botão de Registro */}
+                <Card className="bg-factory-700/50 border-neon-blue/30">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-neon-blue text-lg flex items-center">
+                      <PlusCircle className="h-5 w-5 mr-2" />
+                      Registrar Balanço
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="flex flex-col justify-center items-center space-y-4">
+                    <p className="text-tire-300 text-center text-sm">
+                      Registre o balanço empresarial atual baseado no fluxo de caixa.
+                      Este valor será usado como base para cálculo do lucro empresarial.
+                    </p>
+                    <Button
+                      onClick={registerEmpresarialBalance}
+                      disabled={loadingStates.empresarialValue || saveStatus.empresarialValue === 'saving'}
+                      className="bg-neon-purple hover:bg-neon-purple/80 w-full"
+                      size="lg"
+                    >
+                      {saveStatus.empresarialValue === 'saving' ? (
+                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <PlusCircle className="h-4 w-4 mr-2" />
+                      )}
+                      Registrar Balanço Atual
+                    </Button>
+                  </CardContent>
+                </Card>
               </div>
 
-              <div className="flex justify-end pt-4">
-                <Button
-                  onClick={saveEmpresarialProfitConfig}
-                  disabled={loadingStates.empresarialProfit || saveStatus.empresarialProfit === 'saving'}
-                  className="bg-neon-purple hover:bg-neon-purple/80"
-                >
-                  {saveStatus.empresarialProfit === 'saving' ? (
-                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <Save className="h-4 w-4 mr-2" />
-                  )}
-                  Salvar Configurações de Lucro
-                </Button>
+              <div className="mt-6 p-4 bg-neon-purple/10 rounded-lg border border-neon-purple/30">
+                <h4 className="text-neon-purple font-medium mb-2">Como funciona o Valor Empresarial:</h4>
+                <ul className="text-tire-300 text-sm space-y-1">
+                  <li>• O balanço registrado serve como base para o cálculo do lucro empresarial</li>
+                  <li>• Valores positivos ou negativos são aceitos</li>
+                  <li>• A partir deste registro, todas as movimentações futuras serão calculadas como lucro/prejuízo</li>
+                  <li>• Recomenda-se registrar o balanço periodicamente para manter a precisão</li>
+                </ul>
               </div>
             </CardContent>
           </Card>
