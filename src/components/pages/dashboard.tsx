@@ -2065,9 +2065,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                       formatCurrency(cashBalanceState)
                     )}
                   </p>
-                  <p className="text-xs text-tire-400 mt-1">
-                    {cashFlowEntries.length} movimentações
-                  </p>
+                  
                 </div>
               </div>
             </CardContent>
@@ -2091,9 +2089,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                   }`}>
                     {formatCurrency(totalRevenue)}
                   </p>
-                  <p className="text-xs text-tire-400 mt-1">
-                    {salesCount} vendas
-                  </p>
+                  
                 </div>
               </div>
             </CardContent>
@@ -2242,9 +2238,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                       rawMaterialUnitaryQuantity
                     )}
                   </p>
-                  <p className="text-xs text-tire-400 mt-1">
-                    {rawMaterialUnitaryQuantity === 1 ? '1 tipo em estoque' : `${rawMaterialUnitaryQuantity > 0 ? 'tipos' : '0 tipos'} em estoque`}
-                  </p>
+                  
                 </div>
                 <div className="p-2 rounded-full bg-orange-500/20">
                   <Calculator className="h-5 w-5 text-orange-400" />
@@ -2266,15 +2260,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                       `${finalProductTotalQuantity} unidades`
                     )}
                   </p>
-                  <p className="text-xs text-tire-400 mt-1">
-                    {finalProductTotalQuantity === null || finalProductTotalQuantity === 0 ? (
-                      'Nenhuma unidade em estoque'
-                    ) : finalProductTotalQuantity === 1 ? (
-                      '1 unidade total'
-                    ) : (
-                      `${finalProductTotalQuantity} unidades totais`
-                    )}
-                  </p>
+                  
                 </div>
                 <div className="p-2 rounded-full bg-orange-500/20">
                   <Calculator className="h-5 w-5 text-orange-400" />
@@ -2296,15 +2282,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                       resaleProductTotalQuantity
                     )}
                   </p>
-                  <p className="text-xs text-tire-400 mt-1">
-                    {resaleProductTotalQuantity === null || resaleProductTotalQuantity === 0 ? (
-                      'Nenhuma unidade em estoque'
-                    ) : resaleProductTotalQuantity === 1 ? (
-                      '1 unidade total'
-                    ) : (
-                      `${resaleProductTotalQuantity} unidades totais`
-                    )}
-                  </p>
+                  
                 </div>
                 <div className="p-2 rounded-full bg-orange-500/20">
                   <Calculator className="h-5 w-5 text-orange-400" />
