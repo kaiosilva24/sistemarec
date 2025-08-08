@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -197,7 +196,7 @@ const SettingsDashboard = ({
       setSaveStatus(prev => ({ ...prev, cost: 'success' }));
 
       console.log('✅ [SettingsDashboard] Configurações de custo salvas com sucesso');
-      
+
       setTimeout(() => {
         setSaveStatus(prev => ({ ...prev, cost: 'idle' }));
       }, 3000);
@@ -205,7 +204,7 @@ const SettingsDashboard = ({
     } catch (error) {
       console.error('❌ [SettingsDashboard] Erro ao salvar configurações de custo:', error);
       setSaveStatus(prev => ({ ...prev, cost: 'error' }));
-      
+
       setTimeout(() => {
         setSaveStatus(prev => ({ ...prev, cost: 'idle' }));
       }, 5000);
@@ -231,7 +230,7 @@ const SettingsDashboard = ({
       setSaveStatus(prev => ({ ...prev, stock: 'success' }));
 
       console.log('✅ [SettingsDashboard] Configurações de estoque salvas com sucesso');
-      
+
       setTimeout(() => {
         setSaveStatus(prev => ({ ...prev, stock: 'idle' }));
       }, 3000);
@@ -239,7 +238,7 @@ const SettingsDashboard = ({
     } catch (error) {
       console.error('❌ [SettingsDashboard] Erro ao salvar configurações de estoque:', error);
       setSaveStatus(prev => ({ ...prev, stock: 'error' }));
-      
+
       setTimeout(() => {
         setSaveStatus(prev => ({ ...prev, stock: 'idle' }));
       }, 5000);
@@ -609,7 +608,7 @@ const SettingsDashboard = ({
               <RefreshCw className="h-4 w-4 mr-2" />
               Recarregar Configurações
             </Button>
-            
+
             <Button
               onClick={onRefresh}
               variant="outline"

@@ -1971,53 +1971,13 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
     }
   }, [cashFlowEntries, cashFlowLoading, cashBalanceState]);
 
-  // Monitorar mudanças no estoque para sincronização entre componentes
-  useEffect(() => {
-    if (!stockItems.length || stockItemsLoading) return;
-
-    console.log('📊 [Dashboard] Monitorando mudanças no estoque para sincronização:', {
-      totalStockItems: stockItems.length,
-      finalProducts: stockItems.filter(item => item.item_type === 'product').length,
-      materials: stockItems.filter(item => item.item_type === 'material').length
-    });
-
-    // Debounce para evitar múltiplos disparos
-    const timeoutId = setTimeout(() => {
-      // Disparar evento para forçar sincronização entre StockCharts e FinalProductsStock
-      const stockSyncEvent = new CustomEvent('dashboardStockUpdated', {
-        detail: {
-          stockItems: stockItems.filter(item => item.item_type === 'product'),
-          timestamp: Date.now(),
-          source: 'Dashboard-StockMonitor'
-        }
-      });
-
-      window.dispatchEvent(stockSyncEvent);
-      console.log('📡 [Dashboard] Evento de sincronização de estoque disparado');
-
-      // Forçar recalculação no FinalProductsStock após mudanças no estoque
-      setTimeout(() => {
-        const forceRecalcEvent = new CustomEvent('forceStockRecalculation', {
-          detail: {
-            source: 'Dashboard-StockChange',
-            timestamp: Date.now()
-          }
-        });
-        window.dispatchEvent(forceRecalcEvent);
-        console.log('🔄 [Dashboard] Forçando recalculação após mudança no estoque');
-      }, 300);
-
-    }, 1000); // Debounce de 1 segundo
-
-    return () => clearTimeout(timeoutId);
-  }, [stockItems, stockItemsLoading]);
-
   // Effect para calcular valor empresarial em tempo real
   useEffect(() => {
+    // Aguardar que todos os valores estejam carregados
     if (
       cashBalanceState !== null &&
-      finalProductStockBalance !== null &&
       rawMaterialStockBalance !== null &&
+      finalProductStockBalance !== null &&
       resaleProductStockBalance !== null
     ) {
       const timeoutId = setTimeout(async () => {
@@ -2029,8 +1989,8 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
 
         const totalValue = 
           (cashBalanceState || 0) + 
-          (finalProductStockBalance || 0) + 
           (rawMaterialStockBalance || 0) + 
+          (finalProductStockBalance || 0) +
           (resaleProductStockBalance || 0);
 
         console.log(`💰 [Dashboard] Valor empresarial total calculado: R$ ${totalValue.toFixed(2)}`);
