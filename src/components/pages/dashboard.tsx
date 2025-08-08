@@ -19,6 +19,7 @@ import ResaleProductProfitManager from "../financial/ResaleProductProfitManager"
 import TireCostManager from "../financial/TireCostManager";
 import FinalProductsStock from "../stock/FinalProductsStock";
 import ResaleProductsStock from "../stock/ResaleProductsStock";
+import SettingsDashboard from "../settings/SettingsDashboard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
