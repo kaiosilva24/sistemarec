@@ -4,7 +4,7 @@
 CREATE TABLE IF NOT EXISTS public.system_settings (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     key VARCHAR(255) NOT NULL UNIQUE,
-    value TEXT NOT NULL, -- Mudado para TEXT para suportar JSON
+    value DECIMAL(10,2) NOT NULL,
     description TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()

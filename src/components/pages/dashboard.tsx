@@ -8,7 +8,6 @@ import RegistrationDashboard from "../registration/RegistrationDashboard";
 import StockDashboard from "../stock/StockDashboard";
 import ProductionDashboard from "../production/ProductionDashboard";
 import SalesDashboard from "../sales/SalesDashboard";
-import SettingsDashboard from "../settings/SettingsDashboard";
 import DataDiagnostic from "../debug/DataDiagnostic";
 import StockCharts from "../stock/StockCharts";
 import ProductionChart from "../stock/ProductionChart";
@@ -3009,7 +3008,6 @@ const Home = () => {
       Produção: "production",
       Cadastros: "registrations",
       Vendas: "sales",
-      Configurações: "settings",
     };
     setActiveSection(sectionMap[label] || "dashboard");
   };
@@ -3139,9 +3137,7 @@ const Home = () => {
                     ? "Produção"
                     : activeSection === "sales"
                       ? "Vendas"
-                      : activeSection === "settings"
-                        ? "Configurações"
-                        : "Cadastros"
+                      : "Cadastros"
           }
         />
         <main className="flex-1 overflow-auto">
@@ -3213,9 +3209,6 @@ const Home = () => {
             )}
             {activeSection === "sales" && (
               <SalesDashboard isLoading={loading} onRefresh={handleRefresh} />
-            )}
-            {activeSection === "settings" && (
-              <SettingsDashboard isLoading={loading} onRefresh={handleRefresh} />
             )}
           </div>
         </main>

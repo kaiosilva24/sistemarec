@@ -33,7 +33,6 @@ const defaultNavItems: NavItem[] = [
   { icon: <Calendar size={20} />, label: "Produção" },
   { icon: <ShoppingCart size={20} />, label: "Vendas" },
   { icon: <Users size={20} />, label: "Cadastros" },
-  { icon: <Settings size={20} />, label: "Configurações", isActive: false },
 ];
 
 const defaultBottomItems: NavItem[] = [
