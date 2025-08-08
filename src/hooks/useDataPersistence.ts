@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { dataManager } from "@/utils/dataManager";
-import useSWR from 'swr';
 import type {
   RawMaterial,
   Product,
@@ -18,7 +17,6 @@ import type {
   CostSimulation,
   WarrantyEntry,
   ResaleProduct,
-  InstallmentSale,
 } from "@/types/financial";
 
 interface UseDataPersistenceOptions<T> {
@@ -508,7 +506,7 @@ export const useStockItems = () => {
     const handleForceReload = (event: CustomEvent) => {
       const { updatedStockItems } = event.detail;
       console.log('🔄 [useStockItems] Evento de recarga forçada recebido');
-
+      
       if (updatedStockItems && Array.isArray(updatedStockItems)) {
         console.log(`📦 [useStockItems] Atualizando estado com ${updatedStockItems.length} itens`);
         setStockItems(updatedStockItems);
@@ -527,7 +525,7 @@ export const useStockItems = () => {
     };
 
     console.log('🎯 [useStockItems] Registrando listener para evento forceStockItemsReload');
-
+    
     // Adicionar listener para o evento customizado
     window.addEventListener('forceStockItemsReload', handleForceReload as EventListener);
 
@@ -559,7 +557,7 @@ export const useStockItems = () => {
         "✅ [useStockItems] Item adicionado com sucesso:",
         newStockItem,
       );
-
+      
       // Disparar evento customizado para notificar dashboard
       const stockUpdateEvent = new CustomEvent('stockItemsUpdated', {
         detail: {
@@ -663,7 +661,7 @@ export const useStockItems = () => {
         "✅ [useStockItems] Item atualizado com sucesso:",
         updatedStockItem,
       );
-
+      
       // Disparar evento customizado para notificar dashboard
       const stockUpdateEvent = new CustomEvent('stockItemsUpdated', {
         detail: {
@@ -700,7 +698,7 @@ export const useStockItems = () => {
         console.log(
           `✅ [useStockItems] Item removido do estoque com sucesso: ${itemId}`,
         );
-
+        
         // Disparar evento customizado para notificar dashboard
         const stockUpdateEvent = new CustomEvent('stockItemsUpdated', {
           detail: {
@@ -1622,142 +1620,53 @@ export const useCostSimulations = () => {
 };
 
 export const useResaleProducts = () => {
-  const {
-    data: resaleProducts = [],
-    isLoading,
-    error,
-    mutate,
-  } = useSWR('resale_products', () => dataManager.loadResaleProducts(), {
-    refreshInterval: 10000, // Refresh every 10 seconds
-  });
+  const [resaleProducts, setResaleProducts] = useState<ResaleProduct[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    const loadResaleProducts = async () => {
+      setIsLoading(true);
+      const data = await dataManager.loadResaleProducts();
+      setResaleProducts(data);
+      setIsLoading(false);
+    };
+    loadResaleProducts();
+  }, []);
 
   const addResaleProduct = async (
-    productData: Omit<ResaleProduct, 'id' | 'created_at' | 'updated_at'>
+    productData: Omit<ResaleProduct, "id" | "created_at" | "updated_at">,
   ) => {
-    try {
-      const newProduct = await dataManager.saveResaleProduct(productData);
-      if (newProduct) {
-        mutate([...resaleProducts, newProduct], false);
-        return newProduct;
-      }
-      return null;
-    } catch (error) {
-      console.error('Error adding resale product:', error);
-      throw error;
+    setIsSaving(true);
+    const newProduct = await dataManager.saveResaleProduct(productData);
+    if (newProduct) {
+      setResaleProducts((prev) => [...prev, newProduct]);
     }
+    setIsSaving(false);
+    return newProduct;
   };
 
   const updateResaleProduct = async (
     id: string,
-    updates: Partial<ResaleProduct>
+    updates: Partial<ResaleProduct>,
   ) => {
-    try {
-      const success = await dataManager.updateResaleProduct(id, updates);
-      if (success) {
-        const updatedProducts = resaleProducts.map((product) =>
-          product.id === id ? { ...product, ...updates } : product
-        );
-        mutate(updatedProducts, false);
-        return true;
-      }
-      return false;
-    } catch (error) {
-      console.error('Error updating resale product:', error);
-      throw error;
+    setIsSaving(true);
+    const updatedProduct = await dataManager.updateResaleProduct(id, updates);
+    if (updatedProduct) {
+      setResaleProducts((prev) =>
+        prev.map((p) => (p.id === id ? updatedProduct : p)),
+      );
     }
+    setIsSaving(false);
+    return updatedProduct;
   };
 
   return {
     resaleProducts,
-    isLoading,
-    error,
     addResaleProduct,
     updateResaleProduct,
-    mutate,
-  };
-};
-
-export const useInstallmentSales = () => {
-  const {
-    data: installmentSales = [],
     isLoading,
-    error,
-    mutate,
-  } = useSWR('installment_sales', () => dataManager.loadInstallmentSales(), {
-    refreshInterval: 5000, // Refresh every 5 seconds
-  });
-
-  const addInstallmentSale = async (
-    saleData: Omit<InstallmentSale, 'id' | 'created_at' | 'updated_at'>
-  ) => {
-    try {
-      const newSale = await dataManager.saveInstallmentSale(saleData);
-      if (newSale) {
-        mutate([...installmentSales, newSale], false);
-        return newSale;
-      }
-      return null;
-    } catch (error) {
-      console.error('Error adding installment sale:', error);
-      throw error;
-    }
-  };
-
-  const updateInstallmentSale = async (
-    id: string,
-    updates: Partial<InstallmentSale>
-  ) => {
-    try {
-      const success = await dataManager.updateInstallmentSale(id, updates);
-      if (success) {
-        const updatedSales = installmentSales.map((sale) =>
-          sale.id === id ? { ...sale, ...updates } : sale
-        );
-        mutate(updatedSales, false);
-        return true;
-      }
-      return false;
-    } catch (error) {
-      console.error('Error updating installment sale:', error);
-      throw error;
-    }
-  };
-
-  const confirmInstallmentReceipt = async (
-    id: string,
-    cashFlowEntryId: string
-  ) => {
-    try {
-      const success = await dataManager.confirmInstallmentReceipt(id, cashFlowEntryId);
-      if (success) {
-        const updatedSales = installmentSales.map((sale) =>
-          sale.id === id
-            ? {
-                ...sale,
-                status: 'received' as const,
-                received_date: new Date().toISOString().split('T')[0],
-                cash_flow_entry_id: cashFlowEntryId,
-              }
-            : sale
-        );
-        mutate(updatedSales, false);
-        return true;
-      }
-      return false;
-    } catch (error) {
-      console.error('Error confirming installment receipt:', error);
-      throw error;
-    }
-  };
-
-  return {
-    installmentSales,
-    isLoading,
-    error,
-    addInstallmentSale,
-    updateInstallmentSale,
-    confirmInstallmentReceipt,
-    mutate,
+    isSaving,
   };
 };
 

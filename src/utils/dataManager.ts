@@ -17,7 +17,6 @@ import type {
   CostSimulation,
   WarrantyEntry,
   ResaleProduct,
-  InstallmentSale,
 } from "@/types/financial";
 
 export class DataManager {
@@ -1973,7 +1972,6 @@ export class DataManager {
 
   /**
    * Configura subscription em tempo real para mudanças no lucro médio por pneu
-   */
   subscribeToTireProfitChanges(callback: (newProfit: number) => void): () => void {
     console.log('🔔 [DataManager] Iniciando subscription para lucro médio por pneu...');
 
@@ -3212,136 +3210,6 @@ export class DataManager {
       console.log('🔌 [DataManager] Cancelando subscription da quantidade total de produtos revenda');
       supabase.removeChannel(subscription);
     };
-  }
-
-  // --- Installment Sales Methods ---
-
-  /**
-   * Saves an installment sale record to the database.
-   * @param sale The installment sale data.
-   * @returns A promise that resolves with the saved sale record or null if an error occurred.
-   */
-  async saveInstallmentSale(
-    sale: Omit<InstallmentSale, 'id' | 'created_at' | 'updated_at'>
-  ): Promise<InstallmentSale | null> {
-    console.log('💰 [DataManager] Salvando venda à prazo:', {
-      type: sale.type,
-      customer_name: sale.customer_name,
-      product_name: sale.product_name,
-      total_amount: sale.total_amount,
-      sale_date: sale.sale_date,
-    });
-
-    const result = await this.saveToDatabase('installment_sales', {
-      ...sale,
-      id: `temp_${Date.now()}`,
-    });
-
-    if (result) {
-      console.log('✅ [DataManager] Venda à prazo salva com sucesso:', {
-        id: result.id,
-        type: result.type,
-        customer_name: result.customer_name,
-        total_amount: result.total_amount,
-      });
-    }
-
-    return result;
-  }
-
-  /**
-   * Loads all installment sales records from the database.
-   * @returns A promise that resolves with an array of installment sales records.
-   */
-  async loadInstallmentSales(): Promise<InstallmentSale[]> {
-    return this.loadFromDatabase<InstallmentSale>('installment_sales');
-  }
-
-  /**
-   * Updates an existing installment sale record in the database.
-   * @param id The ID of the installment sale to update.
-   * @param updates The partial data to update.
-   * @returns A promise that resolves with a boolean indicating success or failure.
-   */
-  async updateInstallmentSale(
-    id: string,
-    updates: Partial<InstallmentSale>
-  ): Promise<boolean> {
-    // Use the generic saveToDatabase method, which handles both insert and update
-    const updatedSale = await this.saveToDatabase('installment_sales', { ...updates, id } as InstallmentSale);
-    return updatedSale !== null;
-  }
-
-  /**
-   * Confirms the receipt of an installment sale and creates a corresponding cash flow entry.
-   * @param installmentSaleId The ID of the installment sale to confirm.
-   * @param cashFlowEntryId The ID of the cash flow entry associated with the receipt.
-   * @returns A promise that resolves with a boolean indicating success or failure.
-   */
-  async confirmInstallmentReceipt(
-    installmentSaleId: string,
-    cashFlowEntryId: string
-  ): Promise<boolean> {
-    console.log('💰 [DataManager] Confirmando recebimento de venda à prazo:', {
-      installmentSaleId,
-      cashFlowEntryId,
-    });
-
-    const updates = {
-      status: 'received',
-      received_date: new Date().toISOString().split('T')[0], // Store only the date part
-      cash_flow_entry_id: cashFlowEntryId,
-      updated_at: new Date().toISOString(),
-    };
-
-    // Update the installment sale record
-    const success = await this.updateInDatabase('installment_sales', installmentSaleId, updates);
-
-    if (success) {
-      console.log('✅ [DataManager] Recebimento confirmado com sucesso');
-    } else {
-      console.error('❌ [DataManager] Falha ao confirmar recebimento de venda à prazo');
-    }
-
-    return success;
-  }
-
-  // Helper method for generic updates (used internally by specific entity methods)
-  private async updateInDatabase<T extends { id?: string; updated_at?: string }>(
-    tableName: string,
-    id: string,
-    updates: Partial<T>
-  ): Promise<boolean> {
-    if (!id) {
-      console.error(`❌ [DataManager] Erro: ID inválido para atualizar em ${tableName}`);
-      return false;
-    }
-
-    const dataToSave = {
-      ...updates,
-      id: id,
-      updated_at: new Date().toISOString(),
-    };
-
-    try {
-      const { error } = await supabase.from(tableName).update(dataToSave).eq('id', id);
-
-      if (error) {
-        console.error(`❌ [DataManager] Erro ao atualizar ${tableName} (ID: ${id}):`, {
-          error,
-          errorMessage: error.message,
-          errorCode: error.code,
-          errorDetails: error.details,
-        });
-        return false;
-      }
-
-      console.log(`✅ [DataManager] Registro em ${tableName} (ID: ${id}) atualizado com sucesso`);
-      return true;
-    } catch (error) {
-      console.error(`❌ [DataManager] Erro crítico ao atualizar ${tableName} (ID: ${id}):`, error);
-      return false;
-    }
   }
 }
 
