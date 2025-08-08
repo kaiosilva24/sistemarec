@@ -54,6 +54,7 @@ import {
   useRecipes,
   useMaterials,
   useResaleProducts,
+  useAccountsReceivable,
 } from "@/hooks/useDataPersistence";
 import {
   Salesperson,
@@ -149,6 +150,13 @@ const SalesDashboard = ({
     updateResaleProduct,
     isLoading: resaleProductsLoading,
   } = useResaleProducts();
+  const {
+    accountsReceivableEntries,
+    addAccountsReceivableEntry,
+    updateAccountsReceivableEntry,
+    deleteAccountsReceivableEntry,
+    isLoading: accountsReceivableLoading,
+  } = useAccountsReceivable();
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
@@ -986,25 +994,44 @@ const SalesDashboard = ({
       } else {
         // Handle regular sale process
         if (productType === "final" && product) {
-          // Final product sale - ALWAYS mark with TIPO_PRODUTO: final
-          await addCashFlowEntry({
-            type: "income",
-            category: "venda",
-            reference_name: `Venda para ${customer.name} - ${product.item_name}`,
-            amount: parseFloat(saleValue),
-            description: `TIPO_PRODUTO: final | Vendedor: ${salesperson.name} | Produto: ${product.item_name} | Qtd: ${quantity} ${product.unit} | Preço Unit: ${formatCurrency(parseFloat(unitPrice))} | Pagamento: ${(() => {
-              switch (paymentMethod) {
-                case "cash": return "Dinheiro";
-                case "card": return "Cartão";
-                case "pix": return "PIX";
-                case "installment": return "À Prazo";
-                default: return "À Vista";
-              }
-            })()} | ID_Produto: ${product.id}`,
-            transaction_date: new Date().toISOString().split("T")[0],
-          });
+          // Check if payment is installment (a prazo)
+          if (paymentMethod === "installment") {
+            // Create accounts receivable entry instead of cash flow
+            await addAccountsReceivableEntry({
+              customer_id: customer.id,
+              customer_name: customer.name,
+              salesperson_id: salesperson.id,
+              salesperson_name: salesperson.name,
+              product_type: "final",
+              product_id: product.id,
+              product_name: product.item_name,
+              quantity: parseFloat(quantity),
+              unit_price: parseFloat(unitPrice),
+              total_amount: parseFloat(saleValue),
+              sale_date: new Date().toISOString().split("T")[0],
+              status: "pending",
+              description: `TIPO_PRODUTO: final | Vendedor: ${salesperson.name} | Produto: ${product.item_name} | Qtd: ${quantity} ${product.unit} | Preço Unit: ${formatCurrency(parseFloat(unitPrice))} | Pagamento: À Prazo | ID_Produto: ${product.id}`,
+            });
+          } else {
+            // Regular payment - add to cash flow immediately
+            await addCashFlowEntry({
+              type: "income",
+              category: "venda",
+              reference_name: `Venda para ${customer.name} - ${product.item_name}`,
+              amount: parseFloat(saleValue),
+              description: `TIPO_PRODUTO: final | Vendedor: ${salesperson.name} | Produto: ${product.item_name} | Qtd: ${quantity} ${product.unit} | Preço Unit: ${formatCurrency(parseFloat(unitPrice))} | Pagamento: ${(() => {
+                switch (paymentMethod) {
+                  case "cash": return "Dinheiro";
+                  case "card": return "Cartão";
+                  case "pix": return "PIX";
+                  default: return "À Vista";
+                }
+              })()} | ID_Produto: ${product.id}`,
+              transaction_date: new Date().toISOString().split("T")[0],
+            });
+          }
 
-          // Update stock - subtract sold quantity
+          // Update stock - subtract sold quantity (regardless of payment method)
           const newQuantity = product.quantity - parseFloat(quantity);
           const newTotalValue = newQuantity * product.unit_cost;
 
@@ -1023,28 +1050,48 @@ const SalesDashboard = ({
               soldQuantity: parseFloat(quantity),
               newQuantity: newQuantity,
               newTotalValue: newTotalValue,
+              paymentMethod: paymentMethod === "installment" ? "À Prazo (Conta a Receber)" : "À Vista (Caixa)",
             },
           );
         } else if (productType === "resale" && resaleProduct) {
-          // Resale product sale - ALWAYS mark with TIPO_PRODUTO: revenda
-          await addCashFlowEntry({
-            type: "income",
-            category: "venda",
-            reference_name: `Venda para ${customer.name} - ${resaleProduct.name}`,
-            amount: parseFloat(saleValue),
-            description: `TIPO_PRODUTO: revenda | Vendedor: ${salesperson.name} | Produto: ${resaleProduct.name} | Qtd: ${quantity} ${resaleProduct.unit} | Preço Unit: ${formatCurrency(parseFloat(unitPrice))} | Pagamento: ${(() => {
-              switch (paymentMethod) {
-                case "cash": return "Dinheiro";
-                case "card": return "Cartão";
-                case "pix": return "PIX";
-                case "installment": return "À Prazo";
-                default: return "À Vista";
-              }
-            })()} | ID_Produto: ${resaleProduct.id}`,
-            transaction_date: new Date().toISOString().split("T")[0],
-          });
+          // Check if payment is installment (a prazo)
+          if (paymentMethod === "installment") {
+            // Create accounts receivable entry instead of cash flow
+            await addAccountsReceivableEntry({
+              customer_id: customer.id,
+              customer_name: customer.name,
+              salesperson_id: salesperson.id,
+              salesperson_name: salesperson.name,
+              product_type: "resale",
+              product_id: resaleProduct.id,
+              product_name: resaleProduct.name,
+              quantity: parseFloat(quantity),
+              unit_price: parseFloat(unitPrice),
+              total_amount: parseFloat(saleValue),
+              sale_date: new Date().toISOString().split("T")[0],
+              status: "pending",
+              description: `TIPO_PRODUTO: revenda | Vendedor: ${salesperson.name} | Produto: ${resaleProduct.name} | Qtd: ${quantity} ${resaleProduct.unit} | Preço Unit: ${formatCurrency(parseFloat(unitPrice))} | Pagamento: À Prazo | ID_Produto: ${resaleProduct.id}`,
+            });
+          } else {
+            // Regular payment - add to cash flow immediately
+            await addCashFlowEntry({
+              type: "income",
+              category: "venda",
+              reference_name: `Venda para ${customer.name} - ${resaleProduct.name}`,
+              amount: parseFloat(saleValue),
+              description: `TIPO_PRODUTO: revenda | Vendedor: ${salesperson.name} | Produto: ${resaleProduct.name} | Qtd: ${quantity} ${resaleProduct.unit} | Preço Unit: ${formatCurrency(parseFloat(unitPrice))} | Pagamento: ${(() => {
+                switch (paymentMethod) {
+                  case "cash": return "Dinheiro";
+                  case "card": return "Cartão";
+                  case "pix": return "PIX";
+                  default: return "À Vista";
+                }
+              })()} | ID_Produto: ${resaleProduct.id}`,
+              transaction_date: new Date().toISOString().split("T")[0],
+            });
+          }
 
-          // Update resale product stock in stock_items table
+          // Update resale product stock in stock_items table (regardless of payment method)
           const stockItem = stockItems.find(
             (item) =>
               item.item_id === resaleProduct.id && item.item_type === "product",
@@ -1070,6 +1117,7 @@ const SalesDashboard = ({
                 soldQuantity: parseFloat(quantity),
                 newQuantity: newQuantity,
                 newTotalValue: newTotalValue,
+                paymentMethod: paymentMethod === "installment" ? "À Prazo (Conta a Receber)" : "À Vista (Caixa)",
               },
             );
           } else {
@@ -1096,6 +1144,17 @@ const SalesDashboard = ({
         const productTypeLabel =
           productType === "final" ? "Produto Final" : "Produto de Revenda";
 
+        const isInstallment = paymentMethod === "installment";
+        const paymentMethodLabel = (() => {
+          switch (paymentMethod) {
+            case "cash": return "Dinheiro";
+            case "card": return "Cartão";
+            case "pix": return "PIX";
+            case "installment": return "À Prazo";
+            default: return "À Vista";
+          }
+        })();
+
         alert(
           `Venda registrada com sucesso!\n\n` +
             `Tipo: ${productTypeLabel}\n` +
@@ -1104,8 +1163,10 @@ const SalesDashboard = ({
             `Quantidade: ${quantity} ${productUnit}\n` +
             `Preço Unitário: ${formatCurrency(parseFloat(unitPrice))}\n` +
             `Valor Total: ${formatCurrency(parseFloat(saleValue))}\n` +
+            `Forma de Pagamento: ${paymentMethodLabel}\n` +
             `Vendedor: ${salesperson.name}\n\n` +
-            `📦 Estoque atualizado automaticamente`,
+            `📦 Estoque atualizado automaticamente\n` +
+            `${isInstallment ? "💰 Venda À PRAZO - Valor NÃO foi lançado no caixa\n🗂️ Criada conta a receber - Confirme o recebimento quando pago" : "💰 Valor lançado no caixa automaticamente"}`,
         );
       }
     } catch (error) {
@@ -1755,13 +1816,20 @@ const SalesDashboard = ({
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <div className="flex justify-center">
-        <TabsList className="inline-grid w-auto grid-cols-5 gap-2 bg-factory-800/50 border border-tire-600/30 p-1">
+        <TabsList className="inline-grid w-auto grid-cols-6 gap-2 bg-factory-800/50 border border-tire-600/30 p-1">
           <TabsTrigger
             value="pos"
             className="text-tire-300 data-[state=active]:text-white data-[state=active]:bg-neon-green/20"
           >
             <ShoppingCart className="h-4 w-4 mr-2" />
             Caixa
+          </TabsTrigger>
+          <TabsTrigger
+            value="accounts-receivable"
+            className="text-tire-300 data-[state=active]:text-white data-[state=active]:bg-neon-orange/20"
+          >
+            <Calendar className="h-4 w-4 mr-2" />
+            Contas a Receber
           </TabsTrigger>
           <TabsTrigger
             value="final-sales-history"
@@ -3584,6 +3652,189 @@ const SalesDashboard = ({
                               ) / resaleProductSalesHistory.length,
                             )
                           : formatCurrency(0)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="accounts-receivable">
+          <Card className="bg-factory-900/80 border-tire-600/30 max-w-7xl mx-auto">
+            <CardHeader>
+              <CardTitle className="text-tire-200 text-lg flex items-center gap-2">
+                <Calendar className="h-5 w-5 text-neon-orange" />
+                Contas a Receber (Vendas À Prazo)
+              </CardTitle>
+              <p className="text-tire-300">
+                Gerencie vendas a prazo e confirme recebimentos
+              </p>
+            </CardHeader>
+            <CardContent className="bg-factory-900/60 rounded-lg">
+              <div className="space-y-3 max-h-96 overflow-y-auto">
+                {accountsReceivableEntries.filter(entry => entry.status === "pending").length === 0 ? (
+                  <div className="text-center py-8">
+                    <Calendar className="h-12 w-12 text-tire-500 mx-auto mb-3" />
+                    <p className="text-tire-400">
+                      Nenhuma conta a receber pendente
+                    </p>
+                  </div>
+                ) : (
+                  accountsReceivableEntries
+                    .filter(entry => entry.status === "pending")
+                    .sort((a, b) => new Date(b.sale_date).getTime() - new Date(a.sale_date).getTime())
+                    .map((entry) => (
+                      <div
+                        key={entry.id}
+                        className="p-4 bg-factory-700/30 rounded-lg border border-tire-600/20"
+                      >
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex-1">
+                            <h4 className="text-white font-medium mb-1 flex items-center gap-2">
+                              <span className="text-neon-orange">📅</span>
+                              Venda À Prazo - {entry.product_name}
+                            </h4>
+                            <div className="flex items-center gap-4 text-tire-400 text-sm">
+                              <div className="flex items-center gap-1">
+                                <Calendar className="h-3 w-3" />
+                                <span>
+                                  {new Date(entry.sale_date).toLocaleDateString("pt-BR")}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <Users className="h-3 w-3" />
+                                <span className="text-neon-blue">
+                                  {entry.customer_name}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <UserCheck className="h-3 w-3" />
+                                <span className="text-neon-green">
+                                  {entry.salesperson_name}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <div className="text-right">
+                              <div className="text-neon-orange font-bold text-lg">
+                                {formatCurrency(entry.total_amount)}
+                              </div>
+                              <div className="text-tire-400 text-xs">
+                                {entry.quantity} × {formatCurrency(entry.unit_price)}
+                              </div>
+                              <div className="mt-1">
+                                <span className="text-xs bg-neon-orange/20 text-neon-orange px-2 py-1 rounded">
+                                  PENDENTE
+                                </span>
+                              </div>
+                            </div>
+                            <Button
+                              onClick={async () => {
+                                if (confirm(`Confirmar recebimento de ${formatCurrency(entry.total_amount)} de ${entry.customer_name}?`)) {
+                                  try {
+                                    // Add to cash flow
+                                    await addCashFlowEntry({
+                                      type: "income",
+                                      category: "venda",
+                                      reference_name: `Recebimento À Prazo - ${entry.customer_name} - ${entry.product_name}`,
+                                      amount: entry.total_amount,
+                                      description: `TIPO_PRODUTO: ${entry.product_type === "final" ? "final" : "revenda"} | Vendedor: ${entry.salesperson_name} | Produto: ${entry.product_name} | Qtd: ${entry.quantity} | Preço Unit: ${formatCurrency(entry.unit_price)} | Pagamento: À Prazo (RECEBIDO) | Venda Original: ${new Date(entry.sale_date).toLocaleDateString("pt-BR")}`,
+                                      transaction_date: new Date().toISOString().split("T")[0],
+                                    });
+
+                                    // Update status to received
+                                    await updateAccountsReceivableEntry(entry.id, {
+                                      status: "received",
+                                      received_date: new Date().toISOString().split("T")[0],
+                                    });
+
+                                    alert(`Recebimento confirmado!\n\nValor: ${formatCurrency(entry.total_amount)}\nCliente: ${entry.customer_name}\n\n💰 Valor lançado no caixa automaticamente`);
+                                  } catch (error) {
+                                    console.error("Erro ao confirmar recebimento:", error);
+                                    alert("Erro ao confirmar recebimento. Tente novamente.");
+                                  }
+                                }
+                              }}
+                              className="bg-neon-green hover:bg-neon-green/80 text-white"
+                            >
+                              <CheckCircle className="h-4 w-4 mr-2" />
+                              Confirmar Recebimento
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={async () => {
+                                if (confirm(`Excluir conta a receber de ${entry.customer_name}?\n\nEsta ação não pode ser desfeita.`)) {
+                                  try {
+                                    await deleteAccountsReceivableEntry(entry.id);
+                                    alert("Conta a receber excluída com sucesso!");
+                                  } catch (error) {
+                                    console.error("Erro ao excluir conta a receber:", error);
+                                    alert("Erro ao excluir conta a receber. Tente novamente.");
+                                  }
+                                }
+                              }}
+                              className="text-red-400 hover:text-red-300 hover:bg-red-900/20 p-2 h-8 w-8"
+                              title="Excluir conta a receber"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                        {entry.description && (
+                          <div className="mt-2 p-2 bg-factory-700/20 rounded text-tire-300 text-sm">
+                            <p className="font-medium text-tire-200 mb-1">
+                              Detalhes:
+                            </p>
+                            <p>{entry.description}</p>
+                          </div>
+                        )}
+                        <div className="text-tire-500 text-xs mt-2">
+                          ID: {entry.id} | Criado em: {new Date(entry.created_at).toLocaleDateString("pt-BR")}
+                        </div>
+                      </div>
+                    ))
+                )}
+              </div>
+              
+              {accountsReceivableEntries.filter(entry => entry.status === "pending").length > 0 && (
+                <div className="mt-4 p-4 bg-factory-800/50 rounded-lg border border-tire-600/30">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="text-center">
+                      <p className="text-tire-300 text-sm mb-1">
+                        Contas Pendentes
+                      </p>
+                      <p className="text-neon-orange font-bold text-lg">
+                        {accountsReceivableEntries.filter(entry => entry.status === "pending").length}
+                      </p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-tire-300 text-sm mb-1">
+                        Valor Total a Receber
+                      </p>
+                      <p className="text-neon-orange font-bold text-lg">
+                        {formatCurrency(
+                          accountsReceivableEntries
+                            .filter(entry => entry.status === "pending")
+                            .reduce((sum, entry) => sum + entry.total_amount, 0)
+                        )}
+                      </p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-tire-300 text-sm mb-1">
+                        Valor Médio
+                      </p>
+                      <p className="text-neon-purple font-bold text-lg">
+                        {(() => {
+                          const pendingEntries = accountsReceivableEntries.filter(entry => entry.status === "pending");
+                          const average = pendingEntries.length > 0 
+                            ? pendingEntries.reduce((sum, entry) => sum + entry.total_amount, 0) / pendingEntries.length
+                            : 0;
+                          return formatCurrency(average);
+                        })()}
                       </p>
                     </div>
                   </div>
