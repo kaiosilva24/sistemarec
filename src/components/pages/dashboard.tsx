@@ -1598,7 +1598,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
     };
   }, []);
 
-  // Monitorar mudanças no stockItems e calcular saldo de caixa automaticamente
+  // Monitorar mudanças no stockItems e calcular saldo de matéria-prima automaticamente
   useEffect(() => {
     if (!stockItemsLoading && stockItems.length >= 0) {
       const timeoutId = setTimeout(async () => {
@@ -1845,7 +1845,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
               detail: {
                 balance: newBalance,
                 timestamp: Date.now(),
-                source: 'Dashboard-AutoCalculation'
+                source: 'Dashboard-CashFlowMonitor'
               }
             });
             window.dispatchEvent(updateEvent);
@@ -2042,11 +2042,12 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
         </div>
         <div className="flex gap-6">
           {/* Card Saldo Caixa - Maior */}
-          <Card className="bg-factory-900/30 border-tire-600/30 hover:shadow-lg transition-all duration-200 h-24">
-            <CardContent className="p-6 h-full flex items-center gap-4">
-              <div className="p-3 rounded-full ${
+          <Card className="bg-factory-900/30 border-tire-600/30 hover:shadow-lg transition-all duration-200">
+            <CardContent className="p-6">
+              <div className="flex items-center gap-4">
+                <div className={`p-3 rounded-full ${
                   (cashBalanceState !== null ? cashBalanceState : cashBalance) >= 0 ? 'bg-green-500/20' : 'bg-red-500/20'
-                }">
+                }`}>
                   <DollarSign className={`h-6 w-6 ${
                     (cashBalanceState !== null ? cashBalanceState : cashBalance) >= 0 ? 'text-green-400' : 'text-red-400'
                   }`} />
@@ -2062,7 +2063,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                       formatCurrency(cashBalanceState)
                     )}
                   </p>
-
+                  
                 </div>
               </div>
             </CardContent>
@@ -2086,7 +2087,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                   }`}>
                     {formatCurrency(totalRevenue)}
                   </p>
-
+                  
                 </div>
               </div>
             </CardContent>
@@ -2235,7 +2236,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                       rawMaterialUnitaryQuantity
                     )}
                   </p>
-
+                  
                 </div>
                 <div className="p-2 rounded-full bg-cyan-500/20">
                   <Package className="h-5 w-5 text-cyan-400" />
@@ -2257,7 +2258,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                       `${finalProductTotalQuantity} unidades`
                     )}
                   </p>
-
+                  
                 </div>
                 <div className="p-2 rounded-full bg-pink-500/20">
                   <Factory className="h-5 w-5 text-pink-400" />
@@ -2279,7 +2280,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                       resaleProductTotalQuantity
                     )}
                   </p>
-
+                  
                 </div>
                 <div className="p-2 rounded-full bg-red-500/20">
                   <ShoppingBag className="h-5 w-5 text-red-400" />
@@ -2424,9 +2425,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                 </span>
               </div>
               <div className="flex justify-between items-center pt-2 border-t border-tire-600/30">
-                <span className="text-white font-medium">
-                  Saldo Atual:
-                </span>
+                <span className="text-white font-medium">Saldo Atual:</span>
                 <span
                   className={`font-bold text-lg ${
                     cashBalance >= 0

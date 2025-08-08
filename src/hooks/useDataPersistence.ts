@@ -1091,20 +1091,6 @@ export const useCashFlow = () => {
     }
   }, []);
 
-  // Listener para recarregar dados quando solicitado
-  useEffect(() => {
-    const handleForceReload = () => {
-      console.log('🔄 [useCashFlow] Força recarregamento dos dados de cash flow');
-      loadData();
-    };
-
-    window.addEventListener('forceReloadCashFlow', handleForceReload);
-
-    return () => {
-      window.removeEventListener('forceReloadCashFlow', handleForceReload);
-    };
-  }, [loadData]);
-
   const addCashFlowEntry = useCallback(
     async (entry: Omit<CashFlowEntry, "id" | "created_at">) => {
       try {
