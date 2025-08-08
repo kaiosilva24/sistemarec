@@ -130,7 +130,7 @@ const SalesDashboard = ({
     isLoading: customersLoading,
   } = useCustomers();
   const { stockItems, updateStockItem, deleteStockItem, isLoading: stockLoading } = useStockItems(); // Added deleteStockItem
-  const { cashFlowEntries, addCashFlowEntry, deleteCashFlowEntry, updateCashFlowEntry } = useCashFlow(); // Added updateCashFlowEntry
+  const { cashFlowEntries, addCashFlowEntry, deleteCashFlowEntry, updateCashFlowEntry } = useCashFlow();
   const { addProductionEntry } = useProductionEntries();
   const {
     warrantyEntries,

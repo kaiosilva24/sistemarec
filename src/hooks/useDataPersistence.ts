@@ -170,16 +170,22 @@ export function useDataPersistence<T>(options: UseDataPersistenceOptions<T>) {
   );
 
   // Reset to default
-  const reset = useCallback(() => {
-    setData(defaultValue);
-    saveData(defaultValue, true);
-  }, [defaultValue, saveData]);
+  const reset = useCallback(
+    () => {
+      setData(defaultValue);
+      saveData(defaultValue, true);
+    },
+    [defaultValue, saveData],
+  );
 
   // Reload from storage
-  const reload = useCallback(() => {
-    const loadedData = dataManager.loadData(key, defaultValue);
-    setData(loadedData);
-  }, [key, defaultValue]);
+  const reload = useCallback(
+    () => {
+      const loadedData = dataManager.loadData(key, defaultValue);
+      setData(loadedData);
+    },
+    [key, defaultValue],
+  );
 
   return {
     data,
@@ -506,7 +512,7 @@ export const useStockItems = () => {
     const handleForceReload = (event: CustomEvent) => {
       const { updatedStockItems } = event.detail;
       console.log('🔄 [useStockItems] Evento de recarga forçada recebido');
-      
+
       if (updatedStockItems && Array.isArray(updatedStockItems)) {
         console.log(`📦 [useStockItems] Atualizando estado com ${updatedStockItems.length} itens`);
         setStockItems(updatedStockItems);
@@ -525,7 +531,7 @@ export const useStockItems = () => {
     };
 
     console.log('🎯 [useStockItems] Registrando listener para evento forceStockItemsReload');
-    
+
     // Adicionar listener para o evento customizado
     window.addEventListener('forceStockItemsReload', handleForceReload as EventListener);
 
@@ -557,7 +563,7 @@ export const useStockItems = () => {
         "✅ [useStockItems] Item adicionado com sucesso:",
         newStockItem,
       );
-      
+
       // Disparar evento customizado para notificar dashboard
       const stockUpdateEvent = new CustomEvent('stockItemsUpdated', {
         detail: {
@@ -661,7 +667,7 @@ export const useStockItems = () => {
         "✅ [useStockItems] Item atualizado com sucesso:",
         updatedStockItem,
       );
-      
+
       // Disparar evento customizado para notificar dashboard
       const stockUpdateEvent = new CustomEvent('stockItemsUpdated', {
         detail: {
@@ -698,7 +704,7 @@ export const useStockItems = () => {
         console.log(
           `✅ [useStockItems] Item removido do estoque com sucesso: ${itemId}`,
         );
-        
+
         // Disparar evento customizado para notificar dashboard
         const stockUpdateEvent = new CustomEvent('stockItemsUpdated', {
           detail: {
@@ -1073,44 +1079,75 @@ export const useCashFlow = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
-  useEffect(() => {
-    const loadCashFlowEntries = async () => {
+  const loadData = useCallback(async () => {
+    try {
       setIsLoading(true);
       const data = await dataManager.loadCashFlowEntries();
       setCashFlowEntries(data);
+    } catch (error) {
+      console.error("Erro ao carregar entradas de fluxo de caixa:", error);
+    } finally {
       setIsLoading(false);
-    };
-    loadCashFlowEntries();
+    }
   }, []);
 
-  const addCashFlowEntry = async (
-    entryData: Omit<CashFlowEntry, "id" | "created_at">,
-  ) => {
-    setIsSaving(true);
-    const newEntry = await dataManager.saveCashFlowEntry(entryData);
-    if (newEntry) {
-      setCashFlowEntries((prev) => [...prev, newEntry]);
-    }
-    setIsSaving(false);
-    return newEntry;
-  };
+  const addCashFlowEntry = useCallback(
+    async (entry: Omit<CashFlowEntry, "id" | "created_at">) => {
+      try {
+        const newEntry = await dataManager.saveCashFlowEntry(entry);
+        if (newEntry) {
+          setCashFlowEntries((prev) => [...prev, newEntry]);
+          return newEntry;
+        }
+      } catch (error) {
+        console.error("Erro ao adicionar entrada de fluxo de caixa:", error);
+        throw error;
+      }
+    },
+    [],
+  );
 
-  const deleteCashFlowEntry = async (id: string) => {
-    setIsSaving(true);
-    const success = await dataManager.deleteCashFlowEntry(id);
-    if (success) {
-      setCashFlowEntries((prev) => prev.filter((entry) => entry.id !== id));
+  const updateCashFlowEntry = useCallback(async (id: string, updates: Partial<CashFlowEntry>) => {
+    try {
+      const success = await dataManager.updateCashFlowEntry(id, updates);
+      if (success) {
+        setCashFlowEntries((prev) => 
+          prev.map((entry) => 
+            entry.id === id ? { ...entry, ...updates } : entry
+          )
+        );
+      }
+      return success;
+    } catch (error) {
+      console.error("Erro ao atualizar entrada de fluxo de caixa:", error);
+      throw error;
     }
-    setIsSaving(false);
-    return success;
-  };
+  }, []);
+
+  const deleteCashFlowEntry = useCallback(async (id: string) => {
+    try {
+      const success = await dataManager.deleteCashFlowEntry(id);
+      if (success) {
+        setCashFlowEntries((prev) => prev.filter((entry) => entry.id !== id));
+      }
+      return success;
+    } catch (error) {
+      console.error("Erro ao deletar entrada de fluxo de caixa:", error);
+      throw error;
+    }
+  }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   return {
     cashFlowEntries,
     addCashFlowEntry,
+    updateCashFlowEntry,
     deleteCashFlowEntry,
     isLoading,
-    isSaving,
+    refreshData: loadData,
   };
 };
 
