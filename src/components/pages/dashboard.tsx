@@ -23,7 +23,7 @@ import SettingsDashboard from "../settings/SettingsDashboard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   RefreshCw,
   BarChart3,
@@ -797,8 +797,8 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
           // Forçar recálculo adicional para garantir
           setTimeout(() => {
             console.log('🔄 [Dashboard] Segundo recálculo forçado via cashFlowEntryAdded');
-            const forceResaleRecalcEvent = new CustomEvent('forceResaleProfitRecalc');
-            window.dispatchEvent(forceResaleRecalcEvent);
+            const forceResaleRecalcEvent2 = new CustomEvent('forceResaleProfitRecalc');
+            window.dispatchEvent(forceResaleRecalcEvent2);
           }, 500);
         };
 
@@ -835,8 +835,8 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
               // Forçar recálculo adicional para garantir
               setTimeout(() => {
                 console.log('🔄 [Dashboard] Segundo recálculo forçado para garantir sincronização');
-                const forceResaleRecalcEvent = new CustomEvent('forceResaleProfitRecalc');
-                window.dispatchEvent(forceResaleRecalcEvent);
+                const forceResaleRecalcEvent2 = new CustomEvent('forceResaleProfitRecalc');
+                window.dispatchEvent(forceResaleRecalcEvent2);
               }, 1000);
             }
           )
@@ -884,6 +884,8 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
 
         setFinalProductStockBalance(initialBalance);
         setIsLoadingFinalProductStock(false);
+
+        console.log(`✅ [Dashboard] Saldo inicial carregado: R$ ${initialBalance.toFixed(2)}`);
 
         // Configurar subscription em tempo real
         unsubscribe = dataManager.subscribeToFinalProductStockChanges((newBalance) => {
@@ -1017,6 +1019,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
           console.log(`  - Cálculo local: R$ ${simpleCalculation.toFixed(2)}`);
           console.log(`  - Estado sincronizado: R$ ${finalProductStockBalance.toFixed(2)}`);
           console.log(`  - Diferença: R$ ${Math.abs(finalProductStockBalance - simpleCalculation).toFixed(2)}`);
+          console.log(`  - Produtos finais encontrados: ${productItems.length}`);
           console.log(`  - FinalProductsStock fará o cálculo correto automaticamente`);
         }
       }, 300);
@@ -1182,7 +1185,9 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
         setIsLoadingFinalProductStock(false);
 
         // Configurar subscription em tempo real para mudanças no Supabase
-        // Note: O `dataManager.subscribeToFinalProductStockChanges` é um wrapper que pode ser usado.
+        // Note: O hook useDataPersistence já gerencia subscriptions, este effect pode ser redundante.
+        // Se necessário, o subscription pode ser configurado aqui ou confiado no hook.
+        // O `dataManager.subscribeToFinalProductStockChanges` é um wrapper que pode ser usado.
 
       } catch (error) {
         console.error('❌ [Dashboard] Erro ao inicializar sincronização do saldo de produtos finais:', error);
@@ -2015,82 +2020,40 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
   // Effect para calcular valor empresarial em tempo real
   useEffect(() => {
     const calculateEmpresarialValue = () => {
-      // Aguardar que todos os valores estejam carregados
+      // Só calcular se todos os valores estão carregados
       if (
-        cashBalanceState === null ||
-        rawMaterialStockBalance === null ||
-        finalProductStockBalance === null ||
-        resaleProductStockBalance === null
+        cashBalanceState !== null &&
+        rawMaterialStockBalance !== null &&
+        finalProductStockBalance !== null &&
+        resaleProductStockBalance !== null
       ) {
-        console.log('⏳ [Dashboard] Aguardando carregamento de todos os saldos para calcular valor empresarial');
-        return;
-      }
+        const totalValue = 
+          cashBalanceState +
+          rawMaterialStockBalance +
+          finalProductStockBalance +
+          resaleProductStockBalance;
 
-      const totalValue = 
-        cashBalanceState + 
-        rawMaterialStockBalance + 
-        finalProductStockBalance + 
-        resaleProductStockBalance;
+        console.log('💼 [Dashboard] Calculando Valor Empresarial:');
+        console.log(`  - Saldo Caixa: R$ ${cashBalanceState.toFixed(2)}`);
+        console.log(`  - Saldo Matéria-Prima: R$ ${rawMaterialStockBalance.toFixed(2)}`);
+        console.log(`  - Saldo Produtos Finais: R$ ${finalProductStockBalance.toFixed(2)}`);
+        console.log(`  - Saldo Produtos Revenda: R$ ${resaleProductStockBalance.toFixed(2)}`);
+        console.log(`  - VALOR EMPRESARIAL TOTAL: R$ ${totalValue.toFixed(2)}`);
 
-      console.log('🏢 [Dashboard] Calculando valor empresarial COM PRODUTOS DE REVENDA:', {
-        cashBalance: `R$ ${cashBalanceState.toFixed(2)}`,
-        rawMaterialBalance: `R$ ${rawMaterialStockBalance.toFixed(2)}`,
-        finalProductBalance: `R$ ${finalProductStockBalance.toFixed(2)}`,
-        resaleProductBalance: `R$ ${resaleProductStockBalance.toFixed(2)}`,
-        totalValue: `R$ ${totalValue.toFixed(2)}`,
-        includesResaleProducts: true
-      });
-
-      // Só atualizar se houve mudança significativa
-      if (empresarialValue === null || Math.abs(empresarialValue - totalValue) > 0.01) {
         setEmpresarialValue(totalValue);
         setIsLoadingEmpresarialValue(false);
-
-        // Salvar no Supabase com componentes detalhados
-        dataManager.saveSystemSetting('empresarial_value', totalValue).then(success => {
-          if (success) {
-            console.log(`✅ [Dashboard] Valor empresarial COMPLETO salvo no Supabase: R$ ${totalValue.toFixed(2)}`);
-            console.log('📊 [Dashboard] Componentes do valor empresarial:', {
-              'Saldo de Caixa': `R$ ${cashBalanceState.toFixed(2)}`,
-              'Matéria-Prima': `R$ ${rawMaterialStockBalance.toFixed(2)}`,
-              'Produtos Finais': `R$ ${finalProductStockBalance.toFixed(2)}`,
-              'Produtos Revenda': `R$ ${resaleProductStockBalance.toFixed(2)}`,
-              'TOTAL': `R$ ${totalValue.toFixed(2)}`
-            });
-
-            // Disparar evento DETALHADO para sincronizar com configurações
-            const updateEvent = new CustomEvent('empresarialValueUpdated', {
-              detail: {
-                value: totalValue,
-                timestamp: Date.now(),
-                source: 'Dashboard-EmpresarialValueCalculation',
-                includesResaleProducts: true,
-                components: {
-                  cashBalance: cashBalanceState,
-                  rawMaterialBalance: rawMaterialStockBalance,
-                  finalProductBalance: finalProductStockBalance,
-                  resaleProductBalance: resaleProductStockBalance
-                },
-                calculation: `${cashBalanceState.toFixed(2)} + ${rawMaterialStockBalance.toFixed(2)} + ${finalProductStockBalance.toFixed(2)} + ${resaleProductStockBalance.toFixed(2)} = ${totalValue.toFixed(2)}`
-              }
-            });
-            window.dispatchEvent(updateEvent);
-            console.log('📡 [Dashboard] Evento empresarialValueUpdated DETALHADO disparado com produtos de revenda');
-          }
-        });
+      } else {
+        console.log('⏳ [Dashboard] Aguardando todos os valores para calcular Valor Empresarial...');
+        console.log(`  - Saldo Caixa: ${cashBalanceState !== null ? 'OK' : 'LOADING'}`);
+        console.log(`  - Saldo Matéria-Prima: ${rawMaterialStockBalance !== null ? 'OK' : 'LOADING'}`);
+        console.log(`  - Saldo Produtos Finais: ${finalProductStockBalance !== null ? 'OK' : 'LOADING'}`);
+        console.log(`  - Saldo Produtos Revenda: ${resaleProductStockBalance !== null ? 'OK' : 'LOADING'}`);
       }
     };
 
-    // Executar cálculo sempre que algum saldo mudar
+    // Calcular sempre que qualquer valor mudar
     calculateEmpresarialValue();
-
-  }, [
-    cashBalanceState, 
-    rawMaterialStockBalance, 
-    finalProductStockBalance,
-    resaleProductStockBalance,
-    empresarialValue
-  ]);
+  }, [cashBalanceState, rawMaterialStockBalance, finalProductStockBalance, resaleProductStockBalance]);
 
   // Listeners para eventos de checkpoint - restauração de dados
   useEffect(() => {
@@ -2624,9 +2587,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                 </span>
               </div>
               <div className="flex justify-between items-center pt-2 border-t border-tire-600/30">
-                <span className="text-white font-medium">
-                  Saldo Atual:
-                </span>
+                <span className="text-white font-medium">Saldo Atual:</span>
                 <span
                   className={`font-bold text-lg ${
                     cashBalance >= 0

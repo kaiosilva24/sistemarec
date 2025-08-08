@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -57,8 +58,8 @@ const SettingsDashboard = ({
   });
 
   // Estado para valor empresarial
-  const [empresarialValue, setEmpresarialValue] = useState<number>(0);
-  const [isLoadingEmpresarialValue, setIsLoadingEmpresarialValue] = useState(true);
+  const [businessValue, setBusinessValue] = useState<number>(0);
+  const [isLoadingBusinessValue, setIsLoadingBusinessValue] = useState(true);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
@@ -79,14 +80,14 @@ const SettingsDashboard = ({
 
   // Carregar valor empresarial
   const loadBusinessValue = async () => {
-    setIsLoadingEmpresarialValue(true);
+    setIsLoadingBusinessValue(true);
     try {
       const value = await dataManager.loadBusinessValue();
-      setEmpresarialValue(value);
+      setBusinessValue(value);
     } catch (error) {
       console.error('❌ [SettingsDashboard] Erro ao carregar valor empresarial:', error);
     } finally {
-      setIsLoadingEmpresarialValue(false);
+      setIsLoadingBusinessValue(false);
     }
   };
 
@@ -124,80 +125,24 @@ const SettingsDashboard = ({
 
     const initializeBusinessValueSync = async () => {
       try {
-        console.log('🔄 [SettingsDashboard] Inicializando sincronização em tempo real do valor empresarial...');
-
-        // Carregar valor inicial do Supabase
-        const initialValue = await dataManager.loadBusinessValue();
-        console.log(`🔍 [SettingsDashboard] Valor inicial do valor empresarial: R$ ${initialValue.toFixed(2)}`);
-
-        setEmpresarialValue(initialValue);
-        setIsLoadingEmpresarialValue(false);
-
-        console.log(`✅ [SettingsDashboard] Valor inicial carregado: R$ ${initialValue.toFixed(2)}`);
-
         // Configurar subscription em tempo real
         unsubscribe = dataManager.subscribeToBusinessValueChanges((newValue) => {
-          console.log(`📡 [SettingsDashboard] Novo valor empresarial recebido via subscription: R$ ${newValue.toFixed(2)}`);
-          setEmpresarialValue(newValue);
+          setBusinessValue(newValue);
+          console.log('🔄 [SettingsDashboard] Valor empresarial atualizado em tempo real:', newValue);
         });
-
-        console.log('🔔 [SettingsDashboard] Subscription ativa para mudanças de valor empresarial em tempo real');
 
       } catch (error) {
         console.error('❌ [SettingsDashboard] Erro ao configurar sincronização do valor empresarial:', error);
-        setIsLoadingEmpresarialValue(false);
-
-        // Fallback para valor 0 em caso de erro
-        setEmpresarialValue(0);
       }
     };
-
-    // Listener para evento de atualização do valor empresarial
-    const handleEmpresarialValueUpdate = (event: CustomEvent) => {
-      const { value, timestamp, source, components, includesResaleProducts, calculation } = event.detail;
-      console.log(`🏢 [SettingsDashboard] Evento empresarialValueUpdated recebido COM PRODUTOS DE REVENDA:`, {
-        value: `R$ ${value.toFixed(2)}`,
-        timestamp: new Date(timestamp).toLocaleString(),
-        source,
-        includesResaleProducts,
-        calculation,
-        components: {
-          'Saldo de Caixa': `R$ ${components.cashBalance.toFixed(2)}`,
-          'Matéria-Prima': `R$ ${components.rawMaterialBalance.toFixed(2)}`,
-          'Produtos Finais': `R$ ${components.finalProductBalance.toFixed(2)}`,
-          'Produtos Revenda': `R$ ${components.resaleProductBalance.toFixed(2)}`
-        }
-      });
-
-      // Verificar se inclui produtos de revenda
-      if (includesResaleProducts) {
-        console.log(`✅ [SettingsDashboard] Valor empresarial INCLUI produtos de revenda: R$ ${value.toFixed(2)}`);
-        console.log(`📊 [SettingsDashboard] Fórmula: ${calculation}`);
-
-        // Atualizar estado local
-        setEmpresarialValue(value);
-        setIsLoadingEmpresarialValue(false);
-      } else {
-        console.warn(`⚠️ [SettingsDashboard] Valor empresarial NÃO inclui produtos de revenda, ignorando atualização`);
-      }
-    };
-
-    console.log('🎯 [SettingsDashboard] Registrando listener para evento businessValueUpdated');
-
-    // Adicionar listener para o evento customizado
-    window.addEventListener('businessValueUpdated', handleEmpresarialValueUpdate as EventListener);
 
     initializeBusinessValueSync();
 
-    // Cleanup subscription e listener
+    // Cleanup subscription
     return () => {
       if (unsubscribe) {
-        console.log('🔕 [SettingsDashboard] Cancelando subscription do valor empresarial');
         unsubscribe();
       }
-
-      console.log('🚫 [SettingsDashboard] Removendo listener para evento businessValueUpdated');
-      window.removeEventListener('businessValueUpdated', handleEmpresarialValueUpdate as EventListener);
     };
   }, []);
 
@@ -223,7 +168,7 @@ const SettingsDashboard = ({
       setSaveStatus(prev => ({ ...prev, cost: 'success' }));
 
       console.log('✅ [SettingsDashboard] Configurações de custo salvas com sucesso');
-
+      
       setTimeout(() => {
         setSaveStatus(prev => ({ ...prev, cost: 'idle' }));
       }, 3000);
@@ -231,7 +176,7 @@ const SettingsDashboard = ({
     } catch (error) {
       console.error('❌ [SettingsDashboard] Erro ao salvar configurações de custo:', error);
       setSaveStatus(prev => ({ ...prev, cost: 'error' }));
-
+      
       setTimeout(() => {
         setSaveStatus(prev => ({ ...prev, cost: 'idle' }));
       }, 5000);
@@ -257,7 +202,7 @@ const SettingsDashboard = ({
       setSaveStatus(prev => ({ ...prev, stock: 'success' }));
 
       console.log('✅ [SettingsDashboard] Configurações de estoque salvas com sucesso');
-
+      
       setTimeout(() => {
         setSaveStatus(prev => ({ ...prev, stock: 'idle' }));
       }, 3000);
@@ -265,7 +210,7 @@ const SettingsDashboard = ({
     } catch (error) {
       console.error('❌ [SettingsDashboard] Erro ao salvar configurações de estoque:', error);
       setSaveStatus(prev => ({ ...prev, stock: 'error' }));
-
+      
       setTimeout(() => {
         setSaveStatus(prev => ({ ...prev, stock: 'idle' }));
       }, 5000);
@@ -582,54 +527,33 @@ const SettingsDashboard = ({
                 Valor Empresarial
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 gap-6">
+            <CardContent className="space-y-6">
+              <div className="flex justify-center">
                 <Card className="bg-factory-700/50 border-tire-600/30 hover:shadow-lg transition-all duration-200 w-full max-w-md">
                   <CardContent className="p-6">
                     <div className="flex items-center justify-between">
                       <div className="flex-1">
                         <p className="text-tire-300 text-sm font-medium">Valor Empresarial</p>
-                        {isLoadingEmpresarialValue ? (
-                          <div className="flex items-center gap-2">
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-neon-purple"></div>
-                            <p className="text-lg text-tire-400">Carregando...</p>
-                          </div>
-                        ) : (
-                          <p className="text-2xl font-bold text-tire-200">
-                            {formatCurrency(empresarialValue || 0)}
-                          </p>
-                        )}
+                        <p className="text-2xl font-bold text-tire-200">
+                          {isLoadingBusinessValue ? (
+                            <span className="animate-pulse">Carregando...</span>
+                          ) : (
+                            formatCurrency(businessValue)
+                          )}
+                        </p>
                         <p className="text-tire-400 text-xs mt-1">
                           Sincronizado em tempo real
-                          {empresarialValue > 0 && (
-                            <span className="text-neon-green ml-1">
-                              (Inclui produtos de revenda)
-                            </span>
-                          )}
                         </p>
                       </div>
                       <div className="p-3 rounded-full bg-neon-purple/20">
                         <DollarSign className="h-6 w-6 text-neon-purple" />
                       </div>
                     </div>
-
-                    {/* Debug: Mostrar componentes do valor empresarial */}
-                    {empresarialValue > 0 && (
-                      <div className="mt-4 p-3 bg-factory-700/30 rounded border border-tire-600/20">
-                        <p className="text-tire-300 text-xs mb-2">Componentes do valor:</p>
-                        <div className="text-xs text-tire-400 space-y-1">
-                          <div>• Saldo de Caixa: Sincronizado</div>
-                          <div>• Matéria-Prima: Sincronizado</div>
-                          <div>• Produtos Finais: Sincronizado</div>
-                          <div className="text-neon-green">• Produtos Revenda: Incluído ✓</div>
-                        </div>
-                      </div>
-                    )}
                   </CardContent>
                 </Card>
               </div>
 
-              <div className="text-center text-tire-400 text-sm mt-6">
+              <div className="text-center text-tire-400 text-sm">
                 <p>Este valor é sincronizado automaticamente com o dashboard principal.</p>
                 <p>Qualquer alteração será refletida em tempo real.</p>
               </div>
@@ -656,7 +580,7 @@ const SettingsDashboard = ({
               <RefreshCw className="h-4 w-4 mr-2" />
               Recarregar Configurações
             </Button>
-
+            
             <Button
               onClick={onRefresh}
               variant="outline"
