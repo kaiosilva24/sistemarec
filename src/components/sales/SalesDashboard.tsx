@@ -95,8 +95,7 @@ const SalesDashboard = ({
     useState("all");
   const [resaleSalesHistoryStartDate, setResaleSalesHistoryStartDate] =
     useState("");
-  const [resaleSalesHistoryEndDate, setResaleSalesHistoryEndDate] =
-    useState("");
+  const [resaleSalesHistoryEndDate, setResaleSalesHistoryEndDate] = useState("");
 
   // POS form states
   const [selectedSalesperson, setSelectedSalesperson] = useState("");
@@ -109,6 +108,23 @@ const SalesDashboard = ({
   const [productType, setProductType] = useState<
     "final" | "resale" | "warranty"
   >("final");
+  const [paymentMethod, setPaymentMethod] = useState<"vista" | "prazo">("vista");
+  const [saleDate, setSaleDate] = useState(
+    new Date().toISOString().split("T")[0],
+  );
+  const [saleDescription, setSaleDescription] = useState("");
+
+
+  // POS form states for resale products
+  const [selectedResaleProduct, setSelectedResaleProduct] = useState("");
+  const [resaleSaleQuantity, setResaleSaleQuantity] = useState("");
+  const [resaleSalePrice, setResaleSalePrice] = useState("");
+  const [resaleSaleDescription, setResaleSaleDescription] = useState("");
+  const [resaleSaleDate, setResaleSaleDate] = useState(
+    new Date().toISOString().split("T")[0],
+  );
+  const [resalePaymentMethod, setResalePaymentMethod] = useState<"vista" | "prazo">("vista");
+
 
   // Autocomplete states for POS
   const [salespersonSearch, setSalespersonSearch] = useState("");
@@ -716,6 +732,10 @@ const SalesDashboard = ({
     setQuantity("");
     setSaleValue("");
     setShowProductDropdown(false);
+    // Reset payment method and description when product type changes
+    setPaymentMethod("vista");
+    setSaleDescription("");
+    setSaleDate(new Date().toISOString().split("T")[0]);
   }, [productType]);
 
   // Calculate sale value automatically based on unit price and quantity (only for regular sales)
@@ -884,6 +904,9 @@ const SalesDashboard = ({
         setQuantity("");
         setSaleValue("");
         setProductType("final");
+        setPaymentMethod("vista");
+        setSaleDescription("");
+        setSaleDate(new Date().toISOString().split("T")[0]);
 
         alert(
           `Garantia registrada com sucesso!\n\n` +
@@ -901,13 +924,24 @@ const SalesDashboard = ({
         // Handle regular sale process
         if (productType === "final" && product) {
           // Final product sale - ALWAYS mark with TIPO_PRODUTO: final
+          const enhancedDescription = [
+            `Produto: ${product.item_name}`,
+            `Quantidade: ${quantity}`,
+            `Preço Unitário: ${formatCurrency(parseFloat(unitPrice))}`,
+            `TIPO_PRODUTO: final`,
+            `Pagamento: ${paymentMethod === 'vista' ? 'À Vista' : 'A Prazo'}`,
+            saleDescription.trim() ? `Obs: ${saleDescription}` : "",
+          ]
+            .filter(Boolean)
+            .join(" | ");
+
           await addCashFlowEntry({
             type: "income",
             category: "venda",
             reference_name: `Venda para ${customer.name} - ${product.item_name}`,
             amount: parseFloat(saleValue),
-            description: `TIPO_PRODUTO: final | Vendedor: ${salesperson.name} | Produto: ${product.item_name} | Qtd: ${quantity} ${product.unit} | Preço Unit: ${formatCurrency(parseFloat(unitPrice))} | ID_Produto: ${product.id}`,
-            transaction_date: new Date().toISOString().split("T")[0],
+            description: enhancedDescription + ` | ID_Produto: ${product.id}`,
+            transaction_date: saleDate,
           });
 
           // Update stock - subtract sold quantity
@@ -933,13 +967,24 @@ const SalesDashboard = ({
           );
         } else if (productType === "resale" && resaleProduct) {
           // Resale product sale - ALWAYS mark with TIPO_PRODUTO: revenda
+          const enhancedDescription = [
+            `Produto: ${resaleProduct.name}`,
+            `Quantidade: ${resaleSaleQuantity}`,
+            `Preço Unitário: ${formatCurrency(parseFloat(resaleSalePrice))}`,
+            `TIPO_PRODUTO: revenda`,
+            `Pagamento: ${resalePaymentMethod === 'vista' ? 'À Vista' : 'A Prazo'}`,
+            resaleSaleDescription.trim() ? `Obs: ${resaleSaleDescription}` : "",
+          ]
+            .filter(Boolean)
+            .join(" | ");
+
           await addCashFlowEntry({
             type: "income",
             category: "venda",
             reference_name: `Venda para ${customer.name} - ${resaleProduct.name}`,
-            amount: parseFloat(saleValue),
-            description: `TIPO_PRODUTO: revenda | Vendedor: ${salesperson.name} | Produto: ${resaleProduct.name} | Qtd: ${quantity} ${resaleProduct.unit} | Preço Unit: ${formatCurrency(parseFloat(unitPrice))} | ID_Produto: ${resaleProduct.id}`,
-            transaction_date: new Date().toISOString().split("T")[0],
+            amount: parseFloat(resaleSalePrice),
+            description: enhancedDescription + ` | ID_Produto: ${resaleProduct.id}`,
+            transaction_date: resaleSaleDate,
           });
 
           // Update resale product stock in stock_items table
@@ -949,7 +994,7 @@ const SalesDashboard = ({
           );
 
           if (stockItem) {
-            const newQuantity = stockItem.quantity - parseFloat(quantity);
+            const newQuantity = stockItem.quantity - parseFloat(resaleSaleQuantity);
             const newTotalValue = newQuantity * stockItem.unit_cost;
 
             await updateStockItem(stockItem.id, {
@@ -965,7 +1010,7 @@ const SalesDashboard = ({
                 productName: resaleProduct.name,
                 stockItemId: stockItem.id,
                 previousQuantity: stockItem.quantity,
-                soldQuantity: parseFloat(quantity),
+                soldQuantity: parseFloat(resaleSaleQuantity),
                 newQuantity: newQuantity,
                 newTotalValue: newTotalValue,
               },
@@ -985,6 +1030,18 @@ const SalesDashboard = ({
         setQuantity("");
         setSaleValue("");
         setProductType("final");
+        setPaymentMethod("vista");
+        setSaleDescription("");
+        setSaleDate(new Date().toISOString().split("T")[0]);
+
+        // Reset resale form states as well if they were somehow active
+        setSelectedResaleProduct("");
+        setResaleSaleQuantity("");
+        setResaleSalePrice("");
+        setResaleSaleDescription("");
+        setResaleSaleDate(new Date().toISOString().split("T")[0]);
+        setResalePaymentMethod("vista");
+
 
         const productName =
           productType === "final" ? product?.item_name : resaleProduct?.name;
@@ -998,10 +1055,11 @@ const SalesDashboard = ({
             `Tipo: ${productTypeLabel}\n` +
             `Cliente: ${customer.name}\n` +
             `Produto: ${productName}\n` +
-            `Quantidade: ${quantity} ${productUnit}\n` +
-            `Preço Unitário: ${formatCurrency(parseFloat(unitPrice))}\n` +
-            `Valor Total: ${formatCurrency(parseFloat(saleValue))}\n` +
-            `Vendedor: ${salesperson.name}\n\n` +
+            `Quantidade: ${productType === 'final' ? quantity : resaleSaleQuantity} ${productUnit}\n` +
+            `Preço Unitário: ${formatCurrency(parseFloat(productType === 'final' ? unitPrice : resaleSalePrice))}\n` +
+            `Valor Total: ${formatCurrency(parseFloat(saleValue || resaleSalePrice))}\n` +
+            `Vendedor: ${salesperson.name}\n` +
+            `Pagamento: ${productType === 'final' ? paymentMethod === 'vista' ? 'À Vista' : 'A Prazo' : resalePaymentMethod === 'vista' ? 'À Vista' : 'A Prazo'}\n\n` +
             `📦 Estoque atualizado automaticamente`,
         );
       }
@@ -1046,10 +1104,10 @@ const SalesDashboard = ({
   // Handle delete sale
   const handleDeleteSale = async (saleId: string, saleName: string) => {
     console.log('🔥 [DEBUG] handleDeleteSale called with:', { saleId, saleName });
-    
+
     // Temporarily removing confirm dialog for testing
     console.log('🔥 [DEBUG] Skipping confirmation dialog for testing');
-    
+
     if (true) { // Always proceed for testing
       console.log('🔥 [DEBUG] User confirmed deletion, proceeding...');
       try {
@@ -2076,35 +2134,39 @@ const SalesDashboard = ({
               )}
 
               {/* Step 5: Quantidade */}
-              {selectedProduct && (
-                <div className="space-y-2">
-                  <Label
-                    htmlFor="quantity"
-                    className="text-tire-300 font-medium"
-                  >
-                    {productType === "warranty" ? "4" : "5"}. Quantidade *
-                  </Label>
-                  <Input
-                    id="quantity"
-                    type="number"
-                    step="1"
-                    min="1"
-                    value={quantity}
-                    onChange={(e) => setQuantity(e.target.value)}
-                    className="bg-factory-700/50 border-tire-600/30 text-white h-12 text-lg"
-                    placeholder={
-                      productType === "warranty"
-                        ? "Quantidade para garantia"
-                        : "Digite a quantidade"
+              <div className="space-y-2">
+                <Label
+                  htmlFor="quantity"
+                  className="text-tire-300 font-medium"
+                >
+                  {selectedProduct && productType !== "warranty" ? "5" : "4"}. Quantidade *
+                </Label>
+                <Input
+                  id="quantity"
+                  type="number"
+                  step="1"
+                  min="1"
+                  value={productType === "final" || productType === "warranty" ? quantity : resaleSaleQuantity}
+                  onChange={(e) => {
+                    if (productType === "final" || productType === "warranty") {
+                      setQuantity(e.target.value);
+                    } else {
+                      setResaleSaleQuantity(e.target.value);
                     }
-                  />
-                  {productType === "warranty" && (
-                    <p className="text-purple-400 text-sm">
-                      🛡️ Quantidade que será descontada do estoque por garantia
-                    </p>
-                  )}
-                </div>
-              )}
+                  }}
+                  className="bg-factory-700/50 border-tire-600/30 text-white h-12 text-lg"
+                  placeholder={
+                    productType === "warranty"
+                      ? "Quantidade para garantia"
+                      : "Digite a quantidade"
+                  }
+                />
+                {productType === "warranty" && (
+                  <p className="text-purple-400 text-sm">
+                    🛡️ Quantidade que será descontada do estoque por garantia
+                  </p>
+                )}
+              </div>
 
               {/* Step 6: Valor Total (Auto-calculated) - Only for regular sales */}
               {selectedProduct &&
@@ -2167,7 +2229,7 @@ const SalesDashboard = ({
               {selectedProduct &&
                 productType !== "warranty" &&
                 (!unitPrice || !quantity) && (
-                  <div className="p-3 bg-tire-700/20 rounded border border-tire-600/30">
+                  <div className="p-3 bg-tire-700/20 rounded border border-tire-600/20">
                     <p className="text-tire-400 text-sm text-center">
                       ⏳ Informe o preço unitário e a quantidade para calcular o
                       total automaticamente
@@ -2176,7 +2238,7 @@ const SalesDashboard = ({
                 )}
 
               {selectedProduct && productType === "warranty" && !quantity && (
-                <div className="p-3 bg-purple-700/20 rounded border border-purple-600/30">
+                <div className="p-3 bg-purple-700/20 rounded border border-purple-600/20">
                   <p className="text-purple-400 text-sm text-center">
                     🛡️ Informe a quantidade para processar a garantia
                   </p>
@@ -2253,6 +2315,14 @@ const SalesDashboard = ({
                         </span>
                         <span className="text-neon-green font-bold text-lg">
                           {formatCurrency(parseFloat(saleValue))}
+                        </span>
+                      </div>
+                      <div className="flex justify-between border-t border-neon-green/30 pt-2">
+                        <span className="text-tire-300 font-medium">
+                          Forma de Pagamento:
+                        </span>
+                        <span className="text-neon-green font-bold">
+                          {paymentMethod === 'vista' ? 'À Vista' : 'A Prazo'}
                         </span>
                       </div>
                     </div>
@@ -2352,8 +2422,7 @@ const SalesDashboard = ({
                   !selectedSalesperson ||
                   !selectedCustomer ||
                   !selectedProduct ||
-                  !quantity ||
-                  parseFloat(quantity) <= 0 ||
+                  (!quantity || parseFloat(quantity) <= 0) ||
                   (productType !== "warranty" &&
                     (!unitPrice ||
                       !saleValue ||
@@ -2734,8 +2803,7 @@ const SalesDashboard = ({
                       </p>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
 
               <div className="space-y-3 max-h-96 overflow-y-auto">
                 {finalProductSalesHistory.length === 0 ? (
