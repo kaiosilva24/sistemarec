@@ -2304,7 +2304,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-tire-300 text-sm font-medium">Qtd. Total Produtos Finais</p>
-                  <p className="text-2xl font-bold text-neon-purple">
+                  <p className="text-2xl font-bold text-tire-200">
                     {isLoadingFinalProductTotalQuantity || finalProductTotalQuantity === null ? (
                       <span className="animate-pulse">Carregando...</span>
                     ) : (
