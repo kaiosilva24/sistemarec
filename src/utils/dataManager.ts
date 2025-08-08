@@ -2473,6 +2473,105 @@ export class DataManager {
   }
 
   /**
+   * Salva o saldo de caixa no Supabase
+   */
+  async saveCashBalance(balance: number): Promise<boolean> {
+    try {
+      console.log(`💰 [DataManager] Salvando saldo de caixa: R$ ${balance.toFixed(2)}`);
+
+      // Salvar no Supabase usando upsert
+      const { error } = await this.supabase
+        .from('system_settings')
+        .upsert({
+          key: 'cash_balance',
+          value: balance.toString(),
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'key'
+        });
+
+      if (error) {
+        console.error('❌ [DataManager] Erro ao salvar saldo de caixa no Supabase:', error);
+        return false;
+      }
+
+      console.log(`✅ [DataManager] Saldo de caixa salvo com sucesso: R$ ${balance.toFixed(2)}`);
+      return true;
+    } catch (error) {
+      console.error('❌ [DataManager] Erro ao salvar saldo de caixa:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Carrega o saldo de caixa do Supabase
+   */
+  async loadCashBalance(): Promise<number> {
+    try {
+      console.log('🔍 [DataManager] Carregando saldo de caixa do Supabase...');
+
+      const { data, error } = await this.supabase
+        .from('system_settings')
+        .select('value')
+        .eq('key', 'cash_balance')
+        .single();
+
+      if (error) {
+        console.warn('⚠️ [DataManager] Erro ao carregar saldo de caixa do Supabase:', error.message);
+        return 0; // Valor padrão
+      }
+
+      const balance = Number(data.value) || 0;
+      console.log(`✅ [DataManager] Saldo de caixa carregado do Supabase: R$ ${balance.toFixed(2)}`);
+
+      return balance;
+    } catch (error) {
+      console.error('❌ [DataManager] Erro ao carregar saldo de caixa:', error);
+      return 0; // Valor padrão em caso de erro
+    }
+  }
+
+  /**
+   * Configura subscription em tempo real para mudanças no saldo de caixa
+   */
+  subscribeToCashBalanceChanges(callback: (newBalance: number) => void): () => void {
+    console.log('🔔 [DataManager] Iniciando subscription para mudanças no saldo de caixa...');
+
+    const subscription = this.supabase
+      .channel('cash_balance_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'system_settings',
+          filter: 'key=eq.cash_balance'
+        },
+        (payload) => {
+          console.log('📡 [DataManager] Mudança detectada no saldo de caixa:', payload);
+
+          if (payload.new && payload.new.value) {
+            const newBalance = Number(payload.new.value) || 0;
+
+            if (newBalance >= 0) {
+              console.log(`💰 [DataManager] Novo saldo de caixa: R$ ${newBalance.toFixed(2)}`);
+              callback(newBalance);
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    console.log('✅ [DataManager] Subscription ativa para mudanças no saldo de caixa');
+
+    // Retornar função de cleanup
+    return () => {
+      console.log('🔌 [DataManager] Cancelando subscription do saldo de caixa');
+      this.supabase.removeChannel(subscription);
+    };
+  }
+
+  /**
    * Carrega o saldo de matéria-prima apenas do Supabase (sem localStorage)
    */
   async loadRawMaterialStockBalance(): Promise<number> {

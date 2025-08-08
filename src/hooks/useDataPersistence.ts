@@ -1096,7 +1096,34 @@ export const useCashFlow = () => {
       try {
         const newEntry = await dataManager.saveCashFlowEntry(entry);
         if (newEntry) {
-          setCashFlowEntries((prev) => [...prev, newEntry]);
+          setCashFlowEntries((prev) => {
+            const updatedEntries = [...prev, newEntry];
+            
+            // Calcular novo saldo em tempo real
+            setTimeout(() => {
+              const totalIncome = updatedEntries
+                .filter((entry) => entry.type === "income")
+                .reduce((sum, entry) => sum + entry.amount, 0);
+              const totalExpense = updatedEntries
+                .filter((entry) => entry.type === "expense")
+                .reduce((sum, entry) => sum + entry.amount, 0);
+              const newBalance = totalIncome - totalExpense;
+
+              console.log(`💰 [useCashFlow] Novo saldo calculado: R$ ${newBalance.toFixed(2)}`);
+
+              // Disparar evento para atualizar dashboard
+              const balanceUpdateEvent = new CustomEvent('cashBalanceUpdated', {
+                detail: {
+                  balance: newBalance,
+                  timestamp: Date.now(),
+                  source: 'useCashFlow-addEntry'
+                }
+              });
+              window.dispatchEvent(balanceUpdateEvent);
+            }, 100);
+
+            return updatedEntries;
+          });
           return newEntry;
         }
       } catch (error) {
@@ -1111,11 +1138,36 @@ export const useCashFlow = () => {
     try {
       const success = await dataManager.updateCashFlowEntry(id, updates);
       if (success) {
-        setCashFlowEntries((prev) => 
-          prev.map((entry) => 
+        setCashFlowEntries((prev) => {
+          const updatedEntries = prev.map((entry) => 
             entry.id === id ? { ...entry, ...updates } : entry
-          )
-        );
+          );
+
+          // Calcular novo saldo em tempo real
+          setTimeout(() => {
+            const totalIncome = updatedEntries
+              .filter((entry) => entry.type === "income")
+              .reduce((sum, entry) => sum + entry.amount, 0);
+            const totalExpense = updatedEntries
+              .filter((entry) => entry.type === "expense")
+              .reduce((sum, entry) => sum + entry.amount, 0);
+            const newBalance = totalIncome - totalExpense;
+
+            console.log(`💰 [useCashFlow] Saldo recalculado após atualização: R$ ${newBalance.toFixed(2)}`);
+
+            // Disparar evento para atualizar dashboard
+            const balanceUpdateEvent = new CustomEvent('cashBalanceUpdated', {
+              detail: {
+                balance: newBalance,
+                timestamp: Date.now(),
+                source: 'useCashFlow-updateEntry'
+              }
+            });
+            window.dispatchEvent(balanceUpdateEvent);
+          }, 100);
+
+          return updatedEntries;
+        });
       }
       return success;
     } catch (error) {
@@ -1128,7 +1180,34 @@ export const useCashFlow = () => {
     try {
       const success = await dataManager.deleteCashFlowEntry(id);
       if (success) {
-        setCashFlowEntries((prev) => prev.filter((entry) => entry.id !== id));
+        setCashFlowEntries((prev) => {
+          const updatedEntries = prev.filter((entry) => entry.id !== id);
+
+          // Calcular novo saldo em tempo real
+          setTimeout(() => {
+            const totalIncome = updatedEntries
+              .filter((entry) => entry.type === "income")
+              .reduce((sum, entry) => sum + entry.amount, 0);
+            const totalExpense = updatedEntries
+              .filter((entry) => entry.type === "expense")
+              .reduce((sum, entry) => sum + entry.amount, 0);
+            const newBalance = totalIncome - totalExpense;
+
+            console.log(`💰 [useCashFlow] Saldo recalculado após exclusão: R$ ${newBalance.toFixed(2)}`);
+
+            // Disparar evento para atualizar dashboard
+            const balanceUpdateEvent = new CustomEvent('cashBalanceUpdated', {
+              detail: {
+                balance: newBalance,
+                timestamp: Date.now(),
+                source: 'useCashFlow-deleteEntry'
+              }
+            });
+            window.dispatchEvent(balanceUpdateEvent);
+          }, 100);
+
+          return updatedEntries;
+        });
       }
       return success;
     } catch (error) {

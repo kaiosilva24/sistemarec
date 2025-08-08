@@ -1375,25 +1375,75 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
   // Effect para sincronização em tempo real do saldo de caixa
   useEffect(() => {
     let unsubscribe: (() => void) | null = null;
+    let supabaseChannel: any = null;
 
     const initializeCashBalanceSync = async () => {
       try {
         console.log('🔄 [Dashboard] Inicializando sincronização em tempo real do saldo de caixa...');
 
-        // Carregar valor inicial do Supabase
-        const initialBalance = await dataManager.loadCashBalance();
-        console.log(`🔍 [Dashboard] Valor inicial do saldo do Supabase: R$ ${initialBalance.toFixed(2)}`);
+        // Calcular saldo inicial baseado nas entradas de cash flow
+        const initialBalance = cashBalance;
+        console.log(`🔍 [Dashboard] Saldo inicial calculado: R$ ${initialBalance.toFixed(2)}`);
 
         setCashBalanceState(initialBalance);
         setIsLoadingCashBalance(false);
 
-        console.log(`✅ [Dashboard] Saldo inicial carregado: R$ ${initialBalance.toFixed(2)}`);
+        // Salvar saldo inicial no Supabase
+        await dataManager.saveCashBalance(initialBalance);
 
-        // Configurar subscription em tempo real
-        unsubscribe = dataManager.subscribeToCashBalanceChanges((newBalance) => {
-          console.log(`📡 [Dashboard] Novo saldo de caixa recebido via subscription: R$ ${newBalance.toFixed(2)}`);
-          setCashBalanceState(newBalance);
-        });
+        // Configurar subscription em tempo real para mudanças na tabela cash_flow_entries
+        supabaseChannel = supabase
+          .channel('cash_balance_realtime')
+          .on(
+            'postgres_changes',
+            {
+              event: '*', // INSERT, UPDATE, DELETE
+              schema: 'public',
+              table: 'cash_flow_entries'
+            },
+            async (payload) => {
+              console.log('💰 [Dashboard] Mudança detectada na tabela cash_flow_entries:', payload);
+              
+              // Recalcular saldo baseado nas mudanças
+              setTimeout(async () => {
+                try {
+                  // Recarregar todas as entradas de cash flow
+                  const updatedEntries = await dataManager.loadCashFlowEntries();
+                  
+                  // Calcular novo saldo
+                  const newTotalIncome = updatedEntries
+                    .filter((entry) => entry.type === "income")
+                    .reduce((sum, entry) => sum + entry.amount, 0);
+                  const newTotalExpense = updatedEntries
+                    .filter((entry) => entry.type === "expense")
+                    .reduce((sum, entry) => sum + entry.amount, 0);
+                  const newBalance = newTotalIncome - newTotalExpense;
+
+                  console.log(`📊 [Dashboard] Novo saldo calculado em tempo real: R$ ${newBalance.toFixed(2)}`);
+
+                  // Salvar no Supabase
+                  await dataManager.saveCashBalance(newBalance);
+
+                  // Atualizar estado local
+                  setCashBalanceState(newBalance);
+
+                  // Disparar evento de atualização
+                  const updateEvent = new CustomEvent('cashBalanceUpdated', {
+                    detail: {
+                      balance: newBalance,
+                      timestamp: Date.now(),
+                      source: 'Dashboard-SupabaseRealtime'
+                    }
+                  });
+                  window.dispatchEvent(updateEvent);
+
+                } catch (error) {
+                  console.error('❌ [Dashboard] Erro ao recalcular saldo em tempo real:', error);
+                }
+              }, 200); // Pequeno delay para garantir que a mudança foi persistida
+            }
+          )
+          .subscribe();
 
         console.log('🔔 [Dashboard] Subscription ativa para mudanças de saldo em tempo real');
 
@@ -1407,16 +1457,19 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       }
     };
 
-    initializeCashBalanceSync();
+    // Aguardar o carregamento dos dados de cash flow antes de inicializar
+    if (!cashFlowLoading && cashFlowEntries.length >= 0) {
+      initializeCashBalanceSync();
+    }
 
     // Cleanup subscription
     return () => {
-      if (unsubscribe) {
+      if (supabaseChannel) {
         console.log('🔕 [Dashboard] Cancelando subscription do saldo de caixa');
-        unsubscribe();
+        supabase.removeChannel(supabaseChannel);
       }
     };
-  }, []);
+  }, [cashFlowLoading, cashFlowEntries, cashBalance]);
 
   // Listener para evento customizado de atualização do saldo de caixa
   useEffect(() => {
