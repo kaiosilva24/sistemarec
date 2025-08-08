@@ -695,8 +695,6 @@ const SalesDashboard = ({
     }, 0);
   };
 
-  const totalWarrantyRevenueValue = calculateWarrantyRevenueValue();
-
   // Calculate individual warranty value based on raw material cost from recipes
   const calculateIndividualWarrantyValue = (warranty: any) => {
     console.log(
@@ -1182,7 +1180,7 @@ const SalesDashboard = ({
     }
   };
 
-  
+
 
   // Test function to verify onClick works
   const testClick = () => {
@@ -1795,7 +1793,7 @@ const SalesDashboard = ({
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div className="flex-1">
-                <p className="text-tire-300 text-sm font-medium text-center mb-2">Receita Total</p>
+                <p className="text-tire-300 text-sm font-medium text-center mb-2">Receita Recebida</p>
                 <p className="text-2xl font-bold text-neon-orange text-center">
                   {formatCurrency(
                     finalProductSalesHistory.reduce((total, sale) => total + sale.amount, 0) +
@@ -1803,7 +1801,14 @@ const SalesDashboard = ({
                   )}
                 </p>
                 <p className="text-xs text-tire-400 text-center mt-1">
-                  Final + Revenda
+                  Apenas vendas recebidas
+                </p>
+                <p className="text-xs text-amber-400 text-center mt-1">
+                  + {formatCurrency(
+                    accountsReceivableEntries
+                      .filter(entry => entry.status === "pending")
+                      .reduce((sum, entry) => sum + entry.total_amount, 0)
+                  )} à receber
                 </p>
               </div>
               <div className="text-neon-orange ml-3">
@@ -2302,7 +2307,7 @@ const SalesDashboard = ({
                               <p className="text-neon-blue font-medium">
                                 Cálculo Automático:
                               </p>
-                              <p className="text-tire-300 text-sm">
+                              <p className="text-tire-400 text-sm">
                                 {quantity} ×{" "}
                                 {formatCurrency(parseFloat(unitPrice))}
                               </p>
@@ -2544,7 +2549,7 @@ const SalesDashboard = ({
                           R$ 0,00 (Garantia)
                         </span>
                       </div>
-                      <div className="mt-3 p-2 bg-purple-900/20 rounded text-xs">
+                      <div className="mt-2 p-2 bg-purple-900/20 rounded text-xs">
                         <p className="text-purple-300">
                           ✓ Produto será descontado do estoque
                         </p>
@@ -3799,7 +3804,7 @@ const SalesDashboard = ({
                     ))
                 )}
               </div>
-              
+
               {accountsReceivableEntries.filter(entry => entry.status === "pending").length > 0 && (
                 <div className="mt-4 p-4 bg-factory-800/50 rounded-lg border border-tire-600/30">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
