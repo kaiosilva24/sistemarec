@@ -2039,8 +2039,6 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       {/* Header com Cards de Saldo e Receita */}
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-white">Dashboard</h1>
-          <p className="text-tire-300">Sistema de Gestão Financeira</p>
         </div>
         <div className="flex gap-6">
           {/* Card Saldo Caixa - Maior */}
