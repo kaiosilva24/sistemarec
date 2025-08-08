@@ -48,6 +48,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
+import { TrendingDown } from "lucide-react";
 import { dataManager } from '../../utils/dataManager';
 import { autoSetupSupabase } from '../../utils/setupSupabaseTable';
 import { ensureSystemDataExists } from '../../utils/initializeSupabaseData';
@@ -70,6 +71,14 @@ import {
 // Imports de drag-and-drop removidos - não são mais necessários
 
 // Seção de Métricas Principais removida completamente conforme solicitado
+
+// Função para formatar valores em moeda
+const formatCurrency = (value: number) => {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL'
+  }).format(value);
+};
 
 // Componente para Gráfico de Lucro Empresarial
 interface EmpresarialProfitChartProps {
@@ -179,6 +188,13 @@ const EmpresarialProfitChart = ({ cashFlowEntries, isLoading }: EmpresarialProfi
     return null;
   };
 
+  // Calcular métricas do lucro empresarial
+  const totalProfitInPeriod = chartData.reduce((sum, item) => sum + item.profit, 0);
+  const averageDailyProfit = chartData.length > 0 ? totalProfitInPeriod / chartData.length : 0;
+  const finalAccumulatedProfit = chartData.length > 0 ? chartData[chartData.length - 1].accumulatedProfit : 0;
+  const bestDay = chartData.reduce((max, item) => item.profit > max.profit ? item : max, { profit: 0, displayDate: '' });
+  const worstDay = chartData.reduce((min, item) => item.profit < min.profit ? item : min, { profit: 0, displayDate: '' });
+
   return (
     <Card className="bg-factory-800/50 border-tire-600/30">
       <CardHeader>
@@ -230,78 +246,166 @@ const EmpresarialProfitChart = ({ cashFlowEntries, isLoading }: EmpresarialProfi
         </div>
       </CardHeader>
       <CardContent>
-        <div className="w-full" style={{ width: '790px', height: '260px' }}>
-          {isLoading ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-neon-purple"></div>
-            </div>
-          ) : chartData.length === 0 ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center">
-                <TrendingUp className="h-12 w-12 text-tire-500 mx-auto mb-3" />
-                <p className="text-tire-400">Nenhum dado encontrado para o período selecionado</p>
+        <div className="flex gap-6">
+          {/* Gráfico à esquerda */}
+          <div className="flex-1" style={{ width: '520px', height: '260px' }}>
+            {isLoading ? (
+              <div className="flex items-center justify-center h-full">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-neon-purple"></div>
               </div>
-            </div>
-          ) : (
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart
-                data={chartData}
-                margin={{
-                  top: 20,
-                  right: 30,
-                  left: 20,
-                  bottom: 20,
-                }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.3} />
-                <XAxis
-                  dataKey="displayDate"
-                  stroke="#9CA3AF"
-                  fontSize={10}
-                  angle={-45}
-                  textAnchor="end"
-                  height={60}
-                />
-                <YAxis
-                  stroke="#9CA3AF"
-                  fontSize={12}
-                  tickFormatter={(value) => `R$ ${value.toLocaleString("pt-BR")}`}
-                />
-                <Tooltip content={<CustomTooltip />} />
-                <Line
-                  type="monotone"
-                  dataKey="accumulatedProfit"
-                  name="Lucro Acumulado"
-                  stroke="#8B5CF6"
-                  strokeWidth={3}
-                  dot={{
-                    fill: "#8B5CF6",
-                    strokeWidth: 2,
-                    r: 4,
+            ) : chartData.length === 0 ? (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center">
+                  <TrendingUp className="h-12 w-12 text-tire-500 mx-auto mb-3" />
+                  <p className="text-tire-400">Nenhum dado encontrado para o período selecionado</p>
+                </div>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart
+                  data={chartData}
+                  margin={{
+                    top: 20,
+                    right: 30,
+                    left: 20,
+                    bottom: 20,
                   }}
-                  activeDot={{
-                    r: 6,
-                    fill: "#8B5CF6",
-                    stroke: "#ffffff",
-                    strokeWidth: 2,
-                  }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="profit"
-                  name="Lucro Diário"
-                  stroke="#10B981"
-                  strokeWidth={2}
-                  strokeDasharray="5 5"
-                  dot={{
-                    fill: "#10B981",
-                    strokeWidth: 1,
-                    r: 3,
-                  }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          )}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.3} />
+                  <XAxis
+                    dataKey="displayDate"
+                    stroke="#9CA3AF"
+                    fontSize={10}
+                    angle={-45}
+                    textAnchor="end"
+                    height={60}
+                  />
+                  <YAxis
+                    stroke="#9CA3AF"
+                    fontSize={12}
+                    tickFormatter={(value) => `R$ ${value.toLocaleString("pt-BR")}`}
+                  />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Line
+                    type="monotone"
+                    dataKey="accumulatedProfit"
+                    name="Lucro Acumulado"
+                    stroke="#8B5CF6"
+                    strokeWidth={3}
+                    dot={{
+                      fill: "#8B5CF6",
+                      strokeWidth: 2,
+                      r: 4,
+                    }}
+                    activeDot={{
+                      r: 6,
+                      fill: "#8B5CF6",
+                      stroke: "#ffffff",
+                      strokeWidth: 2,
+                    }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="profit"
+                    name="Lucro Diário"
+                    stroke="#10B981"
+                    strokeWidth={2}
+                    strokeDasharray="5 5"
+                    dot={{
+                      fill: "#10B981",
+                      strokeWidth: 1,
+                      r: 3,
+                    }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+
+          {/* Card de Lucro Empresarial à direita */}
+          <div className="w-64">
+            <Card className="bg-gradient-to-br from-neon-purple/20 via-neon-blue/20 to-neon-green/20 border-neon-purple/40 h-full">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-neon-purple text-lg flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-full bg-neon-purple/30 flex items-center justify-center">
+                    <TrendingUp className="h-3 w-3 text-neon-purple" />
+                  </div>
+                  Resumo do Período
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Lucro Total Acumulado */}
+                <div className="p-3 bg-factory-900/40 rounded-lg border border-neon-purple/20">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-tire-300 text-xs font-medium">Lucro Total Acumulado</span>
+                    <DollarSign className="h-3 w-3 text-neon-purple" />
+                  </div>
+                  <p className="text-xl font-bold text-neon-purple">
+                    {formatCurrency(finalAccumulatedProfit)}
+                  </p>
+                </div>
+
+                {/* Lucro do Período */}
+                <div className="p-3 bg-factory-900/40 rounded-lg border border-neon-blue/20">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-tire-300 text-xs font-medium">Lucro do Período</span>
+                    <BarChart3 className="h-3 w-3 text-neon-blue" />
+                  </div>
+                  <p className="text-lg font-bold text-neon-blue">
+                    {formatCurrency(totalProfitInPeriod)}
+                  </p>
+                </div>
+
+                {/* Média Diária */}
+                <div className="p-3 bg-factory-900/40 rounded-lg border border-neon-green/20">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-tire-300 text-xs font-medium">Média Diária</span>
+                    <Calculator className="h-3 w-3 text-neon-green" />
+                  </div>
+                  <p className="text-lg font-bold text-neon-green">
+                    {formatCurrency(averageDailyProfit)}
+                  </p>
+                </div>
+
+                {/* Melhor e Pior Dia */}
+                {chartData.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="p-2 bg-green-500/10 rounded border border-green-500/30">
+                      <div className="flex items-center gap-1 mb-1">
+                        <TrendingUp className="h-3 w-3 text-green-400" />
+                        <span className="text-green-400 text-xs font-medium">Melhor Dia</span>
+                      </div>
+                      <p className="text-sm font-bold text-green-400">{formatCurrency(bestDay.profit)}</p>
+                      <p className="text-xs text-green-400/70">{bestDay.displayDate}</p>
+                    </div>
+
+                    <div className="p-2 bg-red-500/10 rounded border border-red-500/30">
+                      <div className="flex items-center gap-1 mb-1">
+                        <TrendingDown className="h-3 w-3 text-red-400" />
+                        <span className="text-red-400 text-xs font-medium">Pior Dia</span>
+                      </div>
+                      <p className="text-sm font-bold text-red-400">{formatCurrency(worstDay.profit)}</p>
+                      <p className="text-xs text-red-400/70">{worstDay.displayDate}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Status do Período */}
+                <div className="p-2 bg-factory-900/60 rounded border border-tire-600/30">
+                  <div className="flex items-center justify-between">
+                    <span className="text-tire-300 text-xs">Dias analisados:</span>
+                    <span className="text-white text-sm font-medium">{chartData.length}</span>
+                  </div>
+                  <div className="flex items-center justify-between mt-1">
+                    <span className="text-tire-300 text-xs">Status:</span>
+                    <span className={`text-xs font-medium ${totalProfitInPeriod >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {totalProfitInPeriod >= 0 ? '✅ Lucrativo' : '❌ Prejuízo'}
+                    </span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </CardContent>
     </Card>
