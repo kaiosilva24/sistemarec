@@ -2610,6 +2610,93 @@ export class DataManager {
   }
 
   /**
+   * Carrega o saldo de matéria-prima do Supabase
+   */
+  async loadRawMaterialStockBalance(): Promise<number> {
+    try {
+      console.log('🔍 [DataManager] Carregando saldo de matéria-prima do Supabase...');
+
+      const { data, error } = await this.supabase
+        .from('system_settings')
+        .select('value')
+        .eq('key', 'raw_material_stock_balance')
+        .single();
+
+      if (error) {
+        console.warn('⚠️ [DataManager] Erro ao carregar saldo de matéria-prima do Supabase:', error.message);
+        return 0; // Valor padrão
+      }
+
+      const balance = Number(data.value) || 0;
+      console.log(`✅ [DataManager] Saldo de matéria-prima carregado do Supabase: R$ ${balance.toFixed(2)}`);
+
+      return balance;
+    } catch (error) {
+      console.error('❌ [DataManager] Erro ao carregar saldo de matéria-prima:', error);
+      return 0; // Valor padrão em caso de erro
+    }
+  }
+
+  /**
+   * Salva o saldo de produtos de revenda no Supabase
+   */
+  async saveResaleProductStockBalance(balance: number): Promise<boolean> {
+    try {
+      console.log(`💾 [DataManager] Salvando saldo de produtos de revenda: R$ ${balance.toFixed(2)}`);
+
+      // Salvar no Supabase usando upsert
+      const { error } = await this.supabase
+        .from('system_settings')
+        .upsert({
+          key: 'resale_product_stock_balance',
+          value: balance.toString(),
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'key'
+        });
+
+      if (error) {
+        console.error('❌ [DataManager] Erro ao salvar saldo de produtos de revenda no Supabase:', error);
+        return false;
+      }
+
+      console.log(`✅ [DataManager] Saldo de produtos de revenda salvo com sucesso: R$ ${balance.toFixed(2)}`);
+      return true;
+    } catch (error) {
+      console.error('❌ [DataManager] Erro ao salvar saldo de produtos de revenda:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Carrega o saldo de produtos de revenda do Supabase
+   */
+  async loadResaleProductStockBalance(): Promise<number> {
+    try {
+      console.log('🔍 [DataManager] Carregando saldo de produtos de revenda do Supabase...');
+
+      const { data, error } = await this.supabase
+        .from('system_settings')
+        .select('value')
+        .eq('key', 'resale_product_stock_balance')
+        .single();
+
+      if (error) {
+        console.warn('⚠️ [DataManager] Erro ao carregar saldo de produtos de revenda do Supabase:', error.message);
+        return 0; // Valor padrão
+      }
+
+      const balance = Number(data.value) || 0;
+      console.log(`✅ [DataManager] Saldo de produtos de revenda carregado do Supabase: R$ ${balance.toFixed(2)}`);
+
+      return balance;
+    } catch (error) {
+      console.error('❌ [DataManager] Erro ao carregar saldo de produtos de revenda:', error);
+      return 0; // Valor padrão em caso de erro
+    }
+  }
+
+  /**
    * Salva o saldo de caixa no Supabase
    */
   async saveCashBalance(balance: number): Promise<boolean> {
@@ -2709,49 +2796,6 @@ export class DataManager {
   }
 
   /**
-   * Carrega o saldo de matéria-prima apenas do Supabase (sem localStorage)
-   */
-  async loadRawMaterialStockBalance(): Promise<number> {
-    try {
-      console.log('🔍 [DataManager] Carregando saldo de matéria-prima do Supabase...');
-
-      const { data, error } = await this.supabase
-        .from('system_settings')
-        .select('value')
-        .eq('key', 'raw_material_stock_balance')
-        .single();
-
-      if (error) {
-        console.warn('⚠️ [DataManager] Erro ao carregar saldo de matéria-prima do Supabase:', error.message);
-        return 0; // Valor padrão
-      }
-
-      const balance = Number(data.value) || 0;
-      console.log(`✅ [DataManager] Saldo de matéria-prima carregado do Supabase: R$ ${balance.toFixed(2)}`);
-
-      return balance;
-    } catch (error) {
-      console.error('❌ [DataManager] Erro ao carregar saldo de matéria-prima:', error);
-      return 0; // Valor padrão em caso de erro
-    }
-  }
-
-  /**
-   * Configura subscription em tempo real para mudanças no saldo de matéria-prima
-   */
-  subscribeToRawMaterialStockChanges(callback: (newBalance: number) => void): () => void {
-    console.log('🔔 [DataManager] Iniciando subscription para mudanças no saldo de matéria-prima...');
-
-    console.log('⚠️ [DataManager] TEMPORÁRIO: Subscription desabilitada (tabela system_settings não existe)');
-
-    // TODO: Implementar Supabase Realtime quando tabela system_settings for criada
-    // Por enquanto, retornar função vazia
-    return () => {
-      console.log('🔌 [DataManager] Cleanup de subscription de matéria-prima (vazia)');
-    };
-  }
-
-  /**
    * Salva o valor empresarial no Supabase
    */
   async saveBusinessValue(value: number): Promise<boolean> {
@@ -2847,6 +2891,49 @@ export class DataManager {
     return () => {
       console.log('🔌 [DataManager] Cancelando subscription do valor empresarial');
       this.supabase.removeChannel(subscription);
+    };
+  }
+
+  /**
+   * Carrega o saldo de matéria-prima apenas do Supabase (sem localStorage)
+   */
+  async loadRawMaterialStockBalance(): Promise<number> {
+    try {
+      console.log('🔍 [DataManager] Carregando saldo de matéria-prima do Supabase...');
+
+      const { data, error } = await this.supabase
+        .from('system_settings')
+        .select('value')
+        .eq('key', 'raw_material_stock_balance')
+        .single();
+
+      if (error) {
+        console.warn('⚠️ [DataManager] Erro ao carregar saldo de matéria-prima do Supabase:', error.message);
+        return 0; // Valor padrão
+      }
+
+      const balance = Number(data.value) || 0;
+      console.log(`✅ [DataManager] Saldo de matéria-prima carregado do Supabase: R$ ${balance.toFixed(2)}`);
+
+      return balance;
+    } catch (error) {
+      console.error('❌ [DataManager] Erro ao carregar saldo de matéria-prima:', error);
+      return 0; // Valor padrão em caso de erro
+    }
+  }
+
+  /**
+   * Configura subscription em tempo real para mudanças no saldo de matéria-prima
+   */
+  subscribeToRawMaterialStockChanges(callback: (newBalance: number) => void): () => void {
+    console.log('🔔 [DataManager] Iniciando subscription para mudanças no saldo de matéria-prima...');
+
+    console.log('⚠️ [DataManager] TEMPORÁRIO: Subscription desabilitada (tabela system_settings não existe)');
+
+    // TODO: Implementar Supabase Realtime quando tabela system_settings for criada
+    // Por enquanto, retornar função vazia
+    return () => {
+      console.log('🔌 [DataManager] Cleanup de subscription de matéria-prima (vazia)');
     };
   }
 

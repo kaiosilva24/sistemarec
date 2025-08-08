@@ -11,7 +11,6 @@ export interface DashboardMetrics {
   margemLucro: number
   lucroResaleProducts: number
   valorTotalProdutosRevenda: number
-  valorEmpresarial?: number  // Valor empresarial total (caixa + estoque)
 }
 
 export interface MetricCard {
