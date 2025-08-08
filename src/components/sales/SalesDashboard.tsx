@@ -844,21 +844,37 @@ const SalesDashboard = ({
       return;
     }
 
-    // Confirm the action
-    if (!confirm(`Tem certeza que deseja lançar a venda "${saleName}" no caixa?`)) {
+    // Extract the real value from the sale
+    const realValue = extractRealValueFromSale(sale);
+    
+    console.log('💰 [handleLaunchToCash] Valores:', {
+      currentAmount: sale.amount,
+      realValue: realValue,
+      saleName: saleName
+    });
+
+    // Confirm the action with the real value shown
+    if (!confirm(`Tem certeza que deseja lançar a venda "${saleName}" no caixa?\n\nValor que será lançado: ${formatCurrency(realValue)}`)) {
       return;
     }
 
     try {
-      // Update the cash flow entry: change category from 'venda_a_prazo' to 'venda' and set amount
+      // Update the cash flow entry: change category from 'venda_a_prazo' to 'venda' and set the real amount
       await updateCashFlowEntry(saleId, {
         ...sale,
         category: 'venda',
-        amount: extractRealValueFromSale(sale), // Use the actual real value
-        description: sale.description?.replace(/VENDA_A_PRAZO: true \|/, 'VENDA_A_PRAZO: false |') || sale.description, // Mark as no longer 'a prazo'
+        amount: realValue, // Use the actual real value
+        description: sale.description?.replace(/VENDA_A_PRAZO: true/, 'VENDA_A_PRAZO: false').replace(/À Prazo/g, 'Dinheiro') || sale.description, // Mark as no longer 'a prazo' and change payment method
       });
 
-      alert(`Venda "${saleName}" lançada no caixa com sucesso!`);
+      console.log('✅ [handleLaunchToCash] Venda lançada no caixa:', {
+        saleId,
+        previousAmount: sale.amount,
+        newAmount: realValue,
+        category: 'venda'
+      });
+
+      alert(`Venda "${saleName}" lançada no caixa com sucesso!\n\nValor lançado: ${formatCurrency(realValue)}`);
       onRefresh(); // Trigger a refresh of the data
     } catch (error) {
       console.error("Erro ao lançar venda no caixa:", error);
