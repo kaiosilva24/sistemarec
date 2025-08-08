@@ -125,24 +125,63 @@ const SettingsDashboard = ({
 
     const initializeBusinessValueSync = async () => {
       try {
+        console.log('🔄 [SettingsDashboard] Inicializando sincronização em tempo real do valor empresarial...');
+
+        // Carregar valor inicial do Supabase
+        const initialValue = await dataManager.loadBusinessValue();
+        console.log(`🔍 [SettingsDashboard] Valor inicial do valor empresarial: R$ ${initialValue.toFixed(2)}`);
+
+        setBusinessValue(initialValue);
+        setIsLoadingBusinessValue(false);
+
+        console.log(`✅ [SettingsDashboard] Valor inicial carregado: R$ ${initialValue.toFixed(2)}`);
+
         // Configurar subscription em tempo real
         unsubscribe = dataManager.subscribeToBusinessValueChanges((newValue) => {
+          console.log(`📡 [SettingsDashboard] Novo valor empresarial recebido via subscription: R$ ${newValue.toFixed(2)}`);
           setBusinessValue(newValue);
-          console.log('🔄 [SettingsDashboard] Valor empresarial atualizado em tempo real:', newValue);
         });
+
+        console.log('🔔 [SettingsDashboard] Subscription ativa para mudanças de valor empresarial em tempo real');
 
       } catch (error) {
         console.error('❌ [SettingsDashboard] Erro ao configurar sincronização do valor empresarial:', error);
+        setIsLoadingBusinessValue(false);
+
+        // Fallback para valor 0 em caso de erro
+        setBusinessValue(0);
       }
     };
 
+    // Listener para evento customizado de atualização do valor empresarial
+    const handleBusinessValueUpdate = (event: CustomEvent) => {
+      const { value, timestamp, source } = event.detail;
+      console.log(`💰 [SettingsDashboard] Evento 'businessValueUpdated' recebido:`);
+      console.log(`  - Valor Empresarial: R$ ${value.toFixed(2)}`);
+      console.log(`  - Timestamp: ${new Date(timestamp).toLocaleString()}`);
+      console.log(`  - Source: ${source}`);
+
+      // Atualizar estado imediatamente
+      setBusinessValue(value);
+      setIsLoadingBusinessValue(false);
+    };
+
+    console.log('🎯 [SettingsDashboard] Registrando listener para evento businessValueUpdated');
+
+    // Adicionar listener para o evento customizado
+    window.addEventListener('businessValueUpdated', handleBusinessValueUpdate as EventListener);
+
     initializeBusinessValueSync();
 
-    // Cleanup subscription
+    // Cleanup subscription e listener
     return () => {
       if (unsubscribe) {
+        console.log('🔕 [SettingsDashboard] Cancelando subscription do valor empresarial');
         unsubscribe();
       }
+      
+      console.log('🚫 [SettingsDashboard] Removendo listener para evento businessValueUpdated');
+      window.removeEventListener('businessValueUpdated', handleBusinessValueUpdate as EventListener);
     };
   }, []);
 
