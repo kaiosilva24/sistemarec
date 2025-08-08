@@ -2240,8 +2240,8 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                   </p>
                   
                 </div>
-                <div className="p-2 rounded-full bg-neon-cyan/20">
-                  <Package className="h-5 w-5 text-neon-cyan" />
+                <div className="p-2 rounded-full bg-cyan-500/20">
+                  <Package className="h-5 w-5 text-cyan-400" />
                 </div>
               </div>
             </CardContent>
