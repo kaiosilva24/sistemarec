@@ -2122,29 +2122,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
             </CardContent>
           </Card>
 
-          {/* Card Receita Total - Maior */}
-          <Card className="bg-factory-900/30 border-tire-600/30 hover:shadow-lg transition-all duration-200">
-            <CardContent className="p-6">
-              <div className="flex items-center gap-4">
-                <div className={`p-3 rounded-full ${
-                  totalRevenue > 0 ? 'bg-green-500/20' : 'bg-gray-500/20'
-                }`}>
-                  <TrendingUp className={`h-6 w-6 ${
-                    totalRevenue > 0 ? 'text-green-400' : 'text-gray-400'
-                  }`} />
-                </div>
-                <div>
-                  <p className="text-tire-300 text-sm font-medium">Receita Total</p>
-                  <p className={`text-2xl font-bold ${
-                    totalRevenue > 0 ? 'text-green-400' : 'text-tire-200'
-                  }`}>
-                    {formatCurrency(totalRevenue)}
-                  </p>
-
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          
         </div>
       </div>
 
