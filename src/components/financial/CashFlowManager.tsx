@@ -69,7 +69,6 @@ const CashFlowManager = ({
   const [transactionDate, setTransactionDate] = useState(
     new Date().toISOString().split("T")[0],
   );
-  const [paymentMethod, setPaymentMethod] = useState<"vista" | "prazo">("vista");
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState<"all" | "income" | "expense">(
     "all",
@@ -104,7 +103,7 @@ const CashFlowManager = ({
       reference_id: referenceId || undefined,
       reference_name: referenceName.trim(),
       amount: parseFloat(amount),
-      description: description.trim() ? `${description.trim()} | Pagamento: ${paymentMethod === 'vista' ? 'À Vista' : 'A Prazo'}` : `Pagamento: ${paymentMethod === 'vista' ? 'À Vista' : 'A Prazo'}`,
+      description: description.trim() || undefined,
       transaction_date: transactionDate,
     });
 
@@ -114,7 +113,6 @@ const CashFlowManager = ({
     setReferenceName("");
     setAmount("");
     setDescription("");
-    setPaymentMethod("vista");
   };
 
   const handleCategoryChange = (newCategory: string) => {
@@ -540,43 +538,6 @@ const CashFlowManager = ({
                 />
               </div>
 
-              {/* Campo de Forma de Pagamento - só aparece para entradas (vendas) */}
-              {type === "income" && (
-                <div className="space-y-2">
-                  <Label className="text-tire-300">
-                    Forma de Pagamento *
-                  </Label>
-                  <Select 
-                    value={paymentMethod} 
-                    onValueChange={(value: "vista" | "prazo") => setPaymentMethod(value)}
-                  >
-                    <SelectTrigger className="bg-factory-700/50 border-tire-600/30 text-white">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-factory-800 border-tire-600/30">
-                      <SelectItem
-                        value="vista"
-                        className="text-white hover:bg-tire-700/50"
-                      >
-                        <div className="flex items-center gap-2">
-                          <DollarSign className="h-4 w-4 text-green-400" />
-                          À Vista
-                        </div>
-                      </SelectItem>
-                      <SelectItem
-                        value="prazo"
-                        className="text-white hover:bg-tire-700/50"
-                      >
-                        <div className="flex items-center gap-2">
-                          <Calendar className="h-4 w-4 text-orange-400" />
-                          A Prazo
-                        </div>
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-
               <div className="space-y-2">
                 <Label htmlFor="description" className="text-tire-300">
                   Observações (Opcional)
@@ -969,25 +930,6 @@ const CashFlowManager = ({
                         <p className="text-tire-400 text-sm mt-2">
                           {entry.description}
                         </p>
-                      )}
-                      
-                      {/* Mostrar forma de pagamento se for entrada */}
-                      {entry.type === "income" && entry.description && (
-                        entry.description.includes("Pagamento:") && (
-                          <div className="flex items-center gap-2 mt-1">
-                            {entry.description.includes("À Vista") ? (
-                              <>
-                                <DollarSign className="h-3 w-3 text-green-400" />
-                                <span className="text-green-400 text-xs font-medium">À Vista</span>
-                              </>
-                            ) : entry.description.includes("A Prazo") ? (
-                              <>
-                                <Calendar className="h-3 w-3 text-orange-400" />
-                                <span className="text-orange-400 text-xs font-medium">A Prazo</span>
-                              </>
-                            ) : null}
-                          </div>
-                        )
                       )}
                     </div>
                   ))
