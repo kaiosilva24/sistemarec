@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,6 +16,8 @@ import {
   TrendingUp,
   AlertCircle,
   CheckCircle,
+  Building2,
+  FileText,
 } from "lucide-react";
 import { dataManager } from "../../utils/dataManager";
 
@@ -68,6 +69,10 @@ const SettingsDashboard = ({
     stock: 'idle',
   });
 
+  // Estados para valor empresarial
+  const [empresarialValue, setEmpresarialValue] = useState<number>(0);
+  const [isGeneratingBalance, setIsGeneratingBalance] = useState(false);
+
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
       style: "currency",
@@ -95,7 +100,7 @@ const SettingsDashboard = ({
       // Carregar configurações de lucro empresarial
       const tireProfitValue = await dataManager.loadAverageTireProfit();
       const resaleProfitValue = await dataManager.loadAverageResaleProfit();
-      
+
       setEmpresarialProfitConfig(prev => ({
         ...prev,
         tireProfitPercentage: tireProfitValue,
@@ -109,10 +114,19 @@ const SettingsDashboard = ({
         averageTireCost: averageTireCost,
       }));
 
+      // Carregar configurações de estoque (ainda não implementado o carregamento individual)
+      // await dataManager.loadStockSettings();
+
+      // Carregar valor empresarial
+      const empresarialResult = await dataManager.loadSystemSetting("empresarial_value", "0");
+      setEmpresarialValue(Number(empresarialResult) || 0);
+
+
       console.log('✅ [SettingsDashboard] Configurações carregadas:', {
         tireProfitValue,
         resaleProfitValue,
-        averageTireCost
+        averageTireCost,
+        empresarialValue: Number(empresarialResult) || 0
       });
 
     } catch (error) {
@@ -133,7 +147,7 @@ const SettingsDashboard = ({
     try {
       // Salvar lucro médio por pneu
       await dataManager.saveAverageTireProfit(empresarialProfitConfig.tireProfitPercentage);
-      
+
       // Salvar lucro médio de produtos de revenda
       await dataManager.saveAverageResaleProfit(empresarialProfitConfig.resaleProfitPercentage);
 
@@ -171,7 +185,7 @@ const SettingsDashboard = ({
       window.dispatchEvent(resaleProfitEvent);
 
       console.log('✅ [SettingsDashboard] Configurações de lucro empresarial salvas com sucesso');
-      
+
       // Reset status após 3 segundos
       setTimeout(() => {
         setSaveStatus(prev => ({ ...prev, empresarialProfit: 'idle' }));
@@ -180,7 +194,7 @@ const SettingsDashboard = ({
     } catch (error) {
       console.error('❌ [SettingsDashboard] Erro ao salvar configurações de lucro:', error);
       setSaveStatus(prev => ({ ...prev, empresarialProfit: 'error' }));
-      
+
       // Reset status após 5 segundos
       setTimeout(() => {
         setSaveStatus(prev => ({ ...prev, empresarialProfit: 'idle' }));
@@ -210,7 +224,7 @@ const SettingsDashboard = ({
       setSaveStatus(prev => ({ ...prev, cost: 'success' }));
 
       console.log('✅ [SettingsDashboard] Configurações de custo salvas com sucesso');
-      
+
       setTimeout(() => {
         setSaveStatus(prev => ({ ...prev, cost: 'idle' }));
       }, 3000);
@@ -218,7 +232,7 @@ const SettingsDashboard = ({
     } catch (error) {
       console.error('❌ [SettingsDashboard] Erro ao salvar configurações de custo:', error);
       setSaveStatus(prev => ({ ...prev, cost: 'error' }));
-      
+
       setTimeout(() => {
         setSaveStatus(prev => ({ ...prev, cost: 'idle' }));
       }, 5000);
@@ -244,7 +258,7 @@ const SettingsDashboard = ({
       setSaveStatus(prev => ({ ...prev, stock: 'success' }));
 
       console.log('✅ [SettingsDashboard] Configurações de estoque salvas com sucesso');
-      
+
       setTimeout(() => {
         setSaveStatus(prev => ({ ...prev, stock: 'idle' }));
       }, 3000);
@@ -252,7 +266,7 @@ const SettingsDashboard = ({
     } catch (error) {
       console.error('❌ [SettingsDashboard] Erro ao salvar configurações de estoque:', error);
       setSaveStatus(prev => ({ ...prev, stock: 'error' }));
-      
+
       setTimeout(() => {
         setSaveStatus(prev => ({ ...prev, stock: 'idle' }));
       }, 5000);
@@ -288,6 +302,125 @@ const SettingsDashboard = ({
     }
   };
 
+  // Função para salvar todas as configurações, incluindo o valor empresarial
+  const saveSettings = async () => {
+    try {
+      setSaveStatus(prev => ({ ...prev, empresarialProfit: 'saving', cost: 'saving', stock: 'saving' }));
+
+      // Salvar todas as configurações
+      const results = await Promise.all([
+        dataManager.saveAverageTireCost(costConfig.averageTireCost),
+        dataManager.saveAverageTireProfit(empresarialProfitConfig.tireProfitPercentage),
+        dataManager.saveAverageResaleProfit(empresarialProfitConfig.resaleProfitPercentage),
+        dataManager.saveSystemSetting("production_cost_multiplier", empresarialProfitConfig.productionCostMultiplier.toString()),
+        dataManager.saveSystemSetting("marketing_cost_percentage", empresarialProfitConfig.marketingCostPercentage.toString()),
+        dataManager.saveSystemSetting("operational_cost_percentage", empresarialProfitConfig.operationalCostPercentage.toString()),
+        dataManager.saveSystemSetting("labor_cost_per_hour", costConfig.laborCostPerHour.toString()),
+        dataManager.saveSystemSetting("electricity_cost_per_kwh", costConfig.electricityCostPerKwh.toString()),
+        dataManager.saveSystemSetting("maintenance_cost_percentage", costConfig.maintenanceCostPercentage.toString()),
+        dataManager.saveSystemSetting("min_stock_level", stockConfig.minStockLevel.toString()),
+        dataManager.saveSystemSetting("max_stock_level", stockConfig.maxStockLevel.toString()),
+        dataManager.saveSystemSetting("reorder_point", stockConfig.reorderPoint.toString()),
+        dataManager.saveSystemSetting("safety_stock", stockConfig.safetyStock.toString()),
+        dataManager.saveSystemSetting("empresarial_value", empresarialValue.toString()),
+      ]);
+
+      const allSuccess = results.every(result => result === true);
+
+      if (allSuccess) {
+        setLastUpdated(new Date().toLocaleString("pt-BR"));
+        setSaveStatus({
+          empresarialProfit: 'success',
+          cost: 'success',
+          stock: 'success',
+        });
+        console.log("✅ [SettingsDashboard] Todas as configurações salvas com sucesso");
+        setTimeout(() => {
+          setSaveStatus({
+            empresarialProfit: 'idle',
+            cost: 'idle',
+            stock: 'idle',
+          });
+        }, 3000);
+      } else {
+        console.error("❌ [SettingsDashboard] Algumas configurações falharam ao salvar");
+        setSaveStatus({
+          empresarialProfit: 'error',
+          cost: 'error',
+          stock: 'error',
+        });
+        setTimeout(() => {
+          setSaveStatus({
+            empresarialProfit: 'idle',
+            cost: 'idle',
+            stock: 'idle',
+          });
+        }, 5000);
+      }
+    } catch (error) {
+      console.error("❌ [SettingsDashboard] Erro ao salvar configurações:", error);
+      setSaveStatus({
+        empresarialProfit: 'error',
+        cost: 'error',
+        stock: 'error',
+      });
+      setTimeout(() => {
+        setSaveStatus({
+          empresarialProfit: 'idle',
+          cost: 'idle',
+          stock: 'idle',
+        });
+      }, 5000);
+    }
+  };
+
+  // Função para gerar registro de balanço empresarial
+  const generateEmpresarialBalance = async () => {
+    try {
+      setIsGeneratingBalance(true);
+
+      console.log("💼 [SettingsDashboard] Gerando registro de balanço empresarial...");
+
+      // Calcular o balanço atual baseado no valor empresarial
+      const balanceEntry = {
+        type: "entrada" as const,
+        category: "balanco_empresarial" as const,
+        reference_name: "Registro de Balanço Empresarial",
+        amount: empresarialValue,
+        description: `Registro automático de balanço empresarial. Valor base: R$ ${empresarialValue.toFixed(2)}`,
+        transaction_date: new Date().toISOString(),
+      };
+
+      // Salvar entrada no cash flow
+      const result = await dataManager.saveCashFlowEntry(balanceEntry);
+
+      if (result) {
+        console.log("✅ [SettingsDashboard] Balanço empresarial registrado com sucesso:", result);
+
+        // Atualizar o timestamp de última atualização
+        setLastUpdated(new Date().toLocaleString("pt-BR"));
+
+        // Disparar evento personalizado para notificar outras partes do sistema
+        const event = new CustomEvent('empresarialBalanceGenerated', {
+          detail: {
+            entry: result,
+            empresarialValue: empresarialValue,
+            timestamp: Date.now()
+          }
+        });
+        window.dispatchEvent(event);
+      } else {
+        console.error("❌ [SettingsDashboard] Falha ao registrar balanço empresarial");
+      }
+
+    } catch (error) {
+      console.error("❌ [SettingsDashboard] Erro ao gerar balanço empresarial:", error);
+    } finally {
+      setIsGeneratingBalance(false);
+    }
+  };
+
+
   return (
     <div className="w-full space-y-6 max-w-7xl mx-auto px-4">
       <div className="mb-6">
@@ -302,11 +435,11 @@ const SettingsDashboard = ({
         </p>
       </div>
 
-      <Tabs defaultValue="empresarial-profit" className="space-y-6">
+      <Tabs defaultValue="financial" className="space-y-6">
         <TabsList className="grid w-full grid-cols-3 bg-factory-800/50">
-          <TabsTrigger value="empresarial-profit" className="data-[state=active]:bg-neon-purple/20">
-            <TrendingUp className="h-4 w-4 mr-2" />
-            Lucro Empresarial
+          <TabsTrigger value="financial" className="data-[state=active]:bg-neon-purple/20">
+            <DollarSign className="h-4 w-4 mr-2" />
+            Financeiro
           </TabsTrigger>
           <TabsTrigger value="cost" className="data-[state=active]:bg-neon-blue/20">
             <Calculator className="h-4 w-4 mr-2" />
@@ -318,150 +451,185 @@ const SettingsDashboard = ({
           </TabsTrigger>
         </TabsList>
 
-        {/* Tab de Lucro Empresarial */}
-        <TabsContent value="empresarial-profit">
-          <Card className="bg-factory-800/50 border-tire-600/30">
-            <CardHeader>
-              <CardTitle className="text-tire-200 flex items-center">
-                <TrendingUp className="h-5 w-5 mr-2 text-neon-purple" />
-                Configuração de Lucro Empresarial
-                <SaveStatus status={saveStatus.empresarialProfit} />
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Lucro por Pneu */}
-                <div className="space-y-2">
-                  <Label className="text-tire-300">Lucro Médio por Pneu</Label>
-                  <div className="flex items-center space-x-2">
+        {/* Tab Financeiro (Lucro e Valor Empresarial) */}
+        <TabsContent value="financial" className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {/* Custo Médio por Pneu */}
+            <Card className="bg-factory-700/50 border-factory-600">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-factory-100">
+                  Custo Médio por Pneu
+                </CardTitle>
+                <DollarSign className="h-4 w-4 text-red-400" />
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="tire-cost" className="text-factory-200">
+                      Valor (R$)
+                    </Label>
                     <Input
+                      id="tire-cost"
+                      type="number"
+                      step="0.01"
+                      value={costConfig.averageTireCost}
+                      onChange={(e) =>
+                        setCostConfig(prev => ({ ...prev, averageTireCost: Number(e.target.value) || 0 }))
+                      }
+                      className="bg-factory-800 border-factory-600 text-factory-100"
+                      disabled={isLoading}
+                    />
+                  </div>
+                  <div className="text-2xl font-bold text-factory-100">
+                    {formatCurrency(costConfig.averageTireCost)}
+                  </div>
+                  <Badge variant="outline" className="text-xs">
+                    Base de cálculo de custos
+                  </Badge>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Lucro Médio por Pneu */}
+            <Card className="bg-factory-700/50 border-factory-600">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-factory-100">
+                  Lucro Médio por Pneu
+                </CardTitle>
+                <TrendingUp className="h-4 w-4 text-green-400" />
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="tire-profit" className="text-factory-200">
+                      Valor (%)
+                    </Label>
+                    <Input
+                      id="tire-profit"
                       type="number"
                       step="0.01"
                       value={empresarialProfitConfig.tireProfitPercentage}
                       onChange={(e) =>
-                        setEmpresarialProfitConfig(prev => ({
-                          ...prev,
-                          tireProfitPercentage: parseFloat(e.target.value) || 0
-                        }))
+                        setEmpresarialProfitConfig(prev => ({ ...prev, tireProfitPercentage: Number(e.target.value) || 0 }))
                       }
-                      className="bg-factory-700/50 border-tire-600/30 text-white"
+                      className="bg-factory-800 border-factory-600 text-factory-100"
+                      disabled={isLoading}
                     />
-                    <span className="text-tire-300 text-sm">R$</span>
                   </div>
-                  <p className="text-tire-400 text-xs">
-                    Valor: {formatCurrency(empresarialProfitConfig.tireProfitPercentage)}
-                  </p>
+                  <div className="text-2xl font-bold text-green-400">
+                    {formatPercentage(empresarialProfitConfig.tireProfitPercentage)}
+                  </div>
+                  <Badge variant="outline" className="text-xs">
+                    Margem de lucro
+                  </Badge>
                 </div>
+              </CardContent>
+            </Card>
 
-                {/* Lucro de Produtos de Revenda */}
-                <div className="space-y-2">
-                  <Label className="text-tire-300">Lucro Médio Produtos de Revenda</Label>
-                  <div className="flex items-center space-x-2">
+            {/* Lucro Médio Produtos Revenda */}
+            <Card className="bg-factory-700/50 border-factory-600">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-factory-100">
+                  Lucro Médio Revenda
+                </CardTitle>
+                <Package className="h-4 w-4 text-blue-400" />
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="resale-profit" className="text-factory-200">
+                      Valor (%)
+                    </Label>
                     <Input
+                      id="resale-profit"
                       type="number"
                       step="0.01"
                       value={empresarialProfitConfig.resaleProfitPercentage}
                       onChange={(e) =>
-                        setEmpresarialProfitConfig(prev => ({
-                          ...prev,
-                          resaleProfitPercentage: parseFloat(e.target.value) || 0
-                        }))
+                        setEmpresarialProfitConfig(prev => ({ ...prev, resaleProfitPercentage: Number(e.target.value) || 0 }))
                       }
-                      className="bg-factory-700/50 border-tire-600/30 text-white"
+                      className="bg-factory-800 border-factory-600 text-factory-100"
+                      disabled={isLoading}
                     />
-                    <span className="text-tire-300 text-sm">R$</span>
                   </div>
-                  <p className="text-tire-400 text-xs">
-                    Valor: {formatCurrency(empresarialProfitConfig.resaleProfitPercentage)}
-                  </p>
-                </div>
-
-                {/* Multiplicador de Custo de Produção */}
-                <div className="space-y-2">
-                  <Label className="text-tire-300">Multiplicador de Custo de Produção</Label>
-                  <div className="flex items-center space-x-2">
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={empresarialProfitConfig.productionCostMultiplier}
-                      onChange={(e) =>
-                        setEmpresarialProfitConfig(prev => ({
-                          ...prev,
-                          productionCostMultiplier: parseFloat(e.target.value) || 1
-                        }))
-                      }
-                      className="bg-factory-700/50 border-tire-600/30 text-white"
-                    />
-                    <span className="text-tire-300 text-sm">×</span>
+                  <div className="text-2xl font-bold text-blue-400">
+                    {formatPercentage(empresarialProfitConfig.resaleProfitPercentage)}
                   </div>
-                  <p className="text-tire-400 text-xs">
-                    Fator: {empresarialProfitConfig.productionCostMultiplier.toFixed(2)}×
-                  </p>
+                  <Badge variant="outline" className="text-xs">
+                    Produtos de revenda
+                  </Badge>
                 </div>
+              </CardContent>
+            </Card>
+          </div>
 
-                {/* Custo de Marketing */}
-                <div className="space-y-2">
-                  <Label className="text-tire-300">Custo de Marketing</Label>
-                  <div className="flex items-center space-x-2">
-                    <Input
-                      type="number"
-                      step="0.1"
-                      value={empresarialProfitConfig.marketingCostPercentage}
-                      onChange={(e) =>
-                        setEmpresarialProfitConfig(prev => ({
-                          ...prev,
-                          marketingCostPercentage: parseFloat(e.target.value) || 0
-                        }))
-                      }
-                      className="bg-factory-700/50 border-tire-600/30 text-white"
-                    />
-                    <span className="text-tire-300 text-sm">%</span>
+          {/* Card de Valor Empresarial - Destacado */}
+          <div className="mt-8">
+            <Card className="bg-gradient-to-br from-blue-900/50 to-purple-900/50 border-blue-500/50 shadow-xl">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+                <CardTitle className="text-lg font-bold text-blue-100 flex items-center gap-2">
+                  <Building2 className="h-6 w-6 text-blue-400" />
+                  Valor Empresarial
+                </CardTitle>
+                <Badge variant="outline" className="text-blue-200 border-blue-400">
+                  Base para Lucro Empresarial
+                </Badge>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor="empresarial-value" className="text-blue-200 font-medium">
+                        Valor Base (R$)
+                      </Label>
+                      <Input
+                        id="empresarial-value"
+                        type="number"
+                        step="0.01"
+                        value={empresarialValue}
+                        onChange={(e) => setEmpresarialValue(Number(e.target.value))}
+                        className="bg-blue-900/30 border-blue-600 text-blue-100 text-lg font-semibold"
+                        disabled={isLoading}
+                        placeholder="Digite o valor empresarial"
+                      />
+                    </div>
+                    <div className="text-3xl font-bold text-blue-300">
+                      {formatCurrency(empresarialValue)}
+                    </div>
+                    <p className="text-sm text-blue-200/80">
+                      Este valor será usado como base para calcular o lucro empresarial.
+                      Valores positivos ou negativos são aceitos.
+                    </p>
                   </div>
-                  <p className="text-tire-400 text-xs">
-                    Percentual: {formatPercentage(empresarialProfitConfig.marketingCostPercentage)}
-                  </p>
-                </div>
 
-                {/* Custo Operacional */}
-                <div className="space-y-2">
-                  <Label className="text-tire-300">Custo Operacional</Label>
-                  <div className="flex items-center space-x-2">
-                    <Input
-                      type="number"
-                      step="0.1"
-                      value={empresarialProfitConfig.operationalCostPercentage}
-                      onChange={(e) =>
-                        setEmpresarialProfitConfig(prev => ({
-                          ...prev,
-                          operationalCostPercentage: parseFloat(e.target.value) || 0
-                        }))
-                      }
-                      className="bg-factory-700/50 border-tire-600/30 text-white"
-                    />
-                    <span className="text-tire-300 text-sm">%</span>
+                  <div className="flex flex-col justify-center space-y-4">
+                    <Button
+                      onClick={generateEmpresarialBalance}
+                      disabled={isGeneratingBalance || empresarialValue === 0}
+                      className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-all duration-200 flex items-center gap-2"
+                      size="lg"
+                    >
+                      {isGeneratingBalance ? (
+                        <>
+                          <RefreshCw className="h-5 w-5 animate-spin" />
+                          Gerando Registro...
+                        </>
+                      ) : (
+                        <>
+                          <FileText className="h-5 w-5" />
+                          Gerar Registro de Balanço
+                        </>
+                      )}
+                    </Button>
+                    <p className="text-xs text-blue-200/70 text-center">
+                      Clique para registrar o balanço empresarial atual
+                      e definir a base para o cálculo de lucros futuros.
+                    </p>
                   </div>
-                  <p className="text-tire-400 text-xs">
-                    Percentual: {formatPercentage(empresarialProfitConfig.operationalCostPercentage)}
-                  </p>
                 </div>
-              </div>
-
-              <div className="flex justify-end pt-4">
-                <Button
-                  onClick={saveEmpresarialProfitConfig}
-                  disabled={loadingStates.empresarialProfit || saveStatus.empresarialProfit === 'saving'}
-                  className="bg-neon-purple hover:bg-neon-purple/80"
-                >
-                  {saveStatus.empresarialProfit === 'saving' ? (
-                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <Save className="h-4 w-4 mr-2" />
-                  )}
-                  Salvar Configurações de Lucro
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
         {/* Tab de Custos */}
@@ -476,28 +644,7 @@ const SettingsDashboard = ({
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Custo Médio por Pneu */}
-                <div className="space-y-2">
-                  <Label className="text-tire-300">Custo Médio por Pneu</Label>
-                  <div className="flex items-center space-x-2">
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={costConfig.averageTireCost}
-                      onChange={(e) =>
-                        setCostConfig(prev => ({
-                          ...prev,
-                          averageTireCost: parseFloat(e.target.value) || 0
-                        }))
-                      }
-                      className="bg-factory-700/50 border-tire-600/30 text-white"
-                    />
-                    <span className="text-tire-300 text-sm">R$</span>
-                  </div>
-                  <p className="text-tire-400 text-xs">
-                    Valor: {formatCurrency(costConfig.averageTireCost)}
-                  </p>
-                </div>
+                {/* Custo Médio por Pneu já está no tab 'financial' */}
 
                 {/* Custo de Mão de Obra */}
                 <div className="space-y-2">
@@ -508,10 +655,7 @@ const SettingsDashboard = ({
                       step="0.01"
                       value={costConfig.laborCostPerHour}
                       onChange={(e) =>
-                        setCostConfig(prev => ({
-                          ...prev,
-                          laborCostPerHour: parseFloat(e.target.value) || 0
-                        }))
+                        setCostConfig(prev => ({ ...prev, laborCostPerHour: parseFloat(e.target.value) || 0 }))
                       }
                       className="bg-factory-700/50 border-tire-600/30 text-white"
                     />
@@ -531,10 +675,7 @@ const SettingsDashboard = ({
                       step="0.001"
                       value={costConfig.electricityCostPerKwh}
                       onChange={(e) =>
-                        setCostConfig(prev => ({
-                          ...prev,
-                          electricityCostPerKwh: parseFloat(e.target.value) || 0
-                        }))
+                        setCostConfig(prev => ({ ...prev, electricityCostPerKwh: parseFloat(e.target.value) || 0 }))
                       }
                       className="bg-factory-700/50 border-tire-600/30 text-white"
                     />
@@ -554,10 +695,7 @@ const SettingsDashboard = ({
                       step="0.1"
                       value={costConfig.maintenanceCostPercentage}
                       onChange={(e) =>
-                        setCostConfig(prev => ({
-                          ...prev,
-                          maintenanceCostPercentage: parseFloat(e.target.value) || 0
-                        }))
+                        setCostConfig(prev => ({ ...prev, maintenanceCostPercentage: parseFloat(e.target.value) || 0 }))
                       }
                       className="bg-factory-700/50 border-tire-600/30 text-white"
                     />
@@ -607,10 +745,7 @@ const SettingsDashboard = ({
                       type="number"
                       value={stockConfig.minStockLevel}
                       onChange={(e) =>
-                        setStockConfig(prev => ({
-                          ...prev,
-                          minStockLevel: parseInt(e.target.value) || 0
-                        }))
+                        setStockConfig(prev => ({ ...prev, minStockLevel: parseInt(e.target.value) || 0 }))
                       }
                       className="bg-factory-700/50 border-tire-600/30 text-white"
                     />
@@ -629,10 +764,7 @@ const SettingsDashboard = ({
                       type="number"
                       value={stockConfig.maxStockLevel}
                       onChange={(e) =>
-                        setStockConfig(prev => ({
-                          ...prev,
-                          maxStockLevel: parseInt(e.target.value) || 0
-                        }))
+                        setStockConfig(prev => ({ ...prev, maxStockLevel: parseInt(e.target.value) || 0 }))
                       }
                       className="bg-factory-700/50 border-tire-600/30 text-white"
                     />
@@ -651,10 +783,7 @@ const SettingsDashboard = ({
                       type="number"
                       value={stockConfig.reorderPoint}
                       onChange={(e) =>
-                        setStockConfig(prev => ({
-                          ...prev,
-                          reorderPoint: parseInt(e.target.value) || 0
-                        }))
+                        setStockConfig(prev => ({ ...prev, reorderPoint: parseInt(e.target.value) || 0 }))
                       }
                       className="bg-factory-700/50 border-tire-600/30 text-white"
                     />
@@ -673,10 +802,7 @@ const SettingsDashboard = ({
                       type="number"
                       value={stockConfig.safetyStock}
                       onChange={(e) =>
-                        setStockConfig(prev => ({
-                          ...prev,
-                          safetyStock: parseInt(e.target.value) || 0
-                        }))
+                        setStockConfig(prev => ({ ...prev, safetyStock: parseInt(e.target.value) || 0 }))
                       }
                       className="bg-factory-700/50 border-tire-600/30 text-white"
                     />
@@ -725,7 +851,16 @@ const SettingsDashboard = ({
               <RefreshCw className="h-4 w-4 mr-2" />
               Recarregar Configurações
             </Button>
-            
+
+            <Button
+              onClick={saveSettings}
+              disabled={isLoading || saveStatus.empresarialProfit === 'saving' || saveStatus.cost === 'saving' || saveStatus.stock === 'saving'}
+              className="bg-neon-purple hover:bg-neon-purple/80 text-white"
+            >
+              <Save className="h-4 w-4 mr-2" />
+              Salvar Todas as Configurações
+            </Button>
+
             <Button
               onClick={onRefresh}
               variant="outline"
