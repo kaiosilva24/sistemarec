@@ -223,6 +223,10 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
   const [cashBalanceState, setCashBalanceState] = useState<number | null>(null);
   const [isLoadingCashBalance, setIsLoadingCashBalance] = useState(true);
 
+  // Estado para valor empresarial - soma de todos os saldos em tempo real
+  const [empresarialValue, setEmpresarialValue] = useState<number | null>(null);
+  const [isLoadingEmpresarialValue, setIsLoadingEmpresarialValue] = useState(true);
+
   // Estado para quantidade unitária de matéria-prima - sincronização em tempo real
   const [rawMaterialUnitaryQuantity, setRawMaterialUnitaryQuantity] = useState(0);
   const [isLoadingRawMaterialUnitaryQuantity, setIsLoadingRawMaterialUnitaryQuantity] = useState(true);
@@ -1958,6 +1962,44 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
     return () => clearTimeout(timeoutId);
   }, [stockItems, stockItemsLoading]);
 
+  // Effect para calcular valor empresarial em tempo real
+  useEffect(() => {
+    const calculateEmpresarialValue = () => {
+      // Só calcular se todos os valores estão carregados
+      if (
+        cashBalanceState !== null &&
+        rawMaterialStockBalance !== null &&
+        finalProductStockBalance !== null &&
+        resaleProductStockBalance !== null
+      ) {
+        const totalValue = 
+          cashBalanceState +
+          rawMaterialStockBalance +
+          finalProductStockBalance +
+          resaleProductStockBalance;
+
+        console.log('💼 [Dashboard] Calculando Valor Empresarial:');
+        console.log(`  - Saldo Caixa: R$ ${cashBalanceState.toFixed(2)}`);
+        console.log(`  - Saldo Matéria-Prima: R$ ${rawMaterialStockBalance.toFixed(2)}`);
+        console.log(`  - Saldo Produtos Finais: R$ ${finalProductStockBalance.toFixed(2)}`);
+        console.log(`  - Saldo Produtos Revenda: R$ ${resaleProductStockBalance.toFixed(2)}`);
+        console.log(`  - VALOR EMPRESARIAL TOTAL: R$ ${totalValue.toFixed(2)}`);
+
+        setEmpresarialValue(totalValue);
+        setIsLoadingEmpresarialValue(false);
+      } else {
+        console.log('⏳ [Dashboard] Aguardando todos os valores para calcular Valor Empresarial...');
+        console.log(`  - Saldo Caixa: ${cashBalanceState !== null ? 'OK' : 'LOADING'}`);
+        console.log(`  - Saldo Matéria-Prima: ${rawMaterialStockBalance !== null ? 'OK' : 'LOADING'}`);
+        console.log(`  - Saldo Produtos Finais: ${finalProductStockBalance !== null ? 'OK' : 'LOADING'}`);
+        console.log(`  - Saldo Produtos Revenda: ${resaleProductStockBalance !== null ? 'OK' : 'LOADING'}`);
+      }
+    };
+
+    // Calcular sempre que qualquer valor mudar
+    calculateEmpresarialValue();
+  }, [cashBalanceState, rawMaterialStockBalance, finalProductStockBalance, resaleProductStockBalance]);
+
   // Listeners para eventos de checkpoint - restauração de dados
   useEffect(() => {
     const handleResaleProductStockRestore = (event: CustomEvent) => {
@@ -2114,6 +2156,34 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                       <span className="animate-pulse">Carregando...</span>
                     ) : (
                       formatCurrency(cashBalanceState)
+                    )}
+                  </p>
+
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Card Valor Empresarial - Maior */}
+          <Card className="bg-factory-900/30 border-tire-600/30 hover:shadow-lg transition-all duration-200">
+            <CardContent className="p-6">
+              <div className="flex items-center gap-4">
+                <div className={`p-3 rounded-full ${
+                  empresarialValue && empresarialValue > 0 ? 'bg-neon-purple/20' : 'bg-gray-500/20'
+                }`}>
+                  <TrendingUp className={`h-6 w-6 ${
+                    empresarialValue && empresarialValue > 0 ? 'text-neon-purple' : 'text-gray-400'
+                  }`} />
+                </div>
+                <div>
+                  <p className="text-tire-300 text-sm font-medium">Valor Empresarial</p>
+                  <p className={`text-2xl font-bold ${
+                    empresarialValue && empresarialValue > 0 ? 'text-neon-purple' : 'text-tire-200'
+                  }`}>
+                    {isLoadingEmpresarialValue || empresarialValue === null ? (
+                      <span className="animate-pulse">Carregando...</span>
+                    ) : (
+                      formatCurrency(empresarialValue)
                     )}
                   </p>
 
