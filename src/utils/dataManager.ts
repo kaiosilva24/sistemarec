@@ -2555,6 +2555,204 @@ export class DataManager {
     }
   }
 
+  /**
+   * Calcula o saldo de caixa baseado nas entradas do fluxo de caixa
+   */
+  async calculateCashBalance(): Promise<number> {
+    try {
+      console.log('💰 [DataManager] Calculando saldo de caixa...');
+
+      const cashFlowEntries = await this.loadCashFlowEntries();
+
+      let totalIncome = 0;
+      let totalExpense = 0;
+
+      cashFlowEntries.forEach(entry => {
+        if (entry.type === 'income') {
+          totalIncome += entry.amount;
+        } else if (entry.type === 'expense') {
+          totalExpense += entry.amount;
+        }
+      });
+
+      const balance = totalIncome - totalExpense;
+
+      console.log(`💰 [DataManager] Saldo de caixa calculado:`, {
+        totalIncome: `R$ ${totalIncome.toFixed(2)}`,
+        totalExpense: `R$ ${totalExpense.toFixed(2)}`,
+        balance: `R$ ${balance.toFixed(2)}`,
+        entriesCount: cashFlowEntries.length
+      });
+
+      return balance;
+    } catch (error) {
+      console.error('❌ [DataManager] Erro ao calcular saldo de caixa:', error);
+      return 0;
+    }
+  }
+
+  /**
+   * Salva o saldo de caixa calculado no Supabase
+   */
+  async saveCashBalance(balance: number): Promise<boolean> {
+    try {
+      console.log(`💾 [DataManager] Salvando saldo de caixa: R$ ${balance.toFixed(2)}`);
+
+      const success = await this.saveSystemSetting('cash_balance', balance.toString());
+
+      if (success) {
+        console.log(`✅ [DataManager] Saldo de caixa salvo com sucesso: R$ ${balance.toFixed(2)}`);
+
+        // Salvar também no localStorage para fallback
+        localStorage.setItem('dashboard_cashBalance', JSON.stringify({
+          value: balance,
+          timestamp: Date.now(),
+          source: 'DataManager-saveCashBalance'
+        }));
+      }
+
+      return success;
+    } catch (error) {
+      console.error('❌ [DataManager] Erro ao salvar saldo de caixa:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Carrega o saldo de caixa do Supabase com fallback para cálculo automático
+   */
+  async loadCashBalance(): Promise<number> {
+    try {
+      console.log('🔍 [DataManager] Carregando saldo de caixa do Supabase...');
+
+      const balanceStr = await this.loadSystemSetting('cash_balance');
+
+      if (balanceStr) {
+        const balance = Number(balanceStr) || 0;
+        console.log(`✅ [DataManager] Saldo de caixa carregado do Supabase: R$ ${balance.toFixed(2)}`);
+        return balance;
+      }
+
+      // Fallback: calcular automaticamente
+      console.log('⚠️ [DataManager] Saldo não encontrado no Supabase, calculando automaticamente...');
+      const calculatedBalance = await this.calculateCashBalance();
+
+      // Salvar o valor calculado para próximas consultas
+      await this.saveCashBalance(calculatedBalance);
+
+      return calculatedBalance;
+    } catch (error) {
+      console.error('❌ [DataManager] Erro ao carregar saldo de caixa:', error);
+
+      // Fallback final: tentar calcular
+      try {
+        return await this.calculateCashBalance();
+      } catch (calcError) {
+        console.error('❌ [DataManager] Erro ao calcular saldo de caixa como fallback:', calcError);
+        return 0;
+      }
+    }
+  }
+
+  /**
+   * Configura subscription em tempo real para mudanças no saldo de caixa
+   */
+  subscribeToCashBalanceChanges(callback: (newBalance: number) => void): () => void {
+    console.log('🔔 [DataManager] Iniciando subscription para mudanças no saldo de caixa...');
+
+    // Subscription para mudanças na tabela cash_flow_entries
+    const subscription = supabase
+      .channel('cash_flow_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'cash_flow_entries'
+        },
+        async (payload) => {
+          console.log('📡 [DataManager] Mudança detectada no fluxo de caixa:', payload);
+
+          // Recalcular saldo automaticamente
+          const newBalance = await this.calculateCashBalance();
+          await this.saveCashBalance(newBalance);
+
+          callback(newBalance);
+        }
+      )
+      .subscribe();
+
+    console.log('✅ [DataManager] Subscription ativa para mudanças no fluxo de caixa');
+
+    // Retornar função de cleanup
+    return () => {
+      console.log('🔌 [DataManager] Cancelando subscription do saldo de caixa');
+      supabase.removeChannel(subscription);
+    };
+  }
+
+  // ===== SYSTEM SETTINGS METHODS =====
+
+  /**
+   * Salva uma configuração do sistema na tabela system_settings
+   */
+  async saveSystemSetting(key: string, value: string): Promise<boolean> {
+    try {
+      console.log(`💾 [DataManager] Salvando configuração do sistema: ${key} = ${value}`);
+
+      const { error } = await supabase
+        .from('system_settings')
+        .upsert({
+          key: key,
+          value: value,
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'key'
+        });
+
+      if (error) {
+        console.error(`❌ [DataManager] Erro ao salvar configuração ${key}:`, error);
+        return false;
+      }
+
+      console.log(`✅ [DataManager] Configuração ${key} salva com sucesso`);
+      return true;
+    } catch (error) {
+      console.error(`❌ [DataManager] Erro ao salvar configuração ${key}:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Carrega uma configuração do sistema da tabela system_settings
+   */
+  async loadSystemSetting(key: string): Promise<string | null> {
+    try {
+      console.log(`🔍 [DataManager] Carregando configuração do sistema: ${key}`);
+
+      const { data, error } = await supabase
+        .from('system_settings')
+        .select('value')
+        .eq('key', key)
+        .single();
+
+      if (error) {
+        if (error.code === 'PGRST116') { // Not found
+          console.log(`⚠️ [DataManager] Configuração ${key} não encontrada`);
+          return null;
+        }
+        console.error(`❌ [DataManager] Erro ao carregar configuração ${key}:`, error);
+        return null;
+      }
+
+      console.log(`✅ [DataManager] Configuração ${key} carregada: ${data.value}`);
+      return data.value;
+    } catch (error) {
+      console.error(`❌ [DataManager] Erro ao carregar configuração ${key}:`, error);
+      return null;
+    }
+  }
+
   // ===== PRODUCT UNIT COST METHODS =====
 
   /**
@@ -2620,15 +2818,19 @@ export class DataManager {
         try {
           const analysis = JSON.parse(localData);
           if (analysis.costPerTire && analysis.costPerTire > 0) {
-            console.log(`✅ [DataManager] Custo unitário para ${productName} carregado do localStorage: R$ ${analysis.costPerTire.toFixed(2)}`);
+            console.log(`📦 [DataManager] Custo unitário para ${productName} carregado do localStorage: R$ ${analysis.costPerTire.toFixed(2)}`);
+
+            // Sincronizar com Supabase para próximas consultas
+            await this.saveProductUnitCost(productName, analysis.costPerTire);
+
             return analysis.costPerTire;
           }
-        } catch (error) {
-          console.warn(`⚠️ [DataManager] Erro ao parsear localStorage para ${productName}:`, error);
+        } catch (e) {
+          console.warn(`⚠️ [DataManager] Erro ao parsear dados do localStorage para ${productName}`);
         }
       }
 
-      console.log(`⚠️ [DataManager] Custo unitário não encontrado para ${productName}`);
+      console.log(`⚠️ [DataManager] Custo unitário para ${productName} não encontrado`);
       return null;
     } catch (error) {
       console.error(`❌ [DataManager] Erro ao carregar custo unitário para ${productName}:`, error);
@@ -2719,113 +2921,14 @@ export class DataManager {
   /**
    * Salva a quantidade total de produtos finais apenas no Supabase (sem localStorage)
    */
-  async saveFinalProductStockBalance(balance: number): Promise<boolean> {
+  async saveFinalProductTotalQuantity(quantity: number): Promise<boolean> {
     try {
-      console.log(`💾 [DataManager] Salvando saldo de produtos finais: R$ ${balance.toFixed(2)}`);
-
-      // Salvar no Supabase usando upsert
-      const { error } = await supabase
-        .from('system_settings')
-        .upsert({
-          key: 'final_product_stock_balance',
-          value: balance.toString(),
-          updated_at: new Date().toISOString()
-        }, {
-          onConflict: 'key'
-        });
-
-      if (error) {
-        console.error('❌ [DataManager] Erro ao salvar saldo de produtos finais no Supabase:', error);
-        return false;
-      }
-
-      console.log(`✅ [DataManager] Saldo de produtos finais salvo com sucesso: R$ ${balance.toFixed(2)}`);
-      return true;
-    } catch (error) {
-      console.error('❌ [DataManager] Erro ao salvar saldo de produtos finais:', error);
-      return false;
-    }
-  }
-
-  /**
-   * Carrega o saldo de produtos finais apenas do Supabase (sem localStorage)
-   */
-  async loadFinalProductStockBalance(): Promise<number> {
-    try {
-      console.log('🔍 [DataManager] Carregando saldo de produtos finais do Supabase...');
-
-      const { data, error } = await supabase
-        .from('system_settings')
-        .select('value')
-        .eq('key', 'final_product_stock_balance')
-        .single();
-
-      if (error) {
-        console.warn('⚠️ [DataManager] Erro ao carregar do Supabase:', error.message);
-        return 0; // Valor padrão
-      }
-
-      const balance = Number(data.value) || 0;
-      console.log(`✅ [DataManager] Saldo de produtos finais carregado do Supabase: R$ ${balance.toFixed(2)}`);
-
-      return balance;
-    } catch (error) {
-      console.error('❌ [DataManager] Erro ao carregar saldo de produtos finais:', error);
-      return 0; // Valor padrão em caso de erro
-    }
-  }
-
-  /**
-   * Configura subscription em tempo real para mudanças no saldo de produtos finais
-   */
-  subscribeToFinalProductStockChanges(callback: (newBalance: number) => void): () => void {
-    console.log('🔔 [DataManager] Iniciando subscription para mudanças no saldo de produtos finais...');
-
-    const subscription = supabase
-      .channel('final_product_stock_changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'system_settings',
-          filter: 'key=eq.final_product_stock_balance'
-        },
-        (payload) => {
-          console.log('📡 [DataManager] Mudança detectada no saldo de produtos finais:', payload);
-
-          if (payload.new && payload.new.value) {
-            const newBalance = Number(payload.new.value) || 0;
-
-            if (newBalance >= 0) {
-              console.log(`💰 [DataManager] Novo saldo de produtos finais: R$ ${newBalance.toFixed(2)}`);
-              callback(newBalance);
-            }
-          }
-        }
-      )
-      .subscribe();
-
-    console.log('✅ [DataManager] Subscription ativa para mudanças no saldo de produtos finais');
-
-    // Retornar função de cleanup
-    return () => {
-      console.log('🔌 [DataManager] Cancelando subscription do saldo de produtos finais');
-      supabase.removeChannel(subscription);
-    };
-  }
-
-  /**
-   * Salva a quantidade total de produtos revenda no Supabase
-   */
-  async saveResaleProductTotalQuantity(quantity: number): Promise<boolean> {
-    try {
-      console.log(`💾 [DataManager] Salvando quantidade total de produtos revenda: ${quantity}`);
+      console.log(`📦 [DataManager] Salvando quantidade total de produtos finais: ${quantity}`);
 
       const { error } = await supabase
         .from('system_settings')
         .upsert({
-          key: 'resale_product_total_quantity',
+          key: 'final_product_total_quantity',
           value: quantity.toString(),
           updated_at: new Date().toISOString()
         }, {
@@ -2833,68 +2936,68 @@ export class DataManager {
         });
 
       if (error) {
-        console.error('❌ [DataManager] Erro ao salvar quantidade total de produtos revenda no Supabase:', error);
+        console.error('❌ [DataManager] Erro ao salvar quantidade total de produtos finais no Supabase:', error);
         return false;
       }
 
-      console.log(`✅ [DataManager] Quantidade total de produtos revenda salva com sucesso: ${quantity}`);
+      console.log(`✅ [DataManager] Quantidade total de produtos finais salva com sucesso: ${quantity}`);
       return true;
     } catch (error) {
-      console.error('❌ [DataManager] Erro ao salvar quantidade total de produtos revenda:', error);
+      console.error('❌ [DataManager] Erro ao salvar quantidade total de produtos finais:', error);
       return false;
     }
   }
 
   /**
-   * Carrega a quantidade total de produtos revenda do Supabase
+   * Carrega a quantidade total de produtos finais apenas do Supabase (sem localStorage)
    */
-  async loadResaleProductTotalQuantity(): Promise<number> {
+  async loadFinalProductTotalQuantity(): Promise<number> {
     try {
-      console.log('🔍 [DataManager] Carregando quantidade total de produtos revenda do Supabase...');
+      console.log('🔍 [DataManager] Carregando quantidade total de produtos finais do Supabase...');
 
       const { data, error } = await supabase
         .from('system_settings')
         .select('value')
-        .eq('key', 'resale_product_total_quantity')
+        .eq('key', 'final_product_total_quantity')
         .single();
 
       if (error) {
-        console.warn('⚠️ [DataManager] Erro ao carregar quantidade total de produtos revenda do Supabase:', error.message);
+        console.warn('⚠️ [DataManager] Erro ao carregar quantidade total de produtos finais do Supabase:', error.message);
         return 0; // Valor padrão
       }
 
       const quantity = Number(data.value) || 0;
-      console.log(`✅ [DataManager] Quantidade total de produtos revenda carregada do Supabase: ${quantity}`);
+      console.log(`✅ [DataManager] Quantidade total de produtos finais carregada do Supabase: ${quantity}`);
 
       return quantity;
     } catch (error) {
-      console.error('❌ [DataManager] Erro ao carregar quantidade total de produtos revenda:', error);
+      console.error('❌ [DataManager] Erro ao carregar quantidade total de produtos finais:', error);
       return 0; // Valor padrão em caso de erro
     }
   }
 
   /**
-   * Configura subscription em tempo real para mudanças na quantidade total de produtos revenda
+   * Configura subscription em tempo real para mudanças na quantidade total de produtos finais
    */
-  subscribeToResaleProductTotalQuantityChanges(callback: (newQuantity: number) => void): () => void {
-    console.log('🔔 [DataManager] Iniciando subscription para mudanças na quantidade total de produtos revenda...');
+  subscribeToFinalProductTotalQuantityChanges(callback: (newQuantity: number) => void): () => void {
+    console.log('🔔 [DataManager] Iniciando subscription para mudanças na quantidade total de produtos finais...');
 
     const subscription = supabase
-      .channel('resale_product_total_quantity_changes')
+      .channel('final_product_quantity_changes')
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
           table: 'system_settings',
-          filter: 'key=eq.resale_product_total_quantity'
+          filter: 'key=eq.final_product_total_quantity'
         },
         (payload) => {
-          console.log('📡 [DataManager] Mudança detectada na quantidade total de produtos revenda:', payload);
+          console.log('🔄 [DataManager] Mudança detectada na quantidade total de produtos finais:', payload);
 
           if (payload.new && typeof payload.new === 'object' && 'value' in payload.new) {
             const newQuantity = Number(payload.new.value) || 0;
-            console.log(`📦 [DataManager] Nova quantidade total de produtos revenda: ${newQuantity}`);
+            console.log(`📦 [DataManager] Nova quantidade total de produtos finais recebida: ${newQuantity}`);
 
             callback(newQuantity);
           }
@@ -2902,11 +3005,11 @@ export class DataManager {
       )
       .subscribe();
 
-    console.log('✅ [DataManager] Subscription ativa para mudanças na quantidade total de produtos revenda');
+    console.log('✅ [DataManager] Subscription ativa para mudanças na quantidade total de produtos finais');
 
     // Retornar função de cleanup
     return () => {
-      console.log('🔌 [DataManager] Cancelando subscription da quantidade total de produtos revenda');
+      console.log('🔌 [DataManager] Cancelando subscription da quantidade total de produtos finais');
       supabase.removeChannel(subscription);
     };
   }
