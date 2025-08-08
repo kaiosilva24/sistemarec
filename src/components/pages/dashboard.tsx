@@ -2240,8 +2240,8 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                   </p>
                   
                 </div>
-                <div className="p-2 rounded-full bg-orange-500/20">
-                  <Package className="h-5 w-5 text-orange-400" />
+                <div className="p-2 rounded-full bg-neon-cyan/20">
+                  <Package className="h-5 w-5 text-neon-cyan" />
                 </div>
               </div>
             </CardContent>
@@ -2262,8 +2262,8 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                   </p>
                   
                 </div>
-                <div className="p-2 rounded-full bg-orange-500/20">
-                  <Factory className="h-5 w-5 text-orange-400" />
+                <div className="p-2 rounded-full bg-pink-500/20">
+                  <Factory className="h-5 w-5 text-pink-400" />
                 </div>
               </div>
             </CardContent>
@@ -2284,8 +2284,8 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                   </p>
                   
                 </div>
-                <div className="p-2 rounded-full bg-orange-500/20">
-                  <ShoppingBag className="h-5 w-5 text-orange-400" />
+                <div className="p-2 rounded-full bg-red-500/20">
+                  <ShoppingBag className="h-5 w-5 text-red-400" />
                 </div>
               </div>
             </CardContent>
