@@ -78,7 +78,6 @@ const SalesDashboard = ({
   const [salesHistoryDateType, setSalesHistoryDateType] = useState("all");
   const [salesHistoryStartDate, setSalesHistoryStartDate] = useState("");
   const [salesHistoryEndDate, setSalesHistoryEndDate] = useState("");
-  const [salesHistoryPaymentFilter, setSalesHistoryPaymentFilter] = useState("all"); // Added for payment method filter
 
   // Warranty history filter states
   const [warrantyHistorySearch, setWarrantyHistorySearch] = useState("");
@@ -98,7 +97,6 @@ const SalesDashboard = ({
     useState("");
   const [resaleSalesHistoryEndDate, setResaleSalesHistoryEndDate] =
     useState("");
-  const [resaleSalesHistoryPaymentFilter, setResaleSalesHistoryPaymentFilter] = useState("all"); // Added for payment method filter
 
   // POS form states
   const [selectedSalesperson, setSelectedSalesperson] = useState("");
@@ -278,30 +276,7 @@ const SalesDashboard = ({
           break;
       }
 
-      // Payment method filtering
-      let matchesPayment = true;
-      if (salesHistoryPaymentFilter !== "all") {
-        const paymentMethod = extractPaymentMethodFromSale(entry.description || "");
-        const normalizedPayment = (() => {
-          switch (paymentMethod) {
-            case "Dinheiro": return "cash";
-            case "Cartão": return "card";
-            case "PIX": return "pix";
-            case "À Prazo": return "installment";
-            case "À Vista":
-            default: return "cash_default";
-          }
-        })();
-
-        if (salesHistoryPaymentFilter === "cash_default") {
-          // Para "À Vista", incluir tanto "À Vista" quanto vendas antigas sem forma de pagamento especificada
-          matchesPayment = paymentMethod === "À Vista" || (!entry.description || !entry.description.includes("Pagamento:"));
-        } else {
-          matchesPayment = normalizedPayment === salesHistoryPaymentFilter;
-        }
-      }
-
-      return matchesSearch && matchesDate && matchesPayment;
+      return matchesSearch && matchesDate;
     })
     .sort(
       (a, b) =>
@@ -385,30 +360,7 @@ const SalesDashboard = ({
           break;
       }
 
-      // Payment method filtering
-      let matchesPayment = true;
-      if (resaleSalesHistoryPaymentFilter !== "all") {
-        const paymentMethod = extractPaymentMethodFromSale(entry.description || "");
-        const normalizedPayment = (() => {
-          switch (paymentMethod) {
-            case "Dinheiro": return "cash";
-            case "Cartão": return "card";
-            case "PIX": return "pix";
-            case "À Prazo": return "installment";
-            case "À Vista":
-            default: return "cash_default";
-          }
-        })();
-
-        if (resaleSalesHistoryPaymentFilter === "cash_default") {
-          // Para "À Vista", incluir tanto "À Vista" quanto vendas antigas sem forma de pagamento especificada
-          matchesPayment = paymentMethod === "À Vista" || (!entry.description || !entry.description.includes("Pagamento:"));
-        } else {
-          matchesPayment = normalizedPayment === resaleSalesHistoryPaymentFilter;
-        }
-      }
-
-      return matchesSearch && matchesDate && matchesPayment;
+      return matchesSearch && matchesDate;
     })
     .sort(
       (a, b) =>
@@ -1253,7 +1205,6 @@ const SalesDashboard = ({
     setSalesHistoryDateType("all");
     setSalesHistoryStartDate("");
     setSalesHistoryEndDate("");
-    setSalesHistoryPaymentFilter("all"); // Clear payment filter
   };
 
   // Clear resale filters
@@ -1263,7 +1214,6 @@ const SalesDashboard = ({
     setResaleSalesHistoryDateType("all");
     setResaleSalesHistoryStartDate("");
     setResaleSalesHistoryEndDate("");
-    setResaleSalesHistoryPaymentFilter("all"); // Clear payment filter
   };
 
   // Clear warranty filters
@@ -1281,8 +1231,7 @@ const SalesDashboard = ({
     salesHistoryDateType !== "all" ||
     salesHistoryDateFilter ||
     salesHistoryStartDate ||
-    salesHistoryEndDate ||
-    salesHistoryPaymentFilter !== "all"; // Include payment filter
+    salesHistoryEndDate;
 
   // Check if any resale filter is active
   const hasActiveResaleFilters =
@@ -1290,8 +1239,7 @@ const SalesDashboard = ({
     resaleSalesHistoryDateType !== "all" ||
     resaleSalesHistoryDateFilter ||
     resaleSalesHistoryStartDate ||
-    resaleSalesHistoryEndDate ||
-    resaleSalesHistoryPaymentFilter !== "all"; // Include payment filter
+    resaleSalesHistoryEndDate;
 
   // Check if any warranty filter is active
   const hasActiveWarrantyFilters =
@@ -2600,52 +2548,7 @@ const SalesDashboard = ({
                     </Label>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-                    {/* Filtro de Forma de Pagamento */}
-                    <div className="space-y-2">
-                      <Label className="text-tire-300 text-sm">Forma de Pagamento:</Label>
-                      <Select
-                        value={salesHistoryPaymentFilter}
-                        onValueChange={setSalesHistoryPaymentFilter}
-                      >
-                        <SelectTrigger className="bg-factory-700/50 border-tire-600/30 text-white">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="bg-factory-800 border-tire-600/30">
-                          <SelectItem
-                            value="all"
-                            className="text-white hover:bg-tire-700/50"
-                          >
-                            Todas as formas
-                          </SelectItem>
-                          <SelectItem
-                            value="cash_default"
-                            className="text-white hover:bg-tire-700/50"
-                          >
-                            💰 À Vista/Dinheiro
-                          </SelectItem>
-                          <SelectItem
-                            value="card"
-                            className="text-white hover:bg-tire-700/50"
-                          >
-                            💳 Cartão
-                          </SelectItem>
-                          <SelectItem
-                            value="pix"
-                            className="text-white hover:bg-tire-700/50"
-                          >
-                            📱 PIX
-                          </SelectItem>
-                          <SelectItem
-                            value="installment"
-                            className="text-white hover:bg-tire-700/50"
-                          >
-                            📅 À Prazo
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                     {/* Tipo de Filtro */}
                     <div className="space-y-2">
                       <Label className="text-tire-300 text-sm">Período:</Label>
@@ -2781,21 +2684,6 @@ const SalesDashboard = ({
                         <div className="flex items-center gap-1 px-2 py-1 bg-neon-blue/20 rounded text-neon-blue text-xs">
                           <Search className="h-3 w-3" />
                           Busca: "{salesHistorySearch}"
-                        </div>
-                      )}
-                      {salesHistoryPaymentFilter !== "all" && (
-                        <div className="flex items-center gap-1 px-2 py-1 bg-neon-blue/20 rounded text-neon-blue text-xs">
-                          <DollarSign className="h-3 w-3" />
-                          Pagamento:{" "}
-                          {(() => {
-                            switch (salesHistoryPaymentFilter) {
-                              case "cash_default": return "À Vista/Dinheiro";
-                              case "card": return "Cartão";
-                              case "pix": return "PIX";
-                              case "installment": return "À Prazo";
-                              default: return "Desconhecido";
-                            }
-                          })()}
                         </div>
                       )}
                       {salesHistoryDateType !== "all" && (
@@ -2949,8 +2837,8 @@ const SalesDashboard = ({
                   <div className="text-center py-8">
                     <History className="h-12 w-12 text-tire-500 mx-auto mb-3" />
                     <p className="text-tire-400">
-                      {salesHistorySearch || salesHistoryDateFilter || salesHistoryPaymentFilter !== "all"
-                        ? "Nenhuma venda encontrada com os filtros aplicados."
+                      {salesHistorySearch || salesHistoryDateFilter
+                        ? "Nenhuma venda encontrada"
                         : "Nenhuma venda registrada"}
                     </p>
                   </div>
@@ -3116,52 +3004,7 @@ const SalesDashboard = ({
                     </Label>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-                    {/* Filtro de Forma de Pagamento */}
-                    <div className="space-y-2">
-                      <Label className="text-tire-300 text-sm">Forma de Pagamento:</Label>
-                      <Select
-                        value={resaleSalesHistoryPaymentFilter}
-                        onValueChange={setResaleSalesHistoryPaymentFilter}
-                      >
-                        <SelectTrigger className="bg-factory-700/50 border-tire-600/30 text-white">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="bg-factory-800 border-tire-600/30">
-                          <SelectItem
-                            value="all"
-                            className="text-white hover:bg-tire-700/50"
-                          >
-                            Todas as formas
-                          </SelectItem>
-                          <SelectItem
-                            value="cash_default"
-                            className="text-white hover:bg-tire-700/50"
-                          >
-                            💰 À Vista/Dinheiro
-                          </SelectItem>
-                          <SelectItem
-                            value="card"
-                            className="text-white hover:bg-tire-700/50"
-                          >
-                            💳 Cartão
-                          </SelectItem>
-                          <SelectItem
-                            value="pix"
-                            className="text-white hover:bg-tire-700/50"
-                          >
-                            📱 PIX
-                          </SelectItem>
-                          <SelectItem
-                            value="installment"
-                            className="text-white hover:bg-tire-700/50"
-                          >
-                            📅 À Prazo
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                     {/* Tipo de Filtro */}
                     <div className="space-y-2">
                       <Label className="text-tire-300 text-sm">Período:</Label>
@@ -3298,21 +3141,6 @@ const SalesDashboard = ({
                         <div className="flex items-center gap-1 px-2 py-1 bg-neon-cyan/20 rounded text-neon-cyan text-xs">
                           <Search className="h-3 w-3" />
                           Busca: "{resaleSalesHistorySearch}"
-                        </div>
-                      )}
-                      {resaleSalesHistoryPaymentFilter !== "all" && (
-                        <div className="flex items-center gap-1 px-2 py-1 bg-neon-cyan/20 rounded text-neon-cyan text-xs">
-                          <DollarSign className="h-3 w-3" />
-                          Pagamento:{" "}
-                          {(() => {
-                            switch (resaleSalesHistoryPaymentFilter) {
-                              case "cash_default": return "À Vista/Dinheiro";
-                              case "card": return "Cartão";
-                              case "pix": return "PIX";
-                              case "installment": return "À Prazo";
-                              default: return "Desconhecido";
-                            }
-                          })()}
                         </div>
                       )}
                       {resaleSalesHistoryDateType !== "all" && (
@@ -3468,8 +3296,8 @@ const SalesDashboard = ({
                   <div className="text-center py-8">
                     <History className="h-12 w-12 text-tire-500 mx-auto mb-3" />
                     <p className="text-tire-400">
-                      {resaleSalesHistorySearch || resaleSalesHistoryDateFilter || resaleSalesHistoryPaymentFilter !== "all"
-                        ? "Nenhuma venda encontrada com os filtros aplicados."
+                      {resaleSalesHistorySearch || resaleSalesHistoryDateFilter
+                        ? "Nenhuma venda encontrada"
                         : "Nenhuma venda registrada"}
                     </p>
                   </div>
@@ -3803,7 +3631,7 @@ const SalesDashboard = ({
                     <AlertTriangle className="h-12 w-12 text-tire-500 mx-auto mb-3" />
                     <p className="text-tire-400">
                       {warrantyHistorySearch || warrantyHistoryDateFilter
-                        ? "Nenhuma garantia encontrada com os filtros aplicados."
+                        ? "Nenhuma garantia encontrada"
                         : "Nenhuma garantia registrada"}
                     </p>
                   </div>
@@ -3916,7 +3744,7 @@ const SalesDashboard = ({
               </div>
               {filteredWarrantyEntries.length > 0 && (
                 <div className="mt-4 p-4 bg-factory-800/50 rounded-lg border border-tire-600/30">
-                  <div className="grid grid-cols-1 md:grid-cols-5 lg:grid-cols-7 gap-4">
+                  <div className="grid grid-cols-2 md:grid-cols-5 lg:grid-cols-7 gap-4">
                     <div className="text-center">
                       <p className="text-tire-300 text-sm mb-1">
                         Total de Garantias
@@ -4104,7 +3932,7 @@ const SalesDashboard = ({
                     <Package className="h-12 w-12 text-tire-500 mx-auto mb-3" />
                     <p className="text-tire-400">
                       {productsSearch
-                        ? "Nenhum produto encontrado com os filtros aplicados."
+                        ? "Nenhum produto encontrado"
                         : "Nenhum produto disponível no estoque"}
                     </p>
                   </div>
