@@ -1682,6 +1682,147 @@ export const useResaleProducts = () => {
 };
 
 // Hook for managing accounts receivable
+export const useWarrantyEntries = () => {
+  const [warrantyEntries, setWarrantyEntries] = useState<WarrantyEntry[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    const loadWarrantyEntries = async () => {
+      setIsLoading(true);
+      try {
+        const data = await dataManager.loadWarrantyEntries();
+        setWarrantyEntries(data);
+        console.log(
+          `✅ [useWarrantyEntries] Entradas de garantia carregadas: ${data.length} entradas.`,
+        );
+      } catch (error) {
+        console.error(
+          "❌ [useWarrantyEntries] Erro ao carregar entradas de garantia:",
+          error,
+        );
+        setWarrantyEntries([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadWarrantyEntries();
+  }, []);
+
+  const addWarrantyEntry = async (
+    entryData: Omit<WarrantyEntry, "id" | "created_at">,
+  ) => {
+    console.log("📝 [useWarrantyEntries] Adicionando nova entrada:", entryData);
+    setIsSaving(true);
+    try {
+      const newEntry = await dataManager.saveWarrantyEntry(entryData);
+      if (newEntry) {
+        setWarrantyEntries((prev) => [...prev, newEntry]);
+        console.log(
+          "✅ [useWarrantyEntries] Entrada adicionada com sucesso:",
+          newEntry,
+        );
+      } else {
+        console.error(
+          "❌ [useWarrantyEntries] Falha ao adicionar entrada - retorno nulo.",
+        );
+      }
+      return newEntry;
+    } catch (error) {
+      console.error("❌ [useWarrantyEntries] Erro ao adicionar entrada:", error);
+      throw error;
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const updateWarrantyEntry = async (
+    id: string,
+    updates: Partial<WarrantyEntry>,
+  ) => {
+    console.log(`🔄 [useWarrantyEntries] Atualizando entrada ${id}:`, updates);
+    setIsSaving(true);
+    try {
+      const updatedEntry = await dataManager.updateWarrantyEntry(id, updates);
+      if (updatedEntry) {
+        setWarrantyEntries((prev) =>
+          prev.map((entry) => (entry.id === id ? updatedEntry : entry)),
+        );
+        console.log(
+          "✅ [useWarrantyEntries] Entrada atualizada com sucesso:",
+          updatedEntry,
+        );
+      } else {
+        console.error(
+          `❌ [useWarrantyEntries] Falha ao atualizar entrada ${id} - retorno nulo.`,
+        );
+      }
+      return updatedEntry;
+    } catch (error) {
+      console.error(
+        `❌ [useWarrantyEntries] Erro ao atualizar entrada ${id}:`,
+        error,
+      );
+      throw error;
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const deleteWarrantyEntry = async (id: string) => {
+    console.log(`🗑️ [useWarrantyEntries] Deletando entrada ${id}`);
+    setIsSaving(true);
+    try {
+      const success = await dataManager.deleteWarrantyEntry(id);
+      if (success) {
+        setWarrantyEntries((prev) => prev.filter((entry) => entry.id !== id));
+        console.log(
+          `✅ [useWarrantyEntries] Entrada ${id} deletada com sucesso.`,
+        );
+      } else {
+        console.error(`❌ [useWarrantyEntries] Falha ao deletar entrada ${id}.`);
+      }
+      return success;
+    } catch (error) {
+      console.error(
+        `❌ [useWarrantyEntries] Erro ao deletar entrada ${id}:`,
+        error,
+      );
+      throw error;
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const refreshWarrantyEntries = async () => {
+    console.log(
+      "🔄 [useWarrantyEntries] REFRESH MANUAL - Atualizando entradas de garantia...",
+    );
+    setIsLoading(true);
+    try {
+      const data = await dataManager.loadWarrantyEntries();
+      console.log("✅ [useWarrantyEntries] REFRESH MANUAL concluído:", {
+        total: data.length,
+      });
+      setWarrantyEntries(data);
+    } catch (error) {
+      console.error("❌ [useWarrantyEntries] Erro no refresh manual:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return {
+    warrantyEntries,
+    isLoading,
+    isSaving,
+    addWarrantyEntry,
+    updateWarrantyEntry,
+    deleteWarrantyEntry,
+    refreshWarrantyEntries,
+  };
+};
+
 export const useAccountsReceivable = () => {
   const [accountsReceivableEntries, setAccountsReceivableEntries] = useState<AccountsReceivableEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
