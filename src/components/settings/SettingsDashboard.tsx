@@ -125,14 +125,43 @@ const SettingsDashboard = ({
 
     const initializeBusinessValueSync = async () => {
       try {
+        // Carregar valor inicial do Supabase
+        const initialValue = await dataManager.loadBusinessValue();
+        console.log(`🔍 [SettingsDashboard] Valor empresarial inicial carregado: R$ ${initialValue.toFixed(2)}`);
+
+        setBusinessValue(initialValue);
+        setIsLoadingBusinessValue(false);
+
         // Configurar subscription em tempo real
         unsubscribe = dataManager.subscribeToBusinessValueChanges((newValue) => {
           setBusinessValue(newValue);
           console.log('🔄 [SettingsDashboard] Valor empresarial atualizado em tempo real:', newValue);
         });
 
+        // Listener para evento customizado do dashboard principal
+        const handleBusinessValueUpdate = (event: CustomEvent) => {
+          const { value, timestamp, source, breakdown } = event.detail;
+          console.log(`🔄 [SettingsDashboard] Evento businessValueUpdated recebido:`, {
+            value: `R$ ${value.toFixed(2)}`,
+            timestamp: new Date(timestamp).toLocaleTimeString('pt-BR'),
+            source: source || 'unknown',
+            breakdown
+          });
+          setBusinessValue(value);
+          setIsLoadingBusinessValue(false);
+        };
+
+        // Adicionar listener para o evento customizado
+        window.addEventListener('businessValueUpdated', handleBusinessValueUpdate as EventListener);
+
+        // Cleanup dos listeners
+        return () => {
+          window.removeEventListener('businessValueUpdated', handleBusinessValueUpdate as EventListener);
+        };
+
       } catch (error) {
         console.error('❌ [SettingsDashboard] Erro ao configurar sincronização do valor empresarial:', error);
+        setIsLoadingBusinessValue(false);
       }
     };
 
