@@ -23,7 +23,7 @@ import SettingsDashboard from "../settings/SettingsDashboard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   RefreshCw,
   BarChart3,
@@ -493,7 +493,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
   const [isCreatingCheckpoint, setIsCreatingCheckpoint] = useState(false);
   const [checkpointStatus, setCheckpointStatus] = useState<string | null>(null);
 
-  // Função de debounce para evitar múltiplas atualizações
+  // Função de debounce para evitar oscilações
   const updateResaleProfitWithDebounce = (newProfit: number, source: string) => {
     const now = Date.now();
     const timeSinceLastUpdate = now - lastUpdateTimestamp;
@@ -797,8 +797,8 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
           // Forçar recálculo adicional para garantir
           setTimeout(() => {
             console.log('🔄 [Dashboard] Segundo recálculo forçado via cashFlowEntryAdded');
-            const forceResaleRecalcEvent2 = new CustomEvent('forceResaleProfitRecalc');
-            window.dispatchEvent(forceResaleRecalcEvent2);
+            const forceResaleRecalcEvent = new CustomEvent('forceResaleProfitRecalc');
+            window.dispatchEvent(forceResaleRecalcEvent);
           }, 500);
         };
 
@@ -835,8 +835,8 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
               // Forçar recálculo adicional para garantir
               setTimeout(() => {
                 console.log('🔄 [Dashboard] Segundo recálculo forçado para garantir sincronização');
-                const forceResaleRecalcEvent2 = new CustomEvent('forceResaleProfitRecalc');
-                window.dispatchEvent(forceResaleRecalcEvent2);
+                const forceResaleRecalcEvent = new CustomEvent('forceResaleProfitRecalc');
+                window.dispatchEvent(forceResaleRecalcEvent);
               }, 1000);
             }
           )
@@ -1017,7 +1017,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
           console.log(`  - Cálculo local: R$ ${simpleCalculation.toFixed(2)}`);
           console.log(`  - Estado sincronizado: R$ ${finalProductStockBalance.toFixed(2)}`);
           console.log(`  - Diferença: R$ ${Math.abs(finalProductStockBalance - simpleCalculation).toFixed(2)}`);
-          console.log(`  - ProductsStock fará o cálculo correto automaticamente`);
+          console.log(`  - FinalProductsStock fará o cálculo correto automaticamente`);
         }
       }, 300);
 
@@ -1883,7 +1883,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
           setResaleProductTotalQuantity(totalResaleProductQuantity);
           setIsLoadingResaleProductTotalQuantity(false);
         } else {
-          console.log(`✅ [Dashboard] Quantidade total de revenda já atualizada: ${totalResaleProductTotalQuantity}`);
+          console.log(`✅ [Dashboard] Quantidade total de revenda já atualizada: ${totalResaleProductQuantity}`);
         }
 
       }, 300); // Aguardar 300ms para garantir que os dados foram processados
@@ -2014,60 +2014,83 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
 
   // Effect para calcular valor empresarial em tempo real
   useEffect(() => {
-    if (
-      cashBalanceState !== null &&
-      finalProductStockBalance !== null &&
-      rawMaterialStockBalance !== null &&
-      resaleProductStockBalance !== null
-    ) {
-      const timeoutId = setTimeout(async () => {
-        console.log('💰 [Dashboard] Calculando valor empresarial total...');
-        console.log(`  - Saldo de Caixa: R$ ${(cashBalanceState || 0).toFixed(2)}`);
-        console.log(`  - Saldo Produtos Finais: R$ ${(finalProductStockBalance || 0).toFixed(2)}`);
-        console.log(`  - Saldo Matéria-Prima: R$ ${(rawMaterialStockBalance || 0).toFixed(2)}`);
-        console.log(`  - Saldo Produtos Revenda: R$ ${(resaleProductStockBalance || 0).toFixed(2)}`);
+    const calculateEmpresarialValue = () => {
+      // Aguardar que todos os valores estejam carregados
+      if (
+        cashBalanceState === null ||
+        rawMaterialStockBalance === null ||
+        finalProductStockBalance === null ||
+        resaleProductStockBalance === null
+      ) {
+        console.log('⏳ [Dashboard] Aguardando carregamento de todos os saldos para calcular valor empresarial');
+        return;
+      }
 
-        const totalValue = 
-          (cashBalanceState || 0) + 
-          (finalProductStockBalance || 0) + 
-          (rawMaterialStockBalance || 0) + 
-          (resaleProductStockBalance || 0);
+      const totalValue = 
+        cashBalanceState + 
+        rawMaterialStockBalance + 
+        finalProductStockBalance + 
+        resaleProductStockBalance;
 
-        console.log(`💰 [Dashboard] Valor empresarial total calculado: R$ ${totalValue.toFixed(2)}`);
+      console.log('🏢 [Dashboard] Calculando valor empresarial COM PRODUTOS DE REVENDA:', {
+        cashBalance: `R$ ${cashBalanceState.toFixed(2)}`,
+        rawMaterialBalance: `R$ ${rawMaterialStockBalance.toFixed(2)}`,
+        finalProductBalance: `R$ ${finalProductStockBalance.toFixed(2)}`,
+        resaleProductBalance: `R$ ${resaleProductStockBalance.toFixed(2)}`,
+        totalValue: `R$ ${totalValue.toFixed(2)}`,
+        includesResaleProducts: true
+      });
 
-        // Salvar no Supabase sempre para manter sincronização
-        dataManager.saveBusinessValue(totalValue).then((success) => {
+      // Só atualizar se houve mudança significativa
+      if (empresarialValue === null || Math.abs(empresarialValue - totalValue) > 0.01) {
+        setEmpresarialValue(totalValue);
+        setIsLoadingEmpresarialValue(false);
+
+        // Salvar no Supabase com componentes detalhados
+        dataManager.saveSystemSetting('empresarial_value', totalValue).then(success => {
           if (success) {
-            console.log(`✅ [Dashboard] Valor empresarial salvo no Supabase: R$ ${totalValue.toFixed(2)}`);
+            console.log(`✅ [Dashboard] Valor empresarial COMPLETO salvo no Supabase: R$ ${totalValue.toFixed(2)}`);
+            console.log('📊 [Dashboard] Componentes do valor empresarial:', {
+              'Saldo de Caixa': `R$ ${cashBalanceState.toFixed(2)}`,
+              'Matéria-Prima': `R$ ${rawMaterialStockBalance.toFixed(2)}`,
+              'Produtos Finais': `R$ ${finalProductStockBalance.toFixed(2)}`,
+              'Produtos Revenda': `R$ ${resaleProductStockBalance.toFixed(2)}`,
+              'TOTAL': `R$ ${totalValue.toFixed(2)}`
+            });
 
-            // Disparar evento de atualização
-            const updateEvent = new CustomEvent('businessValueUpdated', {
+            // Disparar evento DETALHADO para sincronizar com configurações
+            const updateEvent = new CustomEvent('empresarialValueUpdated', {
               detail: {
                 value: totalValue,
                 timestamp: Date.now(),
                 source: 'Dashboard-EmpresarialValueCalculation',
-                breakdown: {
-                  cashBalance: cashBalanceState || 0,
-                  finalProductStock: finalProductStockBalance || 0,
-                  rawMaterialStock: rawMaterialStockBalance || 0,
-                  resaleProductStock: resaleProductStockBalance || 0
-                }
+                includesResaleProducts: true,
+                components: {
+                  cashBalance: cashBalanceState,
+                  rawMaterialBalance: rawMaterialStockBalance,
+                  finalProductBalance: finalProductStockBalance,
+                  resaleProductBalance: resaleProductStockBalance
+                },
+                calculation: `${cashBalanceState.toFixed(2)} + ${rawMaterialStockBalance.toFixed(2)} + ${finalProductStockBalance.toFixed(2)} + ${resaleProductStockBalance.toFixed(2)} = ${totalValue.toFixed(2)}`
               }
             });
             window.dispatchEvent(updateEvent);
+            console.log('📡 [Dashboard] Evento empresarialValueUpdated DETALHADO disparado com produtos de revenda');
           }
         });
+      }
+    };
 
-        // Atualizar estado local
-        setEmpresarialValue(totalValue);
-        setIsLoadingEmpresarialValue(false);
-      }, 100); // Reduzir delay para sincronização mais rápida
+    // Executar cálculo sempre que algum saldo mudar
+    calculateEmpresarialValue();
 
-      return () => {
-        clearTimeout(timeoutId);
-      };
-    }
-  }, [cashBalanceState, finalProductStockBalance, rawMaterialStockBalance, resaleProductStockBalance]);
+  }, [
+    cashBalanceState, 
+    rawMaterialStockBalance, 
+    finalProductStockBalance,
+    resaleProductStockBalance,
+    empresarialValue
+  ]);
 
   // Listeners para eventos de checkpoint - restauração de dados
   useEffect(() => {
@@ -2195,6 +2218,66 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       setIsCreatingCheckpoint(false);
     }
   };
+
+  // Effect para sincronização automática do valor empresarial
+  useEffect(() => {
+    const syncBusinessValue = async () => {
+      try {
+        setIsLoadingEmpresarialValue(true);
+
+        // Calcular valor empresarial baseado nos dados atuais
+        const valorEmpresarial = cashBalanceState + finalProductStockBalance + rawMaterialStockBalance + resaleProductStockBalance;
+
+        console.log(`💼 [Dashboard] Calculando Valor Empresarial TOTAL:`);
+        console.log(`  - Saldo Caixa: R$ ${cashBalanceState.toFixed(2)}`);
+        console.log(`  - Produtos Finais: R$ ${finalProductStockBalance.toFixed(2)}`);
+        console.log(`  - Matéria Prima: R$ ${rawMaterialStockBalance.toFixed(2)}`);
+        console.log(`  - Produtos Revenda: R$ ${resaleProductStockBalance.toFixed(2)}`);
+        console.log(`  = TOTAL: R$ ${valorEmpresarial.toFixed(2)}`);
+
+        // Salvar valor sincronizado no Supabase
+        await dataManager.saveBusinessValue(valorEmpresarial);
+
+        setEmpresarialValue(valorEmpresarial);
+
+        // Disparar evento de atualização do valor empresarial
+        const updateEvent = new CustomEvent('businessValueUpdated', {
+          detail: {
+            value: valorEmpresarial,
+            timestamp: Date.now(),
+            source: 'Dashboard-AutoSync',
+            breakdown: {
+              cashBalance: cashBalanceState,
+              finalProducts: finalProductStockBalance,
+              rawMaterials: rawMaterialStockBalance,
+              resaleProducts: resaleProductStockBalance
+            }
+          }
+        });
+        window.dispatchEvent(updateEvent);
+
+        console.log(`✅ [Dashboard] Valor empresarial sincronizado: R$ ${valorEmpresarial.toFixed(2)}`);
+
+      } catch (error) {
+        console.error('❌ [Dashboard] Erro ao sincronizar valor empresarial:', error);
+        // Tentar carregar valor salvo como fallback
+        try {
+          const savedValue = await dataManager.loadBusinessValue();
+          setEmpresarialValue(savedValue);
+        } catch (fallbackError) {
+          console.error('❌ [Dashboard] Erro no fallback também:', fallbackError);
+          setEmpresarialValue(0);
+        }
+      } finally {
+        setIsLoadingEmpresarialValue(false);
+      }
+    };
+
+    // Sincronizar quando qualquer valor componente mudar
+    if (!isLoadingCashBalance && !isLoadingFinalProductStock && !isLoadingRawMaterialStock && !isLoadingResaleProductStock) {
+      syncBusinessValue();
+    }
+  }, [cashBalanceState, finalProductStockBalance, rawMaterialStockBalance, resaleProductStockBalance, isLoadingCashBalance, isLoadingFinalProductStock, isLoadingRawMaterialStock, isLoadingResaleProductStock]);
 
   return (
     <div className="space-y-6">
