@@ -1029,7 +1029,7 @@ const SalesDashboard = ({
               })()} | ID_Produto: ${product.id}`,
               transaction_date: new Date().toISOString().split("T")[0],
             });
-          }</old_str>
+          }
 
           // Update stock - subtract sold quantity (regardless of payment method)
           const newQuantity = product.quantity - parseFloat(quantity);
@@ -1089,7 +1089,7 @@ const SalesDashboard = ({
               })()} | ID_Produto: ${resaleProduct.id}`,
               transaction_date: new Date().toISOString().split("T")[0],
             });
-          }</old_str>
+          }
 
           // Update resale product stock in stock_items table (regardless of payment method)
           const stockItem = stockItems.find(
@@ -1155,37 +1155,19 @@ const SalesDashboard = ({
           }
         })();
 
-        if (isInstallment) {
-          alert(
-            `✅ VENDA À PRAZO REGISTRADA!\n\n` +
-              `Tipo: ${productTypeLabel}\n` +
-              `Cliente: ${customer.name}\n` +
-              `Produto: ${productName}\n` +
-              `Quantidade: ${quantity} ${productUnit}\n` +
-              `Preço Unitário: ${formatCurrency(parseFloat(unitPrice))}\n` +
-              `Valor Total: ${formatCurrency(parseFloat(saleValue))}\n` +
-              `Forma de Pagamento: ${paymentMethodLabel}\n` +
-              `Vendedor: ${salesperson.name}\n\n` +
-              `📦 Estoque atualizado automaticamente\n` +
-              `🔴 IMPORTANTE: Valor NÃO foi lançado no caixa\n` +
-              `📋 Criada CONTA A RECEBER\n` +
-              `💰 Use o botão verde para lançar no caixa quando receber o pagamento!`,
-          );
-        } else {
-          alert(
-            `✅ VENDA REGISTRADA COM SUCESSO!\n\n` +
-              `Tipo: ${productTypeLabel}\n` +
-              `Cliente: ${customer.name}\n` +
-              `Produto: ${productName}\n` +
-              `Quantidade: ${quantity} ${productUnit}\n` +
-              `Preço Unitário: ${formatCurrency(parseFloat(unitPrice))}\n` +
-              `Valor Total: ${formatCurrency(parseFloat(saleValue))}\n` +
-              `Forma de Pagamento: ${paymentMethodLabel}\n` +
-              `Vendedor: ${salesperson.name}\n\n` +
-              `📦 Estoque atualizado automaticamente\n` +
-              `💰 Valor lançado no caixa automaticamente`,
-          );
-        }</old_str>
+        alert(
+          `Venda registrada com sucesso!\n\n` +
+            `Tipo: ${productTypeLabel}\n` +
+            `Cliente: ${customer.name}\n` +
+            `Produto: ${productName}\n` +
+            `Quantidade: ${quantity} ${productUnit}\n` +
+            `Preço Unitário: ${formatCurrency(parseFloat(unitPrice))}\n` +
+            `Valor Total: ${formatCurrency(parseFloat(saleValue))}\n` +
+            `Forma de Pagamento: ${paymentMethodLabel}\n` +
+            `Vendedor: ${salesperson.name}\n\n` +
+            `📦 Estoque atualizado automaticamente\n` +
+            `${isInstallment ? "💰 Venda À PRAZO - Valor NÃO foi lançado no caixa\n🗂️ Criada conta a receber - Confirme o recebimento quando pago" : "💰 Valor lançado no caixa automaticamente"}`,
+        );
       }
     } catch (error) {
       console.error(
@@ -3744,20 +3726,20 @@ const SalesDashboard = ({
                                 {entry.quantity} × {formatCurrency(entry.unit_price)}
                               </div>
                               <div className="mt-1">
-                                <span className="text-xs bg-red-500/20 text-red-400 px-2 py-1 rounded font-bold animate-pulse">
-                                  🔴 AGUARDANDO PAGAMENTO
+                                <span className="text-xs bg-neon-orange/20 text-neon-orange px-2 py-1 rounded">
+                                  PENDENTE
                                 </span>
-                              </div></old_str>
+                              </div>
                             </div>
                             <Button
                               onClick={async () => {
-                                if (confirm(`💰 CONFIRMAR RECEBIMENTO\n\nValor: ${formatCurrency(entry.total_amount)}\nCliente: ${entry.customer_name}\n\nEste valor será lançado IMEDIATAMENTE no caixa.\nConfirma o recebimento?`)) {
+                                if (confirm(`Confirmar recebimento de ${formatCurrency(entry.total_amount)} de ${entry.customer_name}?`)) {
                                   try {
                                     // Add to cash flow
                                     await addCashFlowEntry({
                                       type: "income",
                                       category: "venda",
-                                      reference_name: `💰 Recebimento À Prazo - ${entry.customer_name} - ${entry.product_name}`,
+                                      reference_name: `Recebimento À Prazo - ${entry.customer_name} - ${entry.product_name}`,
                                       amount: entry.total_amount,
                                       description: `TIPO_PRODUTO: ${entry.product_type === "final" ? "final" : "revenda"} | Vendedor: ${entry.salesperson_name} | Produto: ${entry.product_name} | Qtd: ${entry.quantity} | Preço Unit: ${formatCurrency(entry.unit_price)} | Pagamento: À Prazo (RECEBIDO) | Venda Original: ${new Date(entry.sale_date).toLocaleDateString("pt-BR")}`,
                                       transaction_date: new Date().toISOString().split("T")[0],
@@ -3769,18 +3751,18 @@ const SalesDashboard = ({
                                       received_date: new Date().toISOString().split("T")[0],
                                     });
 
-                                    alert(`✅ RECEBIMENTO CONFIRMADO!\n\n💰 Valor: ${formatCurrency(entry.total_amount)}\n👤 Cliente: ${entry.customer_name}\n📅 Data: ${new Date().toLocaleDateString("pt-BR")}\n\n🎉 Valor foi lançado no caixa automaticamente!`);
+                                    alert(`Recebimento confirmado!\n\nValor: ${formatCurrency(entry.total_amount)}\nCliente: ${entry.customer_name}\n\n💰 Valor lançado no caixa automaticamente`);
                                   } catch (error) {
                                     console.error("Erro ao confirmar recebimento:", error);
-                                    alert("❌ Erro ao confirmar recebimento. Tente novamente.");
+                                    alert("Erro ao confirmar recebimento. Tente novamente.");
                                   }
                                 }
                               }}
-                              className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold text-sm px-4 py-2 rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
+                              className="bg-neon-green hover:bg-neon-green/80 text-white"
                             >
                               <CheckCircle className="h-4 w-4 mr-2" />
-                              💰 LANÇAR NO CAIXA
-                            </Button></old_str>
+                              Confirmar Recebimento
+                            </Button>
                             <Button
                               variant="ghost"
                               size="sm"
