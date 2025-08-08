@@ -910,7 +910,15 @@ const SalesDashboard = ({
             category: "venda",
             reference_name: `Venda para ${customer.name} - ${product.item_name}`,
             amount: parseFloat(saleValue),
-            description: `TIPO_PRODUTO: final | Vendedor: ${salesperson.name} | Produto: ${product.item_name} | Qtd: ${quantity} ${product.unit} | Preço Unit: ${formatCurrency(parseFloat(unitPrice))} | ID_Produto: ${product.id}`,
+            description: `TIPO_PRODUTO: final | Vendedor: ${salesperson.name} | Produto: ${product.item_name} | Qtd: ${quantity} ${product.unit} | Preço Unit: ${formatCurrency(parseFloat(unitPrice))} | Pagamento: ${(() => {
+              switch (paymentMethod) {
+                case "cash": return "Dinheiro";
+                case "card": return "Cartão";
+                case "pix": return "PIX";
+                case "installment": return "À Prazo";
+                default: return "À Vista";
+              }
+            })()} | ID_Produto: ${product.id}`,
             transaction_date: new Date().toISOString().split("T")[0],
           });
 
@@ -942,7 +950,15 @@ const SalesDashboard = ({
             category: "venda",
             reference_name: `Venda para ${customer.name} - ${resaleProduct.name}`,
             amount: parseFloat(saleValue),
-            description: `TIPO_PRODUTO: revenda | Vendedor: ${salesperson.name} | Produto: ${resaleProduct.name} | Qtd: ${quantity} ${resaleProduct.unit} | Preço Unit: ${formatCurrency(parseFloat(unitPrice))} | ID_Produto: ${resaleProduct.id}`,
+            description: `TIPO_PRODUTO: revenda | Vendedor: ${salesperson.name} | Produto: ${resaleProduct.name} | Qtd: ${quantity} ${resaleProduct.unit} | Preço Unit: ${formatCurrency(parseFloat(unitPrice))} | Pagamento: ${(() => {
+              switch (paymentMethod) {
+                case "cash": return "Dinheiro";
+                case "card": return "Cartão";
+                case "pix": return "PIX";
+                case "installment": return "À Prazo";
+                default: return "À Vista";
+              }
+            })()} | ID_Produto: ${resaleProduct.id}`,
             transaction_date: new Date().toISOString().split("T")[0],
           });
 
@@ -1040,6 +1056,21 @@ const SalesDashboard = ({
       console.error("Erro ao extrair informações do produto:", error);
     }
     return null;
+  };
+
+  // Extract payment method from sale description
+  const extractPaymentMethodFromSale = (description: string) => {
+    try {
+      const paymentMatch = description.match(/Pagamento: ([^|]+)/);
+      if (paymentMatch) {
+        return paymentMatch[1].trim();
+      }
+      // Se não encontrar forma de pagamento, assume "À Vista" (para vendas antigas)
+      return "À Vista";
+    } catch (error) {
+      console.error("Erro ao extrair forma de pagamento:", error);
+      return "À Vista";
+    }
   };
 
   // Test function to verify onClick works
@@ -2837,6 +2868,11 @@ const SalesDashboard = ({
                                 {formatCurrency(sale.amount)}
                               </span>
                             </div>
+                            <div className="flex items-center gap-1">
+                              <span className="text-xs bg-neon-blue/20 text-neon-blue px-2 py-1 rounded">
+                                💳 {extractPaymentMethodFromSale(sale.description || "")}
+                              </span>
+                            </div>
                           </div>
                         </div>
                         <Button
@@ -3290,6 +3326,11 @@ const SalesDashboard = ({
                               <DollarSign className="h-3 w-3" />
                               <span className="text-neon-cyan font-bold">
                                 {formatCurrency(sale.amount)}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <span className="text-xs bg-neon-cyan/20 text-neon-cyan px-2 py-1 rounded">
+                                💳 {extractPaymentMethodFromSale(sale.description || "")}
                               </span>
                             </div>
                           </div>
