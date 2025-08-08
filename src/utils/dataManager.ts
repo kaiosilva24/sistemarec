@@ -23,11 +23,6 @@ export class DataManager {
   private static instance: DataManager;
   private listeners: Map<string, Set<() => void>> = new Map();
 
-  // Access Supabase client from the imported instance
-  private get supabase() {
-    return supabase;
-  }
-
   static getInstance(): DataManager {
     if (!DataManager.instance) {
       DataManager.instance = new DataManager();
@@ -55,7 +50,7 @@ export class DataManager {
 
       if (id && id.startsWith("temp_")) {
         // Insert new record
-        const { data: insertedData, error } = await this.supabase
+        const { data: insertedData, error } = await supabase
           .from(tableName)
           .insert([dataToSave])
           .select()
@@ -80,7 +75,7 @@ export class DataManager {
         return insertedData;
       } else if (id) {
         // Update existing record
-        const { data: updatedData, error } = await this.supabase
+        const { data: updatedData, error } = await supabase
           .from(tableName)
           .update(dataToSave)
           .eq("id", id)
@@ -116,7 +111,7 @@ export class DataManager {
 
   async loadFromDatabase<T>(tableName: string): Promise<T[]> {
     try {
-      const { data, error } = await this.supabase
+      const { data, error } = await supabase
         .from(tableName)
         .select("*")
         .order("created_at", { ascending: false });
@@ -137,40 +132,16 @@ export class DataManager {
     }
   }
 
-  private async updateInDatabase(tableName: string, id: string, updates: any): Promise<boolean> {
+  async deleteFromDatabase(tableName: string, id: string): Promise<boolean> {
     try {
-      const { error } = await this.supabase
-        .from(tableName)
-        .update(updates)
-        .eq('id', id);
+      const { error } = await supabase.from(tableName).delete().eq("id", id);
 
-      if (error) {
-        console.error(`Erro ao atualizar ${tableName}:`, error);
-        return false;
-      }
+      if (error) throw error;
 
+      console.log(`✅ [DataManager] Registro deletado de ${tableName}:`, id);
       return true;
     } catch (error) {
-      console.error(`Erro ao atualizar ${tableName}:`, error);
-      return false;
-    }
-  }
-
-  private async deleteFromDatabase(tableName: string, id: string): Promise<boolean> {
-    try {
-      const { error } = await this.supabase
-        .from(tableName)
-        .delete()
-        .eq('id', id);
-
-      if (error) {
-        console.error(`Erro ao deletar de ${tableName}:`, error);
-        return false;
-      }
-
-      return true;
-    } catch (error) {
-      console.error(`Erro ao deletar de ${tableName}:`, error);
+      console.error(`❌ [DataManager] Erro ao deletar de ${tableName}:`, error);
       return false;
     }
   }
@@ -183,7 +154,7 @@ export class DataManager {
       );
 
       // First, find the stock item to get details for logging
-      const { data: stockItem, error: findError } = await this.supabase
+      const { data: stockItem, error: findError } = await supabase
         .from("stock_items")
         .select("*")
         .eq("item_id", itemId)
@@ -208,7 +179,7 @@ export class DataManager {
         });
 
         // Delete the stock item
-        const { error: deleteError } = await this.supabase
+        const { error: deleteError } = await supabase
           .from("stock_items")
           .delete()
           .eq("item_id", itemId);
@@ -267,7 +238,7 @@ export class DataManager {
       console.log(
         `🗑️ [DataManager] Removendo itens de estoque relacionados à matéria-prima: ${id}`,
       );
-      const { error: stockError } = await this.supabase
+      const { error: stockError } = await supabase
         .from("stock_items")
         .delete()
         .eq("item_id", id)
@@ -284,7 +255,7 @@ export class DataManager {
       }
 
       // Then delete the material
-      const { error: materialError } = await this.supabase
+      const { error: materialError } = await supabase
         .from("raw_materials")
         .delete()
         .eq("id", id);
@@ -339,7 +310,7 @@ export class DataManager {
       console.log(
         `🗑️ [DataManager] Removendo itens de estoque relacionados ao produto: ${id}`,
       );
-      const { error: stockError } = await this.supabase
+      const { error: stockError } = await supabase
         .from("stock_items")
         .delete()
         .eq("item_id", id)
@@ -356,7 +327,7 @@ export class DataManager {
       }
 
       // Then delete the product
-      const { error: productError } = await this.supabase
+      const { error: productError } = await supabase
         .from("products")
         .delete()
         .eq("id", id);
@@ -462,7 +433,7 @@ export class DataManager {
         dataToSave,
       );
 
-      const { data: insertedData, error } = await this.supabase
+      const { data: insertedData, error } = await supabase
         .from("stock_items")
         .insert([dataToSave])
         .select()
@@ -501,7 +472,7 @@ export class DataManager {
   ): Promise<StockItem | null> {
     try {
       // First, check if the stock item exists
-      const { data: existingItem, error: checkError } = await this.supabase
+      const { data: existingItem, error: checkError } = await supabase
         .from("stock_items")
         .select("id, item_name, quantity")
         .eq("id", id)
@@ -645,7 +616,7 @@ export class DataManager {
         validated: validatedData,
       });
 
-      const { data: updatedData, error } = await this.supabase
+      const { data: updatedData, error } = await supabase
         .from("stock_items")
         .update(validatedData)
         .eq("id", id)
@@ -787,7 +758,7 @@ export class DataManager {
 
   async saveCustomUnit(unit: string): Promise<boolean> {
     try {
-      const { error } = await this.supabase
+      const { error } = await supabase
         .from("custom_units")
         .insert([{ unit_name: unit }]);
 
@@ -806,7 +777,7 @@ export class DataManager {
 
   async loadCustomUnits(): Promise<string[]> {
     try {
-      const { data, error } = await this.supabase
+      const { data, error } = await supabase
         .from("custom_units")
         .select("unit_name")
         .order("unit_name");
@@ -830,7 +801,7 @@ export class DataManager {
 
   async deleteCustomUnit(unit: string): Promise<boolean> {
     try {
-      const { error } = await this.supabase
+      const { error } = await supabase
         .from("custom_units")
         .delete()
         .eq("unit_name", unit);
@@ -1020,7 +991,7 @@ export class DataManager {
       }
 
       // Use direct Supabase insertion for better error handling
-      const { data: insertedData, error } = await this.supabase
+      const { data: insertedData, error } = await supabase
         .from("defective_tire_sales")
         .insert([cleanSaleData])
         .select()
@@ -1067,7 +1038,7 @@ export class DataManager {
         "🔍 [DataManager] Verificando se a venda foi realmente salva...",
       );
       const { data: verificationData, error: verificationError } =
-        await this.supabase
+        await supabase
           .from("defective_tire_sales")
           .select("*")
           .eq("id", insertedData.id)
@@ -1120,7 +1091,7 @@ export class DataManager {
 
     try {
       // Use direct Supabase query for better error handling
-      const { data: sales, error } = await this.supabase
+      const { data: sales, error } = await supabase
         .from("defective_tire_sales")
         .select("*")
         .order("created_at", { ascending: false });
@@ -1230,7 +1201,7 @@ export class DataManager {
       );
 
       // Use direct Supabase insertion for better error handling
-      const { data: insertedData, error } = await this.supabase
+      const { data: insertedData, error } = await supabase
         .from("cost_simulations")
         .insert([cleanSimulationData])
         .select()
@@ -1283,7 +1254,7 @@ export class DataManager {
 
     try {
       // Use direct Supabase query for better error handling
-      const { data: simulations, error } = await this.supabase
+      const { data: simulations, error } = await supabase
         .from("cost_simulations")
         .select("*")
         .order("created_at", { ascending: false });
@@ -1378,7 +1349,7 @@ export class DataManager {
         return null;
       }
 
-      const { data: updatedData, error } = await this.supabase
+      const { data: updatedData, error } = await supabase
         .from("cost_simulations")
         .update(cleanUpdates)
         .eq("id", id)
@@ -1509,7 +1480,7 @@ export class DataManager {
       }
 
       // Use direct Supabase insertion for better error handling
-      const { data: insertedData, error } = await this.supabase
+      const { data: insertedData, error } = await supabase
         .from("warranty_entries")
         .insert([cleanWarrantyData])
         .select()
@@ -1553,7 +1524,7 @@ export class DataManager {
         "🔍 [DataManager] Verificando se a garantia foi realmente salva...",
       );
       const { data: verificationData, error: verificationError } =
-        await this.supabase
+        await supabase
           .from("warranty_entries")
           .select("*")
           .eq("id", insertedData.id)
@@ -1604,7 +1575,7 @@ export class DataManager {
 
     try {
       // Use direct Supabase query for better error handling
-      const { data: warranties, error } = await this.supabase
+      const { data: warranties, error } = await supabase
         .from("warranty_entries")
         .select("*")
         .order("created_at", { ascending: false });
@@ -1688,7 +1659,7 @@ export class DataManager {
     customerId: string,
   ): Promise<WarrantyEntry[]> {
     try {
-      const { data, error } = await this.supabase
+      const { data, error } = await supabase
         .from("warranty_entries")
         .select("*")
         .eq("customer_id", customerId)
@@ -1877,7 +1848,7 @@ export class DataManager {
     try {
       console.log('🔄 [DataManager] Carregando custo médio por pneu do Supabase...');
 
-      const { data, error } = await this.supabase
+      const { data, error } = await supabase
         .from('system_settings')
         .select('value, updated_at')
         .eq('key', 'average_tire_cost')
@@ -1905,7 +1876,7 @@ export class DataManager {
   subscribeToTireCostChanges(callback: (cost: number) => void): () => void {
     console.log('🔔 [DataManager] Iniciando subscription para custo médio por pneu...');
 
-    const subscription = this.supabase
+    const subscription = supabase
       .channel('tire-cost-realtime')
       .on(
         'postgres_changes',
@@ -1944,7 +1915,7 @@ export class DataManager {
       console.log(`💰 [DataManager] Salvando lucro médio por pneu: R$ ${profit.toFixed(2)}`);
 
       // Tenta salvar no Supabase usando upsert
-      const { error: supabaseError } = await this.supabase
+      const { error: supabaseError } = await supabase
         .from('system_settings')
         .upsert({
           key: 'average_tire_profit',
@@ -1976,7 +1947,7 @@ export class DataManager {
       console.log('🔄 [DataManager] Carregando lucro médio por pneu do Supabase...');
 
       // Tenta carregar do Supabase primeiro
-      const { data, error } = await this.supabase
+      const { data, error } = await supabase
         .from('system_settings')
         .select('value, updated_at')
         .eq('key', 'average_tire_profit')
@@ -2004,7 +1975,7 @@ export class DataManager {
   subscribeToTireProfitChanges(callback: (newProfit: number) => void): () => void {
     console.log('🔔 [DataManager] Iniciando subscription para lucro médio por pneu...');
 
-    const subscription = this.supabase
+    const subscription = supabase
       .channel('tire_profit_changes')
       .on(
         'postgres_changes',
@@ -2043,7 +2014,7 @@ export class DataManager {
       console.log(`💰 [DataManager] Salvando lucro médio de produtos de revenda: R$ ${profit.toFixed(2)}`);
 
       // Tenta salvar no Supabase usando upsert
-      const { error: supabaseError } = await this.supabase
+      const { error: supabaseError } = await supabase
         .from('system_settings')
         .upsert({
           key: 'average_resale_profit',
@@ -2075,7 +2046,7 @@ export class DataManager {
     try {
       console.log(`💾 [DataManager] Salvando lucro médio de produtos de revenda: R$ ${profit.toFixed(2)}`);
 
-      const { error } = await this.supabase
+      const { error } = await supabase
         .from('system_settings')
         .upsert({
           key: 'average_resale_profit',
@@ -2106,7 +2077,7 @@ export class DataManager {
     try {
       console.log('🔄 [DataManager] Carregando lucro médio de produtos de revenda do Supabase...');
 
-      const { data, error } = await this.supabase
+      const { data, error } = await supabase
         .from('system_settings')
         .select('value, updated_at')
         .eq('key', 'average_resale_profit')
@@ -2133,7 +2104,7 @@ export class DataManager {
   subscribeToResaleProfitChanges(callback: (newProfit: number) => void): () => void {
     console.log('🔔 [DataManager] Iniciando subscription para lucro médio de produtos de revenda...');
 
-    const subscription = this.supabase
+    const subscription = supabase
       .channel('resale_profit_changes')
       .on(
         'postgres_changes',
@@ -2172,7 +2143,7 @@ export class DataManager {
       console.log(`💾 [DataManager] Salvando lucro médio por pneu: R$ ${profit.toFixed(2)}`);
 
       // Tenta salvar no Supabase
-      const { error } = await this.supabase
+      const { error } = await supabase
         .from('system_settings')
         .upsert({
           key: 'average_tire_profit',
@@ -2225,7 +2196,7 @@ export class DataManager {
       console.log('🔄 [DataManager] Carregando lucro médio por pneu do Supabase...');
 
       // Tenta carregar do Supabase primeiro
-      const { data, error } = await this.supabase
+      const { data, error } = await supabase
         .from('system_settings')
         .select('value, updated_at')
         .eq('key', 'average_tire_profit')
@@ -2285,7 +2256,7 @@ export class DataManager {
   subscribeToTireProfitChanges(callback: (newProfit: number) => void): () => void {
     console.log('🔔 [DataManager] Iniciando subscription para lucro médio por pneu...');
 
-    const subscription = this.supabase
+    const subscription = supabase
       .channel('tire_profit_changes')
       .on(
         'postgres_changes',
@@ -2324,7 +2295,7 @@ export class DataManager {
       console.log(`📦 [DataManager] Salvando saldo de produtos finais: R$ ${balance.toFixed(2)}`);
 
       // Salvar no Supabase usando upsert
-      const { error } = await this.supabase
+      const { error } = await supabase
         .from('system_settings')
         .upsert({
           key: 'final_product_stock_balance',
@@ -2354,7 +2325,7 @@ export class DataManager {
     try {
       console.log('🔍 [DataManager] Carregando saldo de produtos finais do Supabase...');
 
-      const { data, error } = await this.supabase
+      const { data, error } = await supabase
         .from('system_settings')
         .select('value')
         .eq('key', 'final_product_stock_balance')
@@ -2381,7 +2352,7 @@ export class DataManager {
   subscribeToFinalProductStockChanges(callback: (newBalance: number) => void): () => void {
     console.log('🔔 [DataManager] Iniciando subscription para mudanças no saldo de produtos finais...');
 
-    const subscription = this.supabase
+    const subscription = supabase
       .channel('final_product_stock_changes')
       .on(
         'postgres_changes',
@@ -2411,7 +2382,7 @@ export class DataManager {
     // Retornar função de cleanup
     return () => {
       console.log('🔌 [DataManager] Cancelando subscription do saldo de produtos finais');
-      this.supabase.removeChannel(subscription);
+      supabase.removeChannel(subscription);
     };
   }
 
@@ -2423,7 +2394,7 @@ export class DataManager {
       console.log(`💾 [DataManager] Salvando saldo de matéria-prima: R$ ${balance.toFixed(2)}`);
 
       // Salvar no Supabase usando upsert
-      const { error } = await this.supabase
+      const { error } = await supabase
         .from('system_settings')
         .upsert({
           key: 'raw_material_stock_balance',
@@ -2453,7 +2424,7 @@ export class DataManager {
     try {
       console.log('🔍 [DataManager] Carregando saldo de matéria-prima do Supabase...');
 
-      const { data, error } = await this.supabase
+      const { data, error } = await supabase
         .from('system_settings')
         .select('value')
         .eq('key', 'raw_material_stock_balance')
@@ -2496,7 +2467,7 @@ export class DataManager {
     try {
       console.log(`💾 [DataManager] Salvando configuração do sistema: ${key}`);
 
-      const { data: existingData, error: selectError } = await this.supabase
+      const { data: existingData, error: selectError } = await supabase
         .from('system_settings')
         .select('id, value')
         .eq('key', key)
@@ -2516,7 +2487,7 @@ export class DataManager {
 
       if (existingData) {
         // Atualizar registro existente
-        const { error: updateError } = await this.supabase
+        const { error: updateError } = await supabase
           .from('system_settings')
           .update({
             value: value,
@@ -2530,7 +2501,7 @@ export class DataManager {
         }
       } else {
         // Inserir novo registro
-        const { error: insertError } = await this.supabase
+        const { error: insertError } = await supabase
           .from('system_settings')
           .insert({
             key: key,
@@ -2561,7 +2532,205 @@ export class DataManager {
     try {
       console.log(`🔍 [DataManager] Carregando configuração do sistema: ${key}`);
 
-      const { data, error } = await this.supabase
+      const { data, error } = await supabase
+        .from('system_settings')
+        .select('value')
+        .eq('key', key)
+        .single();
+
+      if (error) {
+        if (error.code === 'PGRST116') { // Not found
+          console.log(`⚠️ [DataManager] Configuração ${key} não encontrada`);
+          return null;
+        }
+        console.error(`❌ [DataManager] Erro ao carregar configuração ${key}:`, error);
+        return null;
+      }
+
+      console.log(`✅ [DataManager] Configuração ${key} carregada: ${data.value}`);
+      return data.value;
+    } catch (error) {
+      console.error(`❌ [DataManager] Erro ao carregar configuração ${key}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Calcula o saldo de caixa baseado nas entradas do fluxo de caixa
+   */
+  async calculateCashBalance(): Promise<number> {
+    try {
+      console.log('💰 [DataManager] Calculando saldo de caixa...');
+
+      const cashFlowEntries = await this.loadCashFlowEntries();
+
+      let totalIncome = 0;
+      let totalExpense = 0;
+
+      cashFlowEntries.forEach(entry => {
+        if (entry.type === 'income') {
+          totalIncome += entry.amount;
+        } else if (entry.type === 'expense') {
+          totalExpense += entry.amount;
+        }
+      });
+
+      const balance = totalIncome - totalExpense;
+
+      console.log(`💰 [DataManager] Saldo de caixa calculado:`, {
+        totalIncome: `R$ ${totalIncome.toFixed(2)}`,
+        totalExpense: `R$ ${totalExpense.toFixed(2)}`,
+        balance: `R$ ${balance.toFixed(2)}`,
+        entriesCount: cashFlowEntries.length
+      });
+
+      return balance;
+    } catch (error) {
+      console.error('❌ [DataManager] Erro ao calcular saldo de caixa:', error);
+      return 0;
+    }
+  }
+
+  /**
+   * Salva o saldo de caixa calculado no Supabase
+   */
+  async saveCashBalance(balance: number): Promise<boolean> {
+    try {
+      console.log(`💾 [DataManager] Salvando saldo de caixa: R$ ${balance.toFixed(2)}`);
+
+      const success = await this.saveSystemSetting('cash_balance', balance.toString());
+
+      if (success) {
+        console.log(`✅ [DataManager] Saldo de caixa salvo com sucesso: R$ ${balance.toFixed(2)}`);
+
+        // Salvar também no localStorage para fallback
+        localStorage.setItem('dashboard_cashBalance', JSON.stringify({
+          value: balance,
+          timestamp: Date.now(),
+          source: 'DataManager-saveCashBalance'
+        }));
+      }
+
+      return success;
+    } catch (error) {
+      console.error('❌ [DataManager] Erro ao salvar saldo de caixa:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Carrega o saldo de caixa do Supabase com fallback para cálculo automático
+   */
+  async loadCashBalance(): Promise<number> {
+    try {
+      console.log('🔍 [DataManager] Carregando saldo de caixa do Supabase...');
+
+      const balanceStr = await this.loadSystemSetting('cash_balance');
+
+      if (balanceStr) {
+        const balance = Number(balanceStr) || 0;
+        console.log(`✅ [DataManager] Saldo de caixa carregado do Supabase: R$ ${balance.toFixed(2)}`);
+        return balance;
+      }
+
+      // Fallback: calcular automaticamente
+      console.log('⚠️ [DataManager] Saldo não encontrado no Supabase, calculando automaticamente...');
+      const calculatedBalance = await this.calculateCashBalance();
+
+      // Salvar o valor calculado para próximas consultas
+      await this.saveCashBalance(calculatedBalance);
+
+      return calculatedBalance;
+    } catch (error) {
+      console.error('❌ [DataManager] Erro ao carregar saldo de caixa:', error);
+
+      // Fallback final: tentar calcular
+      try {
+        return await this.calculateCashBalance();
+      } catch (calcError) {
+        console.error('❌ [DataManager] Erro ao calcular saldo de caixa como fallback:', calcError);
+        return 0;
+      }
+    }
+  }
+
+  /**
+   * Configura subscription em tempo real para mudanças no saldo de caixa
+   */
+  subscribeToCashBalanceChanges(callback: (newBalance: number) => void): () => void {
+    console.log('🔔 [DataManager] Iniciando subscription para mudanças no saldo de caixa...');
+
+    // Subscription para mudanças na tabela cash_flow_entries
+    const subscription = supabase
+      .channel('cash_flow_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'cash_flow_entries'
+        },
+        async (payload) => {
+          console.log('📡 [DataManager] Mudança detectada no fluxo de caixa:', payload);
+
+          // Recalcular saldo automaticamente
+          const newBalance = await this.calculateCashBalance();
+          await this.saveCashBalance(newBalance);
+
+          callback(newBalance);
+        }
+      )
+      .subscribe();
+
+    console.log('✅ [DataManager] Subscription ativa para mudanças no fluxo de caixa');
+
+    // Retornar função de cleanup
+    return () => {
+      console.log('🔌 [DataManager] Cancelando subscription do saldo de caixa');
+      supabase.removeChannel(subscription);
+    };
+  }
+
+  // ===== SYSTEM SETTINGS METHODS =====
+
+  /**
+   * Salva uma configuração do sistema na tabela system_settings
+   */
+  async saveSystemSetting(key: string, value: string): Promise<boolean> {
+    try {
+      console.log(`💾 [DataManager] Salvando configuração do sistema: ${key} = ${value}`);
+
+      const { error } = await supabase
+        .from('system_settings')
+        .upsert({
+          key: key,
+          value: value,
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'key'
+        });
+
+      if (error) {
+        console.error(`❌ [DataManager] Erro ao salvar configuração ${key}:`, error);
+        return false;
+      }
+
+      console.log(`✅ [DataManager] Configuração ${key} salva com sucesso`);
+      return true;
+    } catch (error) {
+      console.error(`❌ [DataManager] Erro ao salvar configuração ${key}:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Carrega uma configuração do sistema da tabela system_settings
+   */
+  async loadSystemSetting(key: string): Promise<string | null> {
+    try {
+      console.log(`🔍 [DataManager] Carregando configuração do sistema: ${key}`);
+
+      const { data, error } = await supabase
         .from('system_settings')
         .select('value')
         .eq('key', key)
@@ -2676,7 +2845,7 @@ export class DataManager {
     try {
       console.log('🔍 [DataManager] Carregando todos os custos unitários de produtos...');
 
-      const { data, error } = await this.supabase
+      const { data, error } = await supabase
         .from('system_settings')
         .select('key, value')
         .like('key', 'product_unit_cost_%');
@@ -2712,7 +2881,7 @@ export class DataManager {
   subscribeToProductCostChanges(callback: (productName: string, newCost: number) => void): () => void {
     console.log('🔔 [DataManager] Iniciando subscription para mudanças nos custos unitários...');
 
-    const subscription = this.supabase
+    const subscription = supabase
       .channel('product_costs_changes')
       .on(
         'postgres_changes',
@@ -2743,7 +2912,7 @@ export class DataManager {
     // Retornar função de cleanup
     return () => {
       console.log('🔌 [DataManager] Cancelando subscription dos custos unitários');
-      this.supabase.removeChannel(subscription);
+      supabase.removeChannel(subscription);
     };
   }
 
@@ -2756,7 +2925,7 @@ export class DataManager {
     try {
       console.log(`📦 [DataManager] Salvando quantidade total de produtos finais: ${quantity}`);
 
-      const { error } = await this.supabase
+      const { error } = await supabase
         .from('system_settings')
         .upsert({
           key: 'final_product_total_quantity',
@@ -2786,7 +2955,7 @@ export class DataManager {
     try {
       console.log('🔍 [DataManager] Carregando quantidade total de produtos finais do Supabase...');
 
-      const { data, error } = await this.supabase
+      const { data, error } = await supabase
         .from('system_settings')
         .select('value')
         .eq('key', 'final_product_total_quantity')
@@ -2813,7 +2982,7 @@ export class DataManager {
   subscribeToFinalProductTotalQuantityChanges(callback: (newQuantity: number) => void): () => void {
     console.log('🔔 [DataManager] Iniciando subscription para mudanças na quantidade total de produtos finais...');
 
-    const subscription = this.supabase
+    const subscription = supabase
       .channel('final_product_quantity_changes')
       .on(
         'postgres_changes',
@@ -2841,7 +3010,7 @@ export class DataManager {
     // Retornar função de cleanup
     return () => {
       console.log('🔌 [DataManager] Cancelando subscription da quantidade total de produtos finais');
-      this.supabase.removeChannel(subscription);
+      supabase.removeChannel(subscription);
     };
   }
 
@@ -2853,7 +3022,7 @@ export class DataManager {
       console.log(`💾 [DataManager] Salvando quantidade unitária de matéria-prima: ${quantity}`);
 
       // Salvar no Supabase usando upsert
-      const { error } = await this.supabase
+      const { error } = await supabase
         .from('system_settings')
         .upsert({
           key: 'raw_material_unitary_quantity',
@@ -2883,7 +3052,7 @@ export class DataManager {
     try {
       console.log('🔍 [DataManager] Carregando quantidade unitária de matéria-prima do Supabase...');
 
-      const { data, error } = await this.supabase
+      const { data, error } = await supabase
         .from('system_settings')
         .select('value')
         .eq('key', 'raw_material_unitary_quantity')
@@ -2910,7 +3079,7 @@ export class DataManager {
   subscribeToRawMaterialUnitaryQuantityChanges(callback: (newQuantity: number) => void): () => void {
     console.log('🔔 [DataManager] Iniciando subscription para mudanças na quantidade unitária de matéria-prima...');
 
-    const subscription = this.supabase
+    const subscription = supabase
       .channel('raw_material_unitary_quantity_changes')
       .on(
         'postgres_changes',
@@ -2940,7 +3109,7 @@ export class DataManager {
     // Retornar função de cleanup
     return () => {
       console.log('🔌 [DataManager] Cancelando subscription da quantidade unitária de matéria-prima');
-      this.supabase.removeChannel(subscription);
+      supabase.removeChannel(subscription);
     };
   }
 
@@ -2952,7 +3121,7 @@ export class DataManager {
       console.log(`💾 [DataManager] Salvando quantidade total de produtos revenda: ${quantity}`);
 
       // Salvar no Supabase usando upsert
-      const { error } = await this.supabase
+      const { error } = await supabase
         .from('system_settings')
         .upsert({
           key: 'resale_product_total_quantity',
@@ -2982,7 +3151,7 @@ export class DataManager {
     try {
       console.log('🔍 [DataManager] Carregando quantidade total de produtos revenda do Supabase...');
 
-      const { data, error } = await this.supabase
+      const { data, error } = await supabase
         .from('system_settings')
         .select('value')
         .eq('key', 'resale_product_total_quantity')
@@ -3009,7 +3178,7 @@ export class DataManager {
   subscribeToResaleProductTotalQuantityChanges(callback: (newQuantity: number) => void): () => void {
     console.log('🔔 [DataManager] Iniciando subscription para mudanças na quantidade total de produtos revenda...');
 
-    const subscription = this.supabase
+    const subscription = supabase
       .channel('resale_product_total_quantity_changes')
       .on(
         'postgres_changes',
@@ -3039,7 +3208,7 @@ export class DataManager {
     // Retornar função de cleanup
     return () => {
       console.log('🔌 [DataManager] Cancelando subscription da quantidade total de produtos revenda');
-      this.supabase.removeChannel(subscription);
+      supabase.removeChannel(subscription);
     };
   }
 }
