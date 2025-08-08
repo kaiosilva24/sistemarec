@@ -54,12 +54,14 @@ import {
   useRecipes,
   useMaterials,
   useResaleProducts,
+  useAccountsReceivableEntries,
 } from "@/hooks/useDataPersistence";
 import {
   Salesperson,
   Customer,
   StockItem,
   ResaleProduct,
+  AccountsReceivableEntry,
 } from "@/types/financial";
 
 interface SalesDashboardProps {
@@ -96,8 +98,7 @@ const SalesDashboard = ({
     useState("all");
   const [resaleSalesHistoryStartDate, setResaleSalesHistoryStartDate] =
     useState("");
-  const [resaleSalesHistoryEndDate, setResaleSalesHistoryEndDate] =
-    useState("");
+  const [resaleSalesHistoryEndDate, setResaleSalesHistoryEndDate] = useState("");
   const [resaleSalesHistoryPaymentFilter, setResaleSalesHistoryPaymentFilter] = useState("all"); // Added for payment method filter
 
   // POS form states
@@ -149,6 +150,7 @@ const SalesDashboard = ({
     updateResaleProduct,
     isLoading: resaleProductsLoading,
   } = useResaleProducts();
+  const { addAccountsReceivableEntry } = useAccountsReceivableEntries();
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
@@ -986,23 +988,39 @@ const SalesDashboard = ({
       } else {
         // Handle regular sale process
         if (productType === "final" && product) {
-          // Final product sale - ALWAYS mark with TIPO_PRODUTO: final
-          await addCashFlowEntry({
-            type: "income",
-            category: "venda",
-            reference_name: `Venda para ${customer.name} - ${product.item_name}`,
-            amount: parseFloat(saleValue),
-            description: `TIPO_PRODUTO: final | Vendedor: ${salesperson.name} | Produto: ${product.item_name} | Qtd: ${quantity} ${product.unit} | Preço Unit: ${formatCurrency(parseFloat(unitPrice))} | Pagamento: ${(() => {
-              switch (paymentMethod) {
-                case "cash": return "Dinheiro";
-                case "card": return "Cartão";
-                case "pix": return "PIX";
-                case "installment": return "À Prazo";
-                default: return "À Vista";
-              }
-            })()} | ID_Produto: ${product.id}`,
-            transaction_date: new Date().toISOString().split("T")[0],
-          });
+          // Check if payment is installment (à prazo)
+          if (paymentMethod === "installment") {
+            // For installment sales, add to accounts receivable instead of cash flow
+            await addAccountsReceivableEntry({
+              customer_name: customer.name,
+              product_name: product.item_name,
+              salesperson_name: salesperson.name,
+              amount: parseFloat(saleValue),
+              quantity: parseFloat(quantity),
+              unit_price: parseFloat(unitPrice),
+              sale_date: new Date().toISOString().split("T")[0],
+              description: `TIPO_PRODUTO: final | Vendedor: ${salesperson.name} | Produto: ${product.item_name} | Qtd: ${quantity} ${product.unit} | Preço Unit: ${formatCurrency(parseFloat(unitPrice))} | Pagamento: À Prazo | ID_Produto: ${product.id}`,
+              payment_method: "À Prazo",
+              status: "pending",
+            });
+          } else {
+            // For other payment methods, register in cash flow normally
+            await addCashFlowEntry({
+              type: "income",
+              category: "venda",
+              reference_name: `Venda para ${customer.name} - ${product.item_name}`,
+              amount: parseFloat(saleValue),
+              description: `TIPO_PRODUTO: final | Vendedor: ${salesperson.name} | Produto: ${product.item_name} | Qtd: ${quantity} ${product.unit} | Preço Unit: ${formatCurrency(parseFloat(unitPrice))} | Pagamento: ${(() => {
+                switch (paymentMethod) {
+                  case "cash": return "Dinheiro";
+                  case "card": return "Cartão";
+                  case "pix": return "PIX";
+                  default: return "À Vista";
+                }
+              })()} | ID_Produto: ${product.id}`,
+              transaction_date: new Date().toISOString().split("T")[0],
+            });
+          }
 
           // Update stock - subtract sold quantity
           const newQuantity = product.quantity - parseFloat(quantity);
@@ -1121,7 +1139,7 @@ const SalesDashboard = ({
     }
   };
 
-  
+
 
   // Test function to verify onClick works
   const testClick = () => {
