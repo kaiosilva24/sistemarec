@@ -2292,7 +2292,7 @@ export class DataManager {
    */
   async saveFinalProductStockBalance(balance: number): Promise<boolean> {
     try {
-      console.log(`💾 [DataManager] Salvando saldo de produtos finais: R$ ${balance.toFixed(2)}`);
+      console.log(`📦 [DataManager] Salvando saldo de produtos finais: R$ ${balance.toFixed(2)}`);
 
       // Salvar no Supabase usando upsert
       const { error } = await supabase
@@ -3010,6 +3010,204 @@ export class DataManager {
     // Retornar função de cleanup
     return () => {
       console.log('🔌 [DataManager] Cancelando subscription da quantidade total de produtos finais');
+      supabase.removeChannel(subscription);
+    };
+  }
+
+  /**
+   * Salva a quantidade unitária de matéria-prima apenas no Supabase (sem localStorage)
+   */
+  async saveRawMaterialUnitaryQuantity(quantity: number): Promise<boolean> {
+    try {
+      console.log(`💾 [DataManager] Salvando quantidade unitária de matéria-prima: ${quantity}`);
+
+      // Salvar no Supabase usando upsert
+      const { error } = await supabase
+        .from('system_settings')
+        .upsert({
+          key: 'raw_material_unitary_quantity',
+          value: quantity.toString(),
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'key'
+        });
+
+      if (error) {
+        console.error('❌ [DataManager] Erro ao salvar quantidade unitária de matéria-prima no Supabase:', error);
+        return false;
+      }
+
+      console.log(`✅ [DataManager] Quantidade unitária de matéria-prima salva com sucesso: ${quantity}`);
+      return true;
+    } catch (error) {
+      console.error('❌ [DataManager] Erro ao salvar quantidade unitária de matéria-prima:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Carrega a quantidade unitária de matéria-prima apenas do Supabase (sem localStorage)
+   */
+  async loadRawMaterialUnitaryQuantity(): Promise<number> {
+    try {
+      console.log('🔍 [DataManager] Carregando quantidade unitária de matéria-prima do Supabase...');
+
+      const { data, error } = await supabase
+        .from('system_settings')
+        .select('value')
+        .eq('key', 'raw_material_unitary_quantity')
+        .single();
+
+      if (error) {
+        console.warn('⚠️ [DataManager] Erro ao carregar quantidade unitária de matéria-prima do Supabase:', error.message);
+        return 0; // Valor padrão
+      }
+
+      const quantity = Number(data.value) || 0;
+      console.log(`✅ [DataManager] Quantidade unitária de matéria-prima carregada do Supabase: ${quantity}`);
+
+      return quantity;
+    } catch (error) {
+      console.error('❌ [DataManager] Erro ao carregar quantidade unitária de matéria-prima:', error);
+      return 0; // Valor padrão em caso de erro
+    }
+  }
+
+  /**
+   * Configura subscription em tempo real para mudanças na quantidade unitária de matéria-prima
+   */
+  subscribeToRawMaterialUnitaryQuantityChanges(callback: (newQuantity: number) => void): () => void {
+    console.log('🔔 [DataManager] Iniciando subscription para mudanças na quantidade unitária de matéria-prima...');
+
+    const subscription = supabase
+      .channel('raw_material_unitary_quantity_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'system_settings',
+          filter: 'key=eq.raw_material_unitary_quantity'
+        },
+        (payload) => {
+          console.log('📡 [DataManager] Mudança detectada na quantidade unitária de matéria-prima:', payload);
+
+          if (payload.new && payload.new.value) {
+            const newQuantity = Number(payload.new.value) || 0;
+
+            if (newQuantity >= 0) {
+              console.log(`📦 [DataManager] Nova quantidade unitária de matéria-prima: ${newQuantity}`);
+              callback(newQuantity);
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    console.log('✅ [DataManager] Subscription ativa para mudanças na quantidade unitária de matéria-prima');
+
+    // Retornar função de cleanup
+    return () => {
+      console.log('🔌 [DataManager] Cancelando subscription da quantidade unitária de matéria-prima');
+      supabase.removeChannel(subscription);
+    };
+  }
+
+  /**
+   * Salva a quantidade total de produtos revenda apenas no Supabase (sem localStorage)
+   */
+  async saveResaleProductTotalQuantity(quantity: number): Promise<boolean> {
+    try {
+      console.log(`💾 [DataManager] Salvando quantidade total de produtos revenda: ${quantity}`);
+
+      // Salvar no Supabase usando upsert
+      const { error } = await supabase
+        .from('system_settings')
+        .upsert({
+          key: 'resale_product_total_quantity',
+          value: quantity.toString(),
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'key'
+        });
+
+      if (error) {
+        console.error('❌ [DataManager] Erro ao salvar quantidade total de produtos revenda no Supabase:', error);
+        return false;
+      }
+
+      console.log(`✅ [DataManager] Quantidade total de produtos revenda salva com sucesso: ${quantity}`);
+      return true;
+    } catch (error) {
+      console.error('❌ [DataManager] Erro ao salvar quantidade total de produtos revenda:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Carrega a quantidade total de produtos revenda apenas do Supabase (sem localStorage)
+   */
+  async loadResaleProductTotalQuantity(): Promise<number> {
+    try {
+      console.log('🔍 [DataManager] Carregando quantidade total de produtos revenda do Supabase...');
+
+      const { data, error } = await supabase
+        .from('system_settings')
+        .select('value')
+        .eq('key', 'resale_product_total_quantity')
+        .single();
+
+      if (error) {
+        console.warn('⚠️ [DataManager] Erro ao carregar quantidade total de produtos revenda do Supabase:', error.message);
+        return 0; // Valor padrão
+      }
+
+      const quantity = Number(data.value) || 0;
+      console.log(`✅ [DataManager] Quantidade total de produtos revenda carregada do Supabase: ${quantity}`);
+
+      return quantity;
+    } catch (error) {
+      console.error('❌ [DataManager] Erro ao carregar quantidade total de produtos revenda:', error);
+      return 0; // Valor padrão em caso de erro
+    }
+  }
+
+  /**
+   * Configura subscription em tempo real para mudanças na quantidade total de produtos revenda
+   */
+  subscribeToResaleProductTotalQuantityChanges(callback: (newQuantity: number) => void): () => void {
+    console.log('🔔 [DataManager] Iniciando subscription para mudanças na quantidade total de produtos revenda...');
+
+    const subscription = supabase
+      .channel('resale_product_total_quantity_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'system_settings',
+          filter: 'key=eq.resale_product_total_quantity'
+        },
+        (payload) => {
+          console.log('📡 [DataManager] Mudança detectada na quantidade total de produtos revenda:', payload);
+
+          if (payload.new && payload.new.value) {
+            const newQuantity = Number(payload.new.value) || 0;
+
+            if (newQuantity >= 0) {
+              console.log(`🛍️ [DataManager] Nova quantidade total de produtos revenda: ${newQuantity}`);
+              callback(newQuantity);
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    console.log('✅ [DataManager] Subscription ativa para mudanças na quantidade total de produtos revenda');
+
+    // Retornar função de cleanup
+    return () => {
+      console.log('🔌 [DataManager] Cancelando subscription da quantidade total de produtos revenda');
       supabase.removeChannel(subscription);
     };
   }

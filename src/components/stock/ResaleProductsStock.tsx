@@ -378,12 +378,13 @@ const ResaleProductsStock = ({ isLoading = false }: ResaleProductsStockProps) =>
   const totalStockValue = filteredProducts.reduce((sum, p) => sum + p.totalValue, 0);
   const totalQuantity = filteredProducts.reduce((sum, p) => sum + p.quantity, 0);
 
-  // Sistema de sincronização automática do valor total com o dashboard
+  // Sistema de sincronização automática do valor total e quantidade total com o dashboard
   useEffect(() => {
     // Aguardar um pouco para garantir que os cálculos estejam estabilizados
-    const timeoutId = setTimeout(() => {
-      console.log('💰 [ResaleProductsStock] Sincronizando valor total:', {
+    const timeoutId = setTimeout(async () => {
+      console.log('💰 [ResaleProductsStock] Sincronizando valor total e quantidade total:', {
         totalStockValue: totalStockValue.toFixed(2),
+        totalQuantity: totalQuantity,
         totalProducts,
         productsInStock,
         timestamp: new Date().toLocaleString()
@@ -402,11 +403,37 @@ const ResaleProductsStock = ({ isLoading = false }: ResaleProductsStockProps) =>
       } catch (error) {
         console.warn('⚠️ [ResaleProductsStock] Erro ao salvar no localStorage:', error);
       }
+
+      // Salvar quantidade total no Supabase
+      try {
+        const { dataManager } = await import('@/utils/dataManager');
+        const success = await dataManager.saveResaleProductTotalQuantity(totalQuantity);
+        if (success) {
+          console.log(`✅ [ResaleProductsStock] Quantidade total salva no Supabase: ${totalQuantity}`);
+          
+          // Disparar evento específico para quantidade total
+          const quantityUpdateEvent = new CustomEvent('resaleProductTotalQuantityUpdated', {
+            detail: {
+              quantity: totalQuantity,
+              timestamp: Date.now(),
+              source: 'ResaleProductsStock'
+            }
+          });
+          window.dispatchEvent(quantityUpdateEvent);
+          console.log('📡 [ResaleProductsStock] Evento resaleProductTotalQuantityUpdated disparado:', {
+            quantity: totalQuantity,
+            source: 'ResaleProductsStock'
+          });
+        }
+      } catch (error) {
+        console.warn('⚠️ [ResaleProductsStock] Erro ao salvar quantidade total no Supabase:', error);
+      }
       
-      // Disparar evento customizado para notificar o dashboard
+      // Disparar evento customizado para notificar o dashboard sobre valor total
       const updateEvent = new CustomEvent('resaleTotalStockUpdated', {
         detail: {
           totalValue: totalStockValue,
+          totalQuantity: totalQuantity,
           totalProducts,
           productsInStock,
           lowStockProducts,
@@ -418,13 +445,14 @@ const ResaleProductsStock = ({ isLoading = false }: ResaleProductsStockProps) =>
       window.dispatchEvent(updateEvent);
       console.log('📡 [ResaleProductsStock] Evento resaleTotalStockUpdated disparado:', {
         totalValue: totalStockValue.toFixed(2),
+        totalQuantity: totalQuantity,
         source: 'ResaleProductsStock'
       });
       
     }, 300); // Delay de 300ms para estabilizar cálculos
     
     return () => clearTimeout(timeoutId);
-  }, [totalStockValue, totalProducts, productsInStock, lowStockProducts]); // Monitora mudanças nas métricas
+  }, [totalStockValue, totalQuantity, totalProducts, productsInStock, lowStockProducts]); // Monitora mudanças nas métricas
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
