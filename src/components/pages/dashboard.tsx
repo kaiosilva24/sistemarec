@@ -1043,7 +1043,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       console.log(`  - Timestamp: ${new Date(timestamp).toLocaleString()}`);
       console.log(`  - Source: ${source}`);
 
-      // Atualizar estado imediatamente (sem debounce pois é calculado)
+      // Atualizar estado imediatamente
       setFinalProductStockBalance(balance);
       setIsLoadingFinalProductStock(false);
     };
@@ -1403,13 +1403,13 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
             },
             async (payload) => {
               console.log('💰 [Dashboard] Mudança detectada na tabela cash_flow_entries:', payload);
-              
+
               // Recalcular saldo baseado nas mudanças
               setTimeout(async () => {
                 try {
                   // Recarregar todas as entradas de cash flow
                   const updatedEntries = await dataManager.loadCashFlowEntries();
-                  
+
                   // Calcular novo saldo
                   const newTotalIncome = updatedEntries
                     .filter((entry) => entry.type === "income")
@@ -2116,7 +2116,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                       formatCurrency(cashBalanceState)
                     )}
                   </p>
-                  
+
                 </div>
               </div>
             </CardContent>
@@ -2140,7 +2140,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                   }`}>
                     {formatCurrency(totalRevenue)}
                   </p>
-                  
+
                 </div>
               </div>
             </CardContent>
@@ -2289,7 +2289,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                       rawMaterialUnitaryQuantity
                     )}
                   </p>
-                  
+
                 </div>
                 <div className="p-2 rounded-full bg-cyan-500/20">
                   <Package className="h-5 w-5 text-cyan-400" />
@@ -2311,7 +2311,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                       `${finalProductTotalQuantity} unidades`
                     )}
                   </p>
-                  
+
                 </div>
                 <div className="p-2 rounded-full bg-pink-500/20">
                   <Factory className="h-5 w-5 text-pink-400" />
@@ -2333,7 +2333,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                       resaleProductTotalQuantity
                     )}
                   </p>
-                  
+
                 </div>
                 <div className="p-2 rounded-full bg-red-500/20">
                   <ShoppingBag className="h-5 w-5 text-red-400" />

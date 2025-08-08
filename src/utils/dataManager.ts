@@ -1897,6 +1897,37 @@ export class DataManager {
   }
 
   /**
+   * Salva o custo médio por pneu no Supabase
+   */
+  async saveAverageTireCost(cost: number): Promise<boolean> {
+    try {
+      console.log(`💾 [DataManager] Salvando custo médio por pneu: R$ ${cost.toFixed(2)}`);
+
+      const { error } = await this.supabase
+        .from('system_settings')
+        .upsert({
+          key: 'average_tire_cost',
+          value: cost.toString(),
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'key'
+        });
+
+      if (error) {
+        console.error('❌ [DataManager] Erro ao salvar no Supabase:', error);
+        return false;
+      }
+
+      console.log('✅ [DataManager] Custo médio por pneu salvo no Supabase com sucesso');
+      return true;
+
+    } catch (error) {
+      console.error('❌ [DataManager] Erro ao salvar custo médio por pneu:', error);
+      return false;
+    }
+  }
+
+  /**
    * Busca o custo médio por pneu do Supabase
    */
   async loadAverageTireCost(): Promise<number> {
