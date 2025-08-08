@@ -943,7 +943,7 @@ export class DataManager {
       });
 
       const success = await this.updateInDatabase("cash_flow_entries", id, updates);
-
+      
       if (success) {
         console.log('✅ [DataManager] Entrada de cash flow atualizada com sucesso:', {
           id: id,
@@ -2307,7 +2307,7 @@ export class DataManager {
 
           if (payload.new && typeof payload.new === 'object' && 'value' in payload.new) {
             let value = payload.new.value;
-
+            
             // Try to parse as number first, then string
             const numValue = Number(value);
             if (!isNaN(numValue)) {
