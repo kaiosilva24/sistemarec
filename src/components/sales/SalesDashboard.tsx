@@ -176,6 +176,22 @@ const SalesDashboard = ({
     }
   };
 
+  // Extract real value from installment sales (for sales history display)
+  const extractRealValueFromSale = (entry: any) => {
+    try {
+      if (entry.category === "venda_a_prazo" && entry.description) {
+        const realValueMatch = entry.description.match(/Valor_Real: ([0-9.]+)/);
+        if (realValueMatch) {
+          return parseFloat(realValueMatch[1]);
+        }
+      }
+      return entry.amount; // Return normal amount for non-installment sales
+    } catch (error) {
+      console.error("Erro ao extrair valor real:", error);
+      return entry.amount;
+    }
+  };
+
   // Extract product info from sale description
   const extractProductInfoFromSale = (description: string) => {
     try {
@@ -227,12 +243,12 @@ const SalesDashboard = ({
       product.name.toLowerCase().includes(productsSearch.toLowerCase()),
     );
 
-  // Filter final product sales history (cash flow entries with category "venda" and product type "final")
+  // Filter final product sales history (cash flow entries with category "venda" or "venda_a_prazo" and product type "final")
   const finalProductSalesHistory = cashFlowEntries
     .filter(
       (entry) =>
         entry.type === "income" &&
-        entry.category === "venda" &&
+        (entry.category === "venda" || entry.category === "venda_a_prazo") &&
         // Only include entries that:
         // 1. Explicitly have "TIPO_PRODUTO: final" OR
         // 2. Don't have any "TIPO_PRODUTO:" tag at all (for backward compatibility with older entries)
@@ -343,12 +359,12 @@ const SalesDashboard = ({
         new Date(a.transaction_date).getTime(),
     );
 
-  // Filter resale product sales history (cash flow entries with category "venda" and product type "resale")
+  // Filter resale product sales history (cash flow entries with category "venda" or "venda_a_prazo" and product type "resale")
   const resaleProductSalesHistory = cashFlowEntries
     .filter(
       (entry) =>
         entry.type === "income" &&
-        entry.category === "venda" &&
+        (entry.category === "venda" || entry.category === "venda_a_prazo") &&
         entry.description &&
         entry.description.includes("TIPO_PRODUTO: revenda"),
     )
@@ -987,22 +1003,36 @@ const SalesDashboard = ({
         // Handle regular sale process
         if (productType === "final" && product) {
           // Final product sale - ALWAYS mark with TIPO_PRODUTO: final
-          await addCashFlowEntry({
-            type: "income",
-            category: "venda",
-            reference_name: `Venda para ${customer.name} - ${product.item_name}`,
-            amount: parseFloat(saleValue),
-            description: `TIPO_PRODUTO: final | Vendedor: ${salesperson.name} | Produto: ${product.item_name} | Qtd: ${quantity} ${product.unit} | Preço Unit: ${formatCurrency(parseFloat(unitPrice))} | Pagamento: ${(() => {
-              switch (paymentMethod) {
-                case "cash": return "Dinheiro";
-                case "card": return "Cartão";
-                case "pix": return "PIX";
-                case "installment": return "À Prazo";
-                default: return "À Vista";
-              }
-            })()} | ID_Produto: ${product.id}`,
-            transaction_date: new Date().toISOString().split("T")[0],
-          });
+          // Only register in cash flow if payment method is NOT "installment" (À Prazo)
+          if (paymentMethod !== "installment") {
+            await addCashFlowEntry({
+              type: "income",
+              category: "venda",
+              reference_name: `Venda para ${customer.name} - ${product.item_name}`,
+              amount: parseFloat(saleValue),
+              description: `TIPO_PRODUTO: final | Vendedor: ${salesperson.name} | Produto: ${product.item_name} | Qtd: ${quantity} ${product.unit} | Preço Unit: ${formatCurrency(parseFloat(unitPrice))} | Pagamento: ${(() => {
+                switch (paymentMethod) {
+                  case "cash": return "Dinheiro";
+                  case "card": return "Cartão";
+                  case "pix": return "PIX";
+                  case "installment": return "À Prazo";
+                  default: return "À Vista";
+                }
+              })()} | ID_Produto: ${product.id}`,
+              transaction_date: new Date().toISOString().split("T")[0],
+            });
+          } else {
+            // For installment sales, we still create a record but with a special marker for tracking
+            // This allows the sale to appear in sales history but not affect cash flow balance
+            await addCashFlowEntry({
+              type: "income",
+              category: "venda_a_prazo", // Different category to distinguish from cash sales
+              reference_name: `Venda À Prazo para ${customer.name} - ${product.item_name}`,
+              amount: 0, // Zero amount to not affect cash flow balance
+              description: `TIPO_PRODUTO: final | VENDA_A_PRAZO: true | Valor_Real: ${parseFloat(saleValue)} | Vendedor: ${salesperson.name} | Produto: ${product.item_name} | Qtd: ${quantity} ${product.unit} | Preço Unit: ${formatCurrency(parseFloat(unitPrice))} | Pagamento: À Prazo | ID_Produto: ${product.id}`,
+              transaction_date: new Date().toISOString().split("T")[0],
+            });
+          }
 
           // Update stock - subtract sold quantity
           const newQuantity = product.quantity - parseFloat(quantity);
@@ -1027,22 +1057,35 @@ const SalesDashboard = ({
           );
         } else if (productType === "resale" && resaleProduct) {
           // Resale product sale - ALWAYS mark with TIPO_PRODUTO: revenda
-          await addCashFlowEntry({
-            type: "income",
-            category: "venda",
-            reference_name: `Venda para ${customer.name} - ${resaleProduct.name}`,
-            amount: parseFloat(saleValue),
-            description: `TIPO_PRODUTO: revenda | Vendedor: ${salesperson.name} | Produto: ${resaleProduct.name} | Qtd: ${quantity} ${resaleProduct.unit} | Preço Unit: ${formatCurrency(parseFloat(unitPrice))} | Pagamento: ${(() => {
-              switch (paymentMethod) {
-                case "cash": return "Dinheiro";
-                case "card": return "Cartão";
-                case "pix": return "PIX";
-                case "installment": return "À Prazo";
-                default: return "À Vista";
-              }
-            })()} | ID_Produto: ${resaleProduct.id}`,
-            transaction_date: new Date().toISOString().split("T")[0],
-          });
+          // Only register in cash flow if payment method is NOT "installment" (À Prazo)
+          if (paymentMethod !== "installment") {
+            await addCashFlowEntry({
+              type: "income",
+              category: "venda",
+              reference_name: `Venda para ${customer.name} - ${resaleProduct.name}`,
+              amount: parseFloat(saleValue),
+              description: `TIPO_PRODUTO: revenda | Vendedor: ${salesperson.name} | Produto: ${resaleProduct.name} | Qtd: ${quantity} ${resaleProduct.unit} | Preço Unit: ${formatCurrency(parseFloat(unitPrice))} | Pagamento: ${(() => {
+                switch (paymentMethod) {
+                  case "cash": return "Dinheiro";
+                  case "card": return "Cartão";
+                  case "pix": return "PIX";
+                  case "installment": return "À Prazo";
+                  default: return "À Vista";
+                }
+              })()} | ID_Produto: ${resaleProduct.id}`,
+              transaction_date: new Date().toISOString().split("T")[0],
+            });
+          } else {
+            // For installment sales, we still create a record but with a special marker for tracking
+            await addCashFlowEntry({
+              type: "income",
+              category: "venda_a_prazo", // Different category to distinguish from cash sales
+              reference_name: `Venda À Prazo para ${customer.name} - ${resaleProduct.name}`,
+              amount: 0, // Zero amount to not affect cash flow balance
+              description: `TIPO_PRODUTO: revenda | VENDA_A_PRAZO: true | Valor_Real: ${parseFloat(saleValue)} | Vendedor: ${salesperson.name} | Produto: ${resaleProduct.name} | Qtd: ${quantity} ${resaleProduct.unit} | Preço Unit: ${formatCurrency(parseFloat(unitPrice))} | Pagamento: À Prazo | ID_Produto: ${resaleProduct.id}`,
+              transaction_date: new Date().toISOString().split("T")[0],
+            });
+          }
 
           // Update resale product stock in stock_items table
           const stockItem = stockItems.find(
@@ -1507,7 +1550,7 @@ const SalesDashboard = ({
   const finalProductSalesMetrics = useMemo(() => {
     const totalSales = finalProductSalesHistory.length;
     const totalValue = finalProductSalesHistory.reduce(
-      (sum, sale) => sum + sale.amount,
+      (sum, sale) => sum + extractRealValueFromSale(sale),
       0,
     );
     const totalQuantity = finalProductSalesHistory.reduce((total, sale) => {
@@ -1526,7 +1569,7 @@ const SalesDashboard = ({
   const resaleProductSalesMetrics = useMemo(() => {
     const totalSales = resaleProductSalesHistory.length;
     const totalValue = resaleProductSalesHistory.reduce(
-      (sum, sale) => sum + sale.amount,
+      (sum, sale) => sum + extractRealValueFromSale(sale),
       0,
     );
     const totalQuantity = resaleProductSalesHistory.reduce((total, sale) => {
@@ -1737,8 +1780,8 @@ const SalesDashboard = ({
                 <p className="text-tire-300 text-sm font-medium text-center mb-2">Receita Total</p>
                 <p className="text-2xl font-bold text-neon-orange text-center">
                   {formatCurrency(
-                    finalProductSalesHistory.reduce((total, sale) => total + sale.amount, 0) +
-                    resaleProductSalesHistory.reduce((total, sale) => total + sale.amount, 0)
+                    finalProductSalesHistory.reduce((total, sale) => total + extractRealValueFromSale(sale), 0) +
+                    resaleProductSalesHistory.reduce((total, sale) => total + extractRealValueFromSale(sale), 0)
                   )}
                 </p>
                 <p className="text-xs text-tire-400 text-center mt-1">
@@ -2978,9 +3021,14 @@ const SalesDashboard = ({
                             </div>
                             <div className="flex items-center gap-1">
                               <DollarSign className="h-3 w-3" />
-                              <span className="text-neon-green font-bold">
-                                {formatCurrency(sale.amount)}
+                              <span className={`font-bold ${sale.category === "venda_a_prazo" ? "text-neon-orange" : "text-neon-green"}`}>
+                                {formatCurrency(extractRealValueFromSale(sale))}
                               </span>
+                              {sale.category === "venda_a_prazo" && (
+                                <span className="text-xs bg-neon-orange/20 text-neon-orange px-1 py-0.5 rounded ml-1">
+                                  À PRAZO
+                                </span>
+                              )}
                             </div>
                             <div className="flex items-center gap-1">
                               <span className="text-xs bg-neon-blue/20 text-neon-blue px-2 py-1 rounded">
@@ -3498,9 +3546,14 @@ const SalesDashboard = ({
                             </div>
                             <div className="flex items-center gap-1">
                               <DollarSign className="h-3 w-3" />
-                              <span className="text-neon-cyan font-bold">
-                                {formatCurrency(sale.amount)}
+                              <span className={`font-bold ${sale.category === "venda_a_prazo" ? "text-neon-orange" : "text-neon-cyan"}`}>
+                                {formatCurrency(extractRealValueFromSale(sale))}
                               </span>
+                              {sale.category === "venda_a_prazo" && (
+                                <span className="text-xs bg-neon-orange/20 text-neon-orange px-1 py-0.5 rounded ml-1">
+                                  À PRAZO
+                                </span>
+                              )}
                             </div>
                             <div className="flex items-center gap-1">
                               <span className="text-xs bg-neon-cyan/20 text-neon-cyan px-2 py-1 rounded">
