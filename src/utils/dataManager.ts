@@ -1,517 +1,1451 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+
+import { supabase } from '../supabase/supabase';
 import {
-  Box,
-  Button,
-  TextField,
-  Typography,
-  Container,
-  Grid,
-  Paper,
-  AppBar,
-  Toolbar,
-  IconButton,
-  Menu,
-  MenuItem,
-  ListItemIcon,
-  ListItemText,
-  Divider,
-  Tooltip,
-  Avatar,
-} from '@mui/material';
-import {
-  AddCircleOutline,
-  RemoveCircleOutline,
-  Settings,
-  Logout,
-  ArrowBack,
-} from '@mui.icons/material';
-import DataManager from '../utils/dataManager'; // Corrigido: importando a exportação nomeada
+  RawMaterial,
+  Product,
+  Employee,
+  FixedCost,
+  VariableCost,
+  StockItem,
+  ProductionEntry,
+  Customer,
+  Supplier,
+  CashFlowEntry,
+  ProductionRecipe,
+  DefectiveTireSale,
+  CostSimulation,
+  WarrantyEntry,
+  ResaleProduct,
+  ResaleProductStock,
+  AccountsReceivableEntry
+} from '../types/financial';
+
+class DataManager {
+  // Raw Materials
+  async loadRawMaterials(): Promise<RawMaterial[]> {
+    try {
+      const { data, error } = await supabase
+        .from('raw_materials')
+        .select('*')
+        .eq('archived', false)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Erro ao carregar matérias-primas:', error);
+        throw error;
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Erro na função loadRawMaterials:', error);
+      throw error;
+    }
+  }
+
+  async saveRawMaterial(material: Omit<RawMaterial, 'id' | 'created_at'>): Promise<RawMaterial | null> {
+    try {
+      const { data, error } = await supabase
+        .from('raw_materials')
+        .insert([material])
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Erro ao salvar matéria-prima:', error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Erro na função saveRawMaterial:', error);
+      throw error;
+    }
+  }
+
+  async updateRawMaterial(id: string, updates: Partial<RawMaterial>): Promise<RawMaterial | null> {
+    try {
+      const { data, error } = await supabase
+        .from('raw_materials')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Erro ao atualizar matéria-prima:', error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Erro na função updateRawMaterial:', error);
+      throw error;
+    }
+  }
+
+  async deleteRawMaterial(id: string): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('raw_materials')
+        .update({ archived: true })
+        .eq('id', id);
+
+      if (error) {
+        console.error('Erro ao arquivar matéria-prima:', error);
+        throw error;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Erro na função deleteRawMaterial:', error);
+      return false;
+    }
+  }
+
+  // Products
+  async loadProducts(): Promise<Product[]> {
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .eq('archived', false)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Erro ao carregar produtos:', error);
+        throw error;
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Erro na função loadProducts:', error);
+      throw error;
+    }
+  }
+
+  async saveProduct(product: Omit<Product, 'id' | 'created_at'>): Promise<Product | null> {
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .insert([product])
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Erro ao salvar produto:', error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Erro na função saveProduct:', error);
+      throw error;
+    }
+  }
+
+  async updateProduct(id: string, updates: Partial<Product>): Promise<Product | null> {
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Erro ao atualizar produto:', error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Erro na função updateProduct:', error);
+      throw error;
+    }
+  }
+
+  async deleteProduct(id: string): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('products')
+        .update({ archived: true })
+        .eq('id', id);
+
+      if (error) {
+        console.error('Erro ao arquivar produto:', error);
+        throw error;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Erro na função deleteProduct:', error);
+      return false;
+    }
+  }
+
+  // Employees
+  async loadEmployees(): Promise<Employee[]> {
+    try {
+      const { data, error } = await supabase
+        .from('employees')
+        .select('*')
+        .eq('archived', false)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Erro ao carregar funcionários:', error);
+        throw error;
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Erro na função loadEmployees:', error);
+      throw error;
+    }
+  }
+
+  async saveEmployee(employee: Omit<Employee, 'id' | 'created_at'>): Promise<Employee | null> {
+    try {
+      const { data, error } = await supabase
+        .from('employees')
+        .insert([employee])
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Erro ao salvar funcionário:', error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Erro na função saveEmployee:', error);
+      throw error;
+    }
+  }
+
+  async updateEmployee(id: string, updates: Partial<Employee>): Promise<Employee | null> {
+    try {
+      const { data, error } = await supabase
+        .from('employees')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Erro ao atualizar funcionário:', error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Erro na função updateEmployee:', error);
+      throw error;
+    }
+  }
+
+  async deleteEmployee(id: string): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('employees')
+        .update({ archived: true })
+        .eq('id', id);
+
+      if (error) {
+        console.error('Erro ao arquivar funcionário:', error);
+        throw error;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Erro na função deleteEmployee:', error);
+      return false;
+    }
+  }
+
+  // Fixed Costs
+  async loadFixedCosts(): Promise<FixedCost[]> {
+    try {
+      const { data, error } = await supabase
+        .from('fixed_costs')
+        .select('*')
+        .eq('archived', false)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Erro ao carregar custos fixos:', error);
+        throw error;
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Erro na função loadFixedCosts:', error);
+      throw error;
+    }
+  }
+
+  async saveFixedCost(cost: Omit<FixedCost, 'id' | 'created_at'>): Promise<FixedCost | null> {
+    try {
+      const { data, error } = await supabase
+        .from('fixed_costs')
+        .insert([cost])
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Erro ao salvar custo fixo:', error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Erro na função saveFixedCost:', error);
+      throw error;
+    }
+  }
+
+  async updateFixedCost(id: string, updates: Partial<FixedCost>): Promise<FixedCost | null> {
+    try {
+      const { data, error } = await supabase
+        .from('fixed_costs')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Erro ao atualizar custo fixo:', error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Erro na função updateFixedCost:', error);
+      throw error;
+    }
+  }
+
+  async deleteFixedCost(id: string): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('fixed_costs')
+        .update({ archived: true })
+        .eq('id', id);
+
+      if (error) {
+        console.error('Erro ao arquivar custo fixo:', error);
+        throw error;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Erro na função deleteFixedCost:', error);
+      return false;
+    }
+  }
+
+  // Variable Costs
+  async loadVariableCosts(): Promise<VariableCost[]> {
+    try {
+      const { data, error } = await supabase
+        .from('variable_costs')
+        .select('*')
+        .eq('archived', false)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Erro ao carregar custos variáveis:', error);
+        throw error;
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Erro na função loadVariableCosts:', error);
+      throw error;
+    }
+  }
+
+  async saveVariableCost(cost: Omit<VariableCost, 'id' | 'created_at'>): Promise<VariableCost | null> {
+    try {
+      const { data, error } = await supabase
+        .from('variable_costs')
+        .insert([cost])
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Erro ao salvar custo variável:', error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Erro na função saveVariableCost:', error);
+      throw error;
+    }
+  }
+
+  async updateVariableCost(id: string, updates: Partial<VariableCost>): Promise<VariableCost | null> {
+    try {
+      const { data, error } = await supabase
+        .from('variable_costs')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Erro ao atualizar custo variável:', error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Erro na função updateVariableCost:', error);
+      throw error;
+    }
+  }
+
+  async deleteVariableCost(id: string): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('variable_costs')
+        .update({ archived: true })
+        .eq('id', id);
+
+      if (error) {
+        console.error('Erro ao arquivar custo variável:', error);
+        throw error;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Erro na função deleteVariableCost:', error);
+      return false;
+    }
+  }
+
+  // Stock Items
+  async loadStockItems(): Promise<StockItem[]> {
+    try {
+      const { data, error } = await supabase
+        .from('stock_items')
+        .select('*')
+        .eq('archived', false)
+        .order('updated_at', { ascending: false });
+
+      if (error) {
+        console.error('Erro ao carregar itens do estoque:', error);
+        throw error;
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Erro na função loadStockItems:', error);
+      throw error;
+    }
+  }
+
+  async saveStockItem(item: Omit<StockItem, 'id' | 'created_at' | 'updated_at'>): Promise<StockItem | null> {
+    try {
+      const { data, error } = await supabase
+        .from('stock_items')
+        .insert([{ ...item, updated_at: new Date().toISOString() }])
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Erro ao salvar item do estoque:', error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Erro na função saveStockItem:', error);
+      throw error;
+    }
+  }
+
+  async updateStockItem(id: string, updates: Partial<StockItem>): Promise<StockItem | null> {
+    try {
+      const { data, error } = await supabase
+        .from('stock_items')
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq('item_id', id)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Erro ao atualizar item do estoque:', error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Erro na função updateStockItem:', error);
+      throw error;
+    }
+  }
+
+  async deleteStockItem(id: string): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('stock_items')
+        .update({ archived: true, updated_at: new Date().toISOString() })
+        .eq('item_id', id);
+
+      if (error) {
+        console.error('Erro ao arquivar item do estoque:', error);
+        throw error;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Erro na função deleteStockItem:', error);
+      return false;
+    }
+  }
+
+  // Production Entries
+  async loadProductionEntries(): Promise<ProductionEntry[]> {
+    try {
+      const { data, error } = await supabase
+        .from('production_entries')
+        .select('*')
+        .eq('archived', false)
+        .order('production_date', { ascending: false });
+
+      if (error) {
+        console.error('Erro ao carregar entradas de produção:', error);
+        throw error;
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Erro na função loadProductionEntries:', error);
+      throw error;
+    }
+  }
+
+  async saveProductionEntry(entry: Omit<ProductionEntry, 'id' | 'created_at'>): Promise<ProductionEntry | null> {
+    try {
+      const { data, error } = await supabase
+        .from('production_entries')
+        .insert([entry])
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Erro ao salvar entrada de produção:', error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Erro na função saveProductionEntry:', error);
+      throw error;
+    }
+  }
+
+  async updateProductionEntry(id: string, updates: Partial<ProductionEntry>): Promise<ProductionEntry | null> {
+    try {
+      const { data, error } = await supabase
+        .from('production_entries')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Erro ao atualizar entrada de produção:', error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Erro na função updateProductionEntry:', error);
+      throw error;
+    }
+  }
+
+  async deleteProductionEntry(id: string): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('production_entries')
+        .update({ archived: true })
+        .eq('id', id);
+
+      if (error) {
+        console.error('Erro ao arquivar entrada de produção:', error);
+        throw error;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Erro na função deleteProductionEntry:', error);
+      return false;
+    }
+  }
+
+  // Customers
+  async loadCustomers(): Promise<Customer[]> {
+    try {
+      const { data, error } = await supabase
+        .from('customers')
+        .select('*')
+        .eq('archived', false)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Erro ao carregar clientes:', error);
+        throw error;
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Erro na função loadCustomers:', error);
+      throw error;
+    }
+  }
+
+  async saveCustomer(customer: Omit<Customer, 'id' | 'created_at'>): Promise<Customer | null> {
+    try {
+      const { data, error } = await supabase
+        .from('customers')
+        .insert([customer])
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Erro ao salvar cliente:', error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Erro na função saveCustomer:', error);
+      throw error;
+    }
+  }
+
+  async updateCustomer(id: string, updates: Partial<Customer>): Promise<Customer | null> {
+    try {
+      const { data, error } = await supabase
+        .from('customers')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Erro ao atualizar cliente:', error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Erro na função updateCustomer:', error);
+      throw error;
+    }
+  }
+
+  async deleteCustomer(id: string): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('customers')
+        .update({ archived: true })
+        .eq('id', id);
+
+      if (error) {
+        console.error('Erro ao arquivar cliente:', error);
+        throw error;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Erro na função deleteCustomer:', error);
+      return false;
+    }
+  }
+
+  // Suppliers
+  async loadSuppliers(): Promise<Supplier[]> {
+    try {
+      const { data, error } = await supabase
+        .from('suppliers')
+        .select('*')
+        .eq('archived', false)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Erro ao carregar fornecedores:', error);
+        throw error;
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Erro na função loadSuppliers:', error);
+      throw error;
+    }
+  }
+
+  async saveSupplier(supplier: Omit<Supplier, 'id' | 'created_at'>): Promise<Supplier | null> {
+    try {
+      const { data, error } = await supabase
+        .from('suppliers')
+        .insert([supplier])
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Erro ao salvar fornecedor:', error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Erro na função saveSupplier:', error);
+      throw error;
+    }
+  }
+
+  async updateSupplier(id: string, updates: Partial<Supplier>): Promise<Supplier | null> {
+    try {
+      const { data, error } = await supabase
+        .from('suppliers')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Erro ao atualizar fornecedor:', error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Erro na função updateSupplier:', error);
+      throw error;
+    }
+  }
+
+  async deleteSupplier(id: string): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('suppliers')
+        .update({ archived: true })
+        .eq('id', id);
+
+      if (error) {
+        console.error('Erro ao arquivar fornecedor:', error);
+        throw error;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Erro na função deleteSupplier:', error);
+      return false;
+    }
+  }
+
+  // Cash Flow Entries
+  async loadCashFlowEntries(): Promise<CashFlowEntry[]> {
+    try {
+      const { data, error } = await supabase
+        .from('cash_flow_entries')
+        .select('*')
+        .eq('archived', false)
+        .order('transaction_date', { ascending: false });
+
+      if (error) {
+        console.error('Erro ao carregar entradas do fluxo de caixa:', error);
+        throw error;
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Erro na função loadCashFlowEntries:', error);
+      throw error;
+    }
+  }
+
+  async saveCashFlowEntry(entry: Omit<CashFlowEntry, 'id' | 'created_at'>): Promise<CashFlowEntry | null> {
+    try {
+      const { data, error } = await supabase
+        .from('cash_flow_entries')
+        .insert([entry])
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Erro ao salvar entrada do fluxo de caixa:', error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Erro na função saveCashFlowEntry:', error);
+      throw error;
+    }
+  }
+
+  async updateCashFlowEntry(id: string, updates: Partial<CashFlowEntry>): Promise<CashFlowEntry | null> {
+    try {
+      const { data, error } = await supabase
+        .from('cash_flow_entries')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Erro ao atualizar entrada do fluxo de caixa:', error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Erro na função updateCashFlowEntry:', error);
+      throw error;
+    }
+  }
+
+  async deleteCashFlowEntry(id: string): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('cash_flow_entries')
+        .update({ archived: true })
+        .eq('id', id);
+
+      if (error) {
+        console.error('Erro ao arquivar entrada do fluxo de caixa:', error);
+        throw error;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Erro na função deleteCashFlowEntry:', error);
+      return false;
+    }
+  }
+
+  // Production Recipes
+  async loadProductionRecipes(): Promise<ProductionRecipe[]> {
+    try {
+      const { data, error } = await supabase
+        .from('production_recipes')
+        .select('*')
+        .eq('archived', false)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Erro ao carregar receitas de produção:', error);
+        throw error;
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Erro na função loadProductionRecipes:', error);
+      throw error;
+    }
+  }
+
+  async saveProductionRecipe(recipe: Omit<ProductionRecipe, 'id' | 'created_at'>): Promise<ProductionRecipe | null> {
+    try {
+      const { data, error } = await supabase
+        .from('production_recipes')
+        .insert([recipe])
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Erro ao salvar receita de produção:', error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Erro na função saveProductionRecipe:', error);
+      throw error;
+    }
+  }
+
+  async updateProductionRecipe(id: string, updates: Partial<ProductionRecipe>): Promise<ProductionRecipe | null> {
+    try {
+      const { data, error } = await supabase
+        .from('production_recipes')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Erro ao atualizar receita de produção:', error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Erro na função updateProductionRecipe:', error);
+      throw error;
+    }
+  }
+
+  async deleteProductionRecipe(id: string): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('production_recipes')
+        .update({ archived: true })
+        .eq('id', id);
+
+      if (error) {
+        console.error('Erro ao arquivar receita de produção:', error);
+        throw error;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Erro na função deleteProductionRecipe:', error);
+      return false;
+    }
+  }
+
+  // Defective Tire Sales
+  async loadDefectiveTireSales(): Promise<DefectiveTireSale[]> {
+    try {
+      const { data, error } = await supabase
+        .from('defective_tire_sales')
+        .select('*')
+        .eq('archived', false)
+        .order('sale_date', { ascending: false });
+
+      if (error) {
+        console.error('Erro ao carregar vendas de pneus defeituosos:', error);
+        throw error;
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Erro na função loadDefectiveTireSales:', error);
+      throw error;
+    }
+  }
+
+  async saveDefectiveTireSale(sale: Omit<DefectiveTireSale, 'id' | 'created_at'>): Promise<DefectiveTireSale | null> {
+    try {
+      const { data, error } = await supabase
+        .from('defective_tire_sales')
+        .insert([sale])
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Erro ao salvar venda de pneu defeituoso:', error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Erro na função saveDefectiveTireSale:', error);
+      throw error;
+    }
+  }
+
+  async updateDefectiveTireSale(id: string, updates: Partial<DefectiveTireSale>): Promise<DefectiveTireSale | null> {
+    try {
+      const { data, error } = await supabase
+        .from('defective_tire_sales')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Erro ao atualizar venda de pneu defeituoso:', error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Erro na função updateDefectiveTireSale:', error);
+      throw error;
+    }
+  }
+
+  async deleteDefectiveTireSale(id: string): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('defective_tire_sales')
+        .update({ archived: true })
+        .eq('id', id);
+
+      if (error) {
+        console.error('Erro ao arquivar venda de pneu defeituoso:', error);
+        throw error;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Erro na função deleteDefectiveTireSale:', error);
+      return false;
+    }
+  }
+
+  // Cost Simulations
+  async loadCostSimulations(): Promise<CostSimulation[]> {
+    try {
+      const { data, error } = await supabase
+        .from('cost_simulations')
+        .select('*')
+        .eq('archived', false)
+        .order('updated_at', { ascending: false });
+
+      if (error) {
+        console.error('Erro ao carregar simulações de custo:', error);
+        throw error;
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Erro na função loadCostSimulations:', error);
+      throw error;
+    }
+  }
+
+  async saveCostSimulation(simulation: Omit<CostSimulation, 'id' | 'created_at' | 'updated_at'>): Promise<CostSimulation | null> {
+    try {
+      const { data, error } = await supabase
+        .from('cost_simulations')
+        .insert([simulation])
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Erro ao salvar simulação de custo:', error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Erro na função saveCostSimulation:', error);
+      throw error;
+    }
+  }
+
+  async updateCostSimulation(id: string, updates: Partial<CostSimulation>): Promise<CostSimulation | null> {
+    try {
+      const { data, error } = await supabase
+        .from('cost_simulations')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Erro ao atualizar simulação de custo:', error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Erro na função updateCostSimulation:', error);
+      throw error;
+    }
+  }
+
+  async deleteCostSimulation(id: string): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('cost_simulations')
+        .update({ archived: true })
+        .eq('id', id);
+
+      if (error) {
+        console.error('Erro ao arquivar simulação de custo:', error);
+        throw error;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Erro na função deleteCostSimulation:', error);
+      return false;
+    }
+  }
+
+  // Warranty Entries
+  async loadWarrantyEntries(): Promise<WarrantyEntry[]> {
+    try {
+      const { data, error } = await supabase
+        .from('warranty_entries')
+        .select('*')
+        .eq('archived', false)
+        .order('warranty_date', { ascending: false });
+
+      if (error) {
+        console.error('Erro ao carregar entradas de garantia:', error);
+        throw error;
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Erro na função loadWarrantyEntries:', error);
+      throw error;
+    }
+  }
+
+  async saveWarrantyEntry(entry: Omit<WarrantyEntry, 'id' | 'created_at'>): Promise<WarrantyEntry | null> {
+    try {
+      const { data, error } = await supabase
+        .from('warranty_entries')
+        .insert([entry])
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Erro ao salvar entrada de garantia:', error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Erro na função saveWarrantyEntry:', error);
+      throw error;
+    }
+  }
+
+  async updateWarrantyEntry(id: string, updates: Partial<WarrantyEntry>): Promise<WarrantyEntry | null> {
+    try {
+      const { data, error } = await supabase
+        .from('warranty_entries')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Erro ao atualizar entrada de garantia:', error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Erro na função updateWarrantyEntry:', error);
+      throw error;
+    }
+  }
+
+  async deleteWarrantyEntry(id: string): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('warranty_entries')
+        .update({ archived: true })
+        .eq('id', id);
+
+      if (error) {
+        console.error('Erro ao arquivar entrada de garantia:', error);
+        throw error;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Erro na função deleteWarrantyEntry:', error);
+      return false;
+    }
+  }
+
+  // Resale Products
+  async loadResaleProducts(): Promise<ResaleProduct[]> {
+    try {
+      const { data, error } = await supabase
+        .from('resale_products')
+        .select('*')
+        .eq('archived', false)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Erro ao carregar produtos de revenda:', error);
+        throw error;
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Erro na função loadResaleProducts:', error);
+      throw error;
+    }
+  }
+
+  async saveResaleProduct(product: Omit<ResaleProduct, 'id' | 'created_at'>): Promise<ResaleProduct | null> {
+    try {
+      const { data, error } = await supabase
+        .from('resale_products')
+        .insert([product])
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Erro ao salvar produto de revenda:', error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Erro na função saveResaleProduct:', error);
+      throw error;
+    }
+  }
+
+  async updateResaleProduct(id: string, updates: Partial<ResaleProduct>): Promise<ResaleProduct | null> {
+    try {
+      const { data, error } = await supabase
+        .from('resale_products')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Erro ao atualizar produto de revenda:', error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Erro na função updateResaleProduct:', error);
+      throw error;
+    }
+  }
+
+  async deleteResaleProduct(id: string): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('resale_products')
+        .update({ archived: true })
+        .eq('id', id);
+
+      if (error) {
+        console.error('Erro ao arquivar produto de revenda:', error);
+        throw error;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Erro na função deleteResaleProduct:', error);
+      return false;
+    }
+  }
+
+  // Resale Product Stock
+  async loadResaleProductsStock(): Promise<ResaleProductStock[]> {
+    try {
+      const { data, error } = await supabase
+        .from('resale_products_stock')
+        .select('*')
+        .eq('archived', false)
+        .order('updated_at', { ascending: false });
+
+      if (error) {
+        console.error('Erro ao carregar estoque de produtos de revenda:', error);
+        throw error;
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Erro na função loadResaleProductsStock:', error);
+      throw error;
+    }
+  }
+
+  async saveResaleProductStock(stock: Omit<ResaleProductStock, 'id' | 'created_at' | 'updated_at'>): Promise<ResaleProductStock | null> {
+    try {
+      const { data, error } = await supabase
+        .from('resale_products_stock')
+        .insert([{ ...stock, updated_at: new Date().toISOString() }])
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Erro ao salvar estoque de produto de revenda:', error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Erro na função saveResaleProductStock:', error);
+      throw error;
+    }
+  }
+
+  async updateResaleProductStock(id: string, updates: Partial<ResaleProductStock>): Promise<ResaleProductStock | null> {
+    try {
+      const { data, error } = await supabase
+        .from('resale_products_stock')
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq('product_id', id)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Erro ao atualizar estoque de produto de revenda:', error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Erro na função updateResaleProductStock:', error);
+      throw error;
+    }
+  }
+
+  async deleteResaleProductStock(id: string): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('resale_products_stock')
+        .update({ archived: true, updated_at: new Date().toISOString() })
+        .eq('product_id', id);
+
+      if (error) {
+        console.error('Erro ao arquivar estoque de produto de revenda:', error);
+        throw error;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Erro na função deleteResaleProductStock:', error);
+      return false;
+    }
+  }
+
+  // Accounts Receivable
+  async loadAccountsReceivableEntries(): Promise<AccountsReceivableEntry[]> {
+    try {
+      const { data, error } = await supabase
+        .from('accounts_receivable')
+        .select('*')
+        .eq('archived', false)
+        .order('due_date', { ascending: true });
+
+      if (error) {
+        console.error('Erro ao carregar contas a receber:', error);
+        throw error;
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Erro na função loadAccountsReceivableEntries:', error);
+      throw error;
+    }
+  }
+
+  async saveAccountsReceivableEntry(entry: Omit<AccountsReceivableEntry, 'id' | 'created_at' | 'updated_at'>): Promise<AccountsReceivableEntry | null> {
+    try {
+      const { data, error } = await supabase
+        .from('accounts_receivable')
+        .insert([entry])
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Erro ao salvar conta a receber:', error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Erro na função saveAccountsReceivableEntry:', error);
+      throw error;
+    }
+  }
+
+  async updateAccountsReceivableEntry(id: string, updates: Partial<AccountsReceivableEntry>): Promise<AccountsReceivableEntry | null> {
+    try {
+      const { data, error } = await supabase
+        .from('accounts_receivable')
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Erro ao atualizar conta a receber:', error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Erro na função updateAccountsReceivableEntry:', error);
+      throw error;
+    }
+  }
+
+  async deleteAccountsReceivableEntry(id: string): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('accounts_receivable')
+        .update({ archived: true, updated_at: new Date().toISOString() })
+        .eq('id', id);
+
+      if (error) {
+        console.error('Erro ao arquivar conta a receber:', error);
+        throw error;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Erro na função deleteAccountsReceivableEntry:', error);
+      return false;
+    }
+  }
+
+  // Método para salvar custo médio por pneu (sincronização com TireCostManager)
+  async saveAverageTireCost(averageCost: number): Promise<boolean> {
+    try {
+      // Upsert no sistema de configurações para manter o custo médio sincronizado
+      const { error } = await supabase
+        .from('system_settings')
+        .upsert({ 
+          key: 'average_tire_cost', 
+          value: averageCost.toString(),
+          updated_at: new Date().toISOString()
+        });
+
+      if (error) {
+        console.error('Erro ao salvar custo médio por pneu:', error);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Erro na função saveAverageTireCost:', error);
+      return false;
+    }
+  }
+
+  // Método para carregar custo médio por pneu
+  async loadAverageTireCost(): Promise<number> {
+    try {
+      const { data, error } = await supabase
+        .from('system_settings')
+        .select('value')
+        .eq('key', 'average_tire_cost')
+        .single();
+
+      if (error) {
+        console.error('Erro ao carregar custo médio por pneu:', error);
+        return 0;
+      }
+
+      return parseFloat(data.value) || 0;
+    } catch (error) {
+      console.error('Erro na função loadAverageTireCost:', error);
+      return 0;
+    }
+  }
+}
 
 // Criar e exportar instância única do DataManager
 const dataManagerInstance = new DataManager();
 
 export { dataManagerInstance as dataManager };
 export default dataManagerInstance;
-
-interface TireData {
-  id: number;
-  brand: string;
-  model: string;
-  size: string;
-  pressure: number;
-  wear: number; // 0 to 10
-  lastInspection: string;
-  nextInspection: string;
-  purchaseDate: string;
-  notes: string;
-}
-
-const TireCostManager: React.FC = () => {
-  const [tires, setTires] = useState<TireData[]>([]);
-  const [newTire, setNewTire] = useState<Omit<TireData, 'id'>>({
-    brand: '',
-    model: '',
-    size: '',
-    pressure: 0,
-    wear: 0,
-    lastInspection: '',
-    nextInspection: '',
-    purchaseDate: '',
-    notes: '',
-  });
-  const [editingTireId, setEditingTireId] = useState<number | null>(null);
-  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const navigate = useNavigate();
-
-  const open = Boolean(anchorEl);
-
-  useEffect(() => {
-    const fetchTires = async () => {
-      try {
-        const data = await dataManagerInstance.getTires(); // Usando a instância
-        setTires(data);
-      } catch (error) {
-        console.error('Failed to fetch tires:', error);
-        // Handle error appropriately, e.g., show a message to the user
-      }
-    };
-    fetchTires();
-  }, []);
-
-  const handleClick = (event: React.MouseEvent<HTMLElement>) => {
-    setAnchorEl(event.currentTarget);
-  };
-
-  const handleClose = () => {
-    setAnchorEl(null);
-  };
-
-  const handleAddTire = async () => {
-    try {
-      // Basic validation
-      if (
-        !newTire.brand ||
-        !newTire.model ||
-        !newTire.size ||
-        newTire.wear < 0 ||
-        newTire.wear > 10 ||
-        !newTire.purchaseDate ||
-        !newTire.nextInspection
-      ) {
-        alert('Please fill in all required fields and ensure wear is between 0 and 10.');
-        return;
-      }
-
-      const addedTire = await dataManagerInstance.addTire(newTire); // Usando a instância
-      setTires([...tires, addedTire]);
-      setNewTire({
-        brand: '',
-        model: '',
-        size: '',
-        pressure: 0,
-        wear: 0,
-        lastInspection: '',
-        nextInspection: '',
-        purchaseDate: '',
-        notes: '',
-      });
-    } catch (error) {
-      console.error('Failed to add tire:', error);
-      alert('Failed to add tire. Please try again.');
-    }
-  };
-
-  const handleUpdateTire = async () => {
-    if (editingTireId === null) return;
-    try {
-      // Basic validation
-      if (
-        !newTire.brand ||
-        !newTire.model ||
-        !newTire.size ||
-        newTire.wear < 0 ||
-        newTire.wear > 10 ||
-        !newTire.purchaseDate ||
-        !newTire.nextInspection
-      ) {
-        alert('Please fill in all required fields and ensure wear is between 0 and 10.');
-        return;
-      }
-
-      const updatedTire = await dataManagerInstance.updateTire(editingTireId, newTire); // Usando a instância
-      setTires(tires.map((tire) => (tire.id === editingTireId ? updatedTire : tire)));
-      setEditingTireId(null);
-      setNewTire({
-        brand: '',
-        model: '',
-        size: '',
-        pressure: 0,
-        wear: 0,
-        lastInspection: '',
-        nextInspection: '',
-        purchaseDate: '',
-        notes: '',
-      });
-    } catch (error) {
-      console.error('Failed to update tire:', error);
-      alert('Failed to update tire. Please try again.');
-    }
-  };
-
-  const handleDeleteTire = async (id: number) => {
-    try {
-      await dataManagerInstance.deleteTire(id); // Usando a instância
-      setTires(tires.filter((tire) => tire.id !== id));
-    } catch (error) {
-      console.error('Failed to delete tire:', error);
-      alert('Failed to delete tire. Please try again.');
-    }
-  };
-
-  const handleEditClick = (tire: TireData) => {
-    setEditingTireId(tire.id);
-    setNewTire({ ...tire });
-  };
-
-  const handleInputChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
-  ) => {
-    const { name, value } = e.target;
-    setNewTire((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleNumericInputChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
-  ) => {
-    const { name, value } = e.target;
-    const numericValue = parseFloat(value);
-    setNewTire((prev) => ({ ...prev, [name]: isNaN(numericValue) ? 0 : numericValue }));
-  };
-
-  const handleCancelEdit = () => {
-    setEditingTireId(null);
-    setNewTire({
-      brand: '',
-      model: '',
-      size: '',
-      pressure: 0,
-      wear: 0,
-      lastInspection: '',
-      nextInspection: '',
-      purchaseDate: '',
-      notes: '',
-    });
-  };
-
-  const handleNavigate = (path: string) => {
-    navigate(path);
-    handleClose();
-  };
-
-  return (
-    <Box sx={{ flexGrow: 1 }}>
-      <AppBar position="static">
-        <Toolbar>
-          <IconButton
-            size="large"
-            edge="start"
-            color="inherit"
-            aria-label="back"
-            sx={{ mr: 2 }}
-            onClick={() => navigate('/dashboard')}
-          >
-            <ArrowBack />
-          </IconButton>
-          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-            Tire Cost Manager
-          </Typography>
-          <Tooltip title="Account settings">
-            <IconButton
-              onClick={handleClick}
-              size="small"
-              sx={{ ml: 2 }}
-              aria-controls={open ? 'account-menu' : undefined}
-              aria-haspopup="true"
-              aria-expanded={open ? 'true' : undefined}
-            >
-              <Avatar sx={{ width: 32, height: 32 }}>T</Avatar>
-            </IconButton>
-          </Tooltip>
-        </Toolbar>
-      </AppBar>
-      <Menu
-        anchorEl={anchorEl}
-        id="account-menu"
-        open={open}
-        onClose={handleClose}
-        onClick={handleClose}
-        PaperProps={{
-          elevation: 0,
-          sx: {
-            overflow: 'visible',
-            filter: 'drop-shadow(0px 2px 8px rgba(0,0,0,0.32))',
-            mt: 1.5,
-            '& .MuiAvatar-root': {
-              width: 32,
-              height: 32,
-              ml: -0.5,
-              mr: 1,
-            },
-            '&:before': {
-              content: '""',
-              color: 'background.paper',
-              display: 'block',
-              position: 'absolute',
-              top: 0,
-              right: 14,
-              width: 10,
-              height: 10,
-              bgcolor: 'background.paper',
-              transform: 'translateY(-50%) rotate(45deg)',
-              zIndex: 0,
-            },
-          },
-        }}
-        transformOrigin={{ horizontal: 'right', vertical: 'top' }}
-        anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
-      >
-        <MenuItem>
-          <Avatar /> Profile
-        </MenuItem>
-        <MenuItem>
-          <Avatar /> My account
-        </MenuItem>
-        <Divider />
-        <MenuItem onClick={() => handleNavigate('/settings')}>
-          <ListItemIcon>
-            <Settings fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>Settings</ListItemText>
-        </MenuItem>
-        <MenuItem>
-          <ListItemIcon>
-            <Logout fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>Logout</ListItemText>
-        </MenuItem>
-      </Menu>
-
-      <Container component="main" maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-        <Paper elevation={3} sx={{ p: 3 }}>
-          <Typography variant="h4" gutterBottom align="center">
-            Manage Your Tires
-          </Typography>
-          <Grid container spacing={3}>
-            <Grid item xs={12} md={6}>
-              <Typography variant="h6" gutterBottom>
-                {editingTireId !== null ? 'Edit Tire' : 'Add New Tire'}
-              </Typography>
-              <Box
-                component="form"
-                noValidate
-                sx={{ mt: 1 }}
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  editingTireId !== null ? handleUpdateTire() : handleAddTire();
-                }}
-              >
-                <TextField
-                  margin="normal"
-                  required
-                  fullWidth
-                  label="Brand"
-                  name="brand"
-                  autoComplete="off"
-                  value={newTire.brand}
-                  onChange={handleInputChange}
-                  sx={{ backgroundColor: '#f9f9f9' }}
-                />
-                <TextField
-                  margin="normal"
-                  required
-                  fullWidth
-                  label="Model"
-                  name="model"
-                  autoComplete="off"
-                  value={newTire.model}
-                  onChange={handleInputChange}
-                  sx={{ backgroundColor: '#f9f9f9' }}
-                />
-                <TextField
-                  margin="normal"
-                  required
-                  fullWidth
-                  label="Size (e.g., 205/55R16)"
-                  name="size"
-                  autoComplete="off"
-                  value={newTire.size}
-                  onChange={handleInputChange}
-                  sx={{ backgroundColor: '#f9f9f9' }}
-                />
-                <TextField
-                  margin="normal"
-                  fullWidth
-                  label="Pressure (PSI)"
-                  name="pressure"
-                  type="number"
-                  autoComplete="off"
-                  value={newTire.pressure}
-                  onChange={handleNumericInputChange}
-                  sx={{ backgroundColor: '#f9f9f9' }}
-                />
-                <TextField
-                  margin="normal"
-                  required
-                  fullWidth
-                  label="Wear (0-10)"
-                  name="wear"
-                  type="number"
-                  autoComplete="off"
-                  value={newTire.wear}
-                  onChange={handleNumericInputChange}
-                  inputProps={{ min: 0, max: 10 }}
-                  sx={{ backgroundColor: '#f9f9f9' }}
-                />
-                <TextField
-                  margin="normal"
-                  required
-                  fullWidth
-                  label="Last Inspection Date (YYYY-MM-DD)"
-                  name="lastInspection"
-                  type="date"
-                  autoComplete="off"
-                  value={newTire.lastInspection}
-                  onChange={handleInputChange}
-                  InputLabelProps={{
-                    shrink: true,
-                  }}
-                  sx={{ backgroundColor: '#f9f9f9' }}
-                />
-                <TextField
-                  margin="normal"
-                  required
-                  fullWidth
-                  label="Next Inspection Date (YYYY-MM-DD)"
-                  name="nextInspection"
-                  type="date"
-                  autoComplete="off"
-                  value={newTire.nextInspection}
-                  onChange={handleInputChange}
-                  InputLabelProps={{
-                    shrink: true,
-                  }}
-                  sx={{ backgroundColor: '#f9f9f9' }}
-                />
-                <TextField
-                  margin="normal"
-                  required
-                  fullWidth
-                  label="Purchase Date (YYYY-MM-DD)"
-                  name="purchaseDate"
-                  type="date"
-                  autoComplete="off"
-                  value={newTire.purchaseDate}
-                  onChange={handleInputChange}
-                  InputLabelProps={{
-                    shrink: true,
-                  }}
-                  sx={{ backgroundColor: '#f9f9f9' }}
-                />
-                <TextField
-                  margin="normal"
-                  fullWidth
-                  label="Notes"
-                  name="notes"
-                  multiline
-                  rows={3}
-                  autoComplete="off"
-                  value={newTire.notes}
-                  onChange={handleInputChange}
-                  sx={{ backgroundColor: '#f9f9f9' }}
-                />
-                <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between' }}>
-                  <Button
-                    type="submit"
-                    variant="contained"
-                    color="primary"
-                    startIcon={editingTireId !== null ? null : <AddCircleOutline />}
-                    sx={{ px: 4 }}
-                  >
-                    {editingTireId !== null ? 'Update Tire' : 'Add Tire'}
-                  </Button>
-                  {editingTireId !== null && (
-                    <Button
-                      variant="outlined"
-                      color="secondary"
-                      onClick={handleCancelEdit}
-                      startIcon={<RemoveCircleOutline />}
-                      sx={{ px: 4 }}
-                    >
-                      Cancel Edit
-                    </Button>
-                  )}
-                </Box>
-              </Box>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <Typography variant="h6" gutterBottom>
-                Tire Inventory
-              </Typography>
-              <Paper elevation={2} sx={{ maxHeight: 500, overflow: 'auto', p: 2 }}>
-                {tires.length === 0 ? (
-                  <Typography color="textSecondary">No tires added yet.</Typography>
-                ) : (
-                  tires.map((tire) => (
-                    <Paper
-                      key={tire.id}
-                      elevation={1}
-                      sx={{
-                        mb: 2,
-                        p: 2,
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        backgroundColor: '#f9f9f9',
-                      }}
-                    >
-                      <Box>
-                        <Typography variant="subtitle1">
-                          {tire.brand} {tire.model} ({tire.size})
-                        </Typography>
-                        <Typography variant="body2" color="textSecondary">
-                          Wear: {tire.wear}/10 | Next Insp:{' '}
-                          {new Date(tire.nextInspection).toLocaleDateString()}
-                        </Typography>
-                      </Box>
-                      <Box>
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          onClick={() => handleEditClick(tire)}
-                          sx={{ mr: 1 }}
-                        >
-                          Edit
-                        </Button>
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          color="error"
-                          onClick={() => handleDeleteTire(tire.id)}
-                        >
-                          Delete
-                        </Button>
-                      </Box>
-                    </Paper>
-                  ))
-                )}
-              </Paper>
-            </Grid>
-          </Grid>
-        </Paper>
-      </Container>
-    </Box>
-  );
-};
-
-export default TireCostManager;
