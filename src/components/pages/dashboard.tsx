@@ -2814,7 +2814,8 @@ const Home = () => {
       Produção: "production",
       Cadastros: "registrations",
       Vendas: "sales",
-      Configurações: "settings", // Adicionado caso para Configurações
+      Settings: "settings", // Mapeamento correto para o valor "Settings" que vem da sidebar
+      Configurações: "settings", // Adicional para compatibilidade
     };
     setActiveSection(sectionMap[label] || "dashboard");
   };
