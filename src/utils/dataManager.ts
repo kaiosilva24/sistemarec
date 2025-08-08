@@ -2222,6 +2222,113 @@ export class DataManager {
   }
 
   /**
+   * Salva uma configuração genérica do sistema no Supabase
+   */
+  async saveSystemSetting(key: string, value: any): Promise<boolean> {
+    try {
+      console.log(`💾 [DataManager] Salvando configuração do sistema: ${key} = ${value}`);
+
+      const { error } = await this.supabase
+        .from('system_settings')
+        .upsert({
+          key: key,
+          value: value.toString(),
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'key'
+        });
+
+      if (error) {
+        console.error('❌ [DataManager] Erro ao salvar configuração no Supabase:', error);
+        return false;
+      }
+
+      console.log(`✅ [DataManager] Configuração ${key} salva no Supabase com sucesso`);
+      return true;
+
+    } catch (error) {
+      console.error(`❌ [DataManager] Erro ao salvar configuração ${key}:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Busca uma configuração genérica do sistema do Supabase
+   */
+  async loadSystemSetting(key: string, defaultValue: any = null): Promise<any> {
+    try {
+      console.log(`🔄 [DataManager] Carregando configuração do sistema: ${key}`);
+
+      const { data, error } = await this.supabase
+        .from('system_settings')
+        .select('value, updated_at')
+        .eq('key', key)
+        .single();
+
+      if (error || !data) {
+        console.warn(`⚠️ [DataManager] Configuração ${key} não encontrada no Supabase, usando valor padrão`);
+        return defaultValue;
+      }
+
+      // Try to parse as number first, then string
+      let value = data.value;
+      const numValue = Number(value);
+      if (!isNaN(numValue)) {
+        value = numValue;
+      }
+
+      console.log(`✅ [DataManager] Configuração ${key} carregada do Supabase: ${value}`);
+      return value;
+
+    } catch (error) {
+      console.error(`❌ [DataManager] Erro ao carregar configuração ${key}:`, error);
+      return defaultValue;
+    }
+  }
+
+  /**
+   * Subscreve às mudanças de uma configuração específica do sistema em tempo real
+   */
+  subscribeToSystemSettingChanges(key: string, callback: (value: any) => void): () => void {
+    console.log(`🔔 [DataManager] Iniciando subscription para configuração: ${key}`);
+
+    const subscription = this.supabase
+      .channel(`system_setting_${key}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'system_settings',
+          filter: `key=eq.${key}`
+        },
+        (payload) => {
+          console.log(`🔄 [DataManager] Mudança detectada na configuração ${key}:`, payload);
+
+          if (payload.new && typeof payload.new === 'object' && 'value' in payload.new) {
+            let value = payload.new.value;
+            
+            // Try to parse as number first, then string
+            const numValue = Number(value);
+            if (!isNaN(numValue)) {
+              value = numValue;
+            }
+
+            console.log(`📡 [DataManager] Novo valor para ${key} recebido: ${value}`);
+            callback(value);
+          }
+        }
+      )
+      .subscribe();
+
+    // Retorna função para cancelar subscription
+    return () => {
+      console.log(`🔕 [DataManager] Cancelando subscription da configuração: ${key}`);
+      subscription.unsubscribe();
+    };
+  }
+
+  /**
    * Salva o lucro médio por pneu no Supabase
    */
   async saveAverageTireProfit(profit: number): Promise<boolean> {

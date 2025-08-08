@@ -11,6 +11,7 @@ import {
   HelpCircle,
   FolderKanban,
   ShoppingCart,
+  Bug,
 } from "lucide-react";
 
 interface NavItem {

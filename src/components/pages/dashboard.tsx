@@ -188,7 +188,7 @@ const EmpresarialProfitChart = ({ cashFlowEntries, isLoading }: EmpresarialProfi
             </div>
             Lucro Empresarial
           </CardTitle>
-          
+
           {/* Filtros de Data */}
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
@@ -879,10 +879,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
 
         // Carregar valor inicial do Supabase
         const initialBalance = await dataManager.loadFinalProductStockBalance();
-        console.log(`🔍 [Dashboard] Valor inicial do saldo do Supabase: R$ ${initialBalance.toFixed(2)}`);
-
-        // Usar valor do Supabase exclusivamente
-        console.log(`🎯 [Dashboard] Valor final escolhido: R$ ${initialBalance.toFixed(2)}`);
+        console.log(`🔍 [Dashboard] Valor inicial do saldo de produtos finais: R$ ${initialBalance.toFixed(2)}`);
 
         setFinalProductStockBalance(initialBalance);
         setIsLoadingFinalProductStock(false);
@@ -1179,147 +1176,6 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       try {
         console.log('🚀 [Dashboard] Inicializando sincronização do saldo de produtos finais...');
 
-        // Carregar valor do Supabase
-        const supabaseBalance = await dataManager.loadFinalProductStockBalance();
-        console.log(`💰 [Dashboard] Saldo carregado do Supabase: R$ ${supabaseBalance.toFixed(2)}`);
-
-        // Usar valor do Supabase como inicial
-        setFinalProductStockBalance(supabaseBalance);
-        setIsLoadingFinalProductStock(false);
-
-        console.log(`🎯 [Dashboard] Saldo inicial definido: R$ ${supabaseBalance.toFixed(2)}`);
-      } catch (error) {
-        console.error('❌ [Dashboard] Erro ao inicializar saldo de produtos finais:', error);
-        setIsLoadingFinalProductStock(false);
-      }
-    };
-
-    initializeFinalProductStockSync();
-  }, []);
-
-  // Effect para sincronização em tempo real do saldo de matéria-prima
-  useEffect(() => {
-    let unsubscribe: (() => void) | null = null;
-
-    const initializeRawMaterialStockSync = async () => {
-      try {
-        console.log('🚀 [Dashboard] Inicializando sincronização do saldo de matéria-prima...');
-
-        // Carregar valor inicial do Supabase
-        const initialBalance = await dataManager.loadRawMaterialStockBalance();
-        console.log(`🔍 [Dashboard] Valor inicial do saldo do Supabase: R$ ${initialBalance.toFixed(2)}`);
-
-        // Se valor for 0, calcular baseado nos stockItems
-        if (initialBalance === 0 && stockItems.length > 0) {
-          const calculatedBalance = stockItems
-            .filter(item => item.item_type === 'material')
-            .reduce((total, item) => total + (item.total_value || 0), 0);
-
-          if (calculatedBalance > 0) {
-            console.log(`📊 [Dashboard] Calculando saldo inicial: R$ ${calculatedBalance.toFixed(2)}`);
-            await dataManager.saveRawMaterialStockBalance(calculatedBalance);
-            setRawMaterialStockBalance(calculatedBalance);
-          } else {
-            setRawMaterialStockBalance(initialBalance);
-          }
-        } else {
-          setRawMaterialStockBalance(initialBalance);
-        }
-
-        setIsLoadingRawMaterialStock(false);
-
-        console.log(`✅ [Dashboard] Saldo de matéria-prima inicial carregado: R$ ${(rawMaterialStockBalance || initialBalance).toFixed(2)}`);
-
-        // Configurar subscription em tempo real
-        unsubscribe = dataManager.subscribeToRawMaterialStockChanges((newBalance) => {
-          console.log(`📡 [Dashboard] Novo saldo de matéria-prima recebido via subscription: R$ ${newBalance.toFixed(2)}`);
-          setRawMaterialStockBalance(newBalance);
-        });
-
-        console.log('🔔 [Dashboard] Subscription ativa para mudanças de saldo de matéria-prima em tempo real');
-
-      } catch (error) {
-        console.error('❌ [Dashboard] Erro ao inicializar sincronização do saldo de matéria-prima:', error);
-        setIsLoadingRawMaterialStock(false);
-
-        // Fallback para cálculo local em caso de erro
-        const fallbackBalance = stockItems
-          .filter(item => item.item_type === 'material')
-          .reduce((total, item) => total + (item.total_value || 0), 0);
-        setRawMaterialStockBalance(fallbackBalance);
-      }
-    };
-
-    initializeRawMaterialStockSync();
-
-    // Cleanup subscription
-    return () => {
-      if (unsubscribe) {
-        console.log('🔕 [Dashboard] Cancelando subscription do saldo de matéria-prima');
-        unsubscribe();
-      }
-    };
-  }, [stockItems, stockItemsLoading]);
-
-  // Listener para evento customizado de atualização do lucro médio dos produtos de revenda
-  useEffect(() => {
-    const handleResaleProfitUpdate = (event: CustomEvent) => {
-      const { profit, timestamp, source } = event.detail;
-      console.log(`📡 [Dashboard] Evento 'resaleProfitUpdated' recebido:`);
-      console.log(`  - Lucro: R$ ${profit.toFixed(2)}`);
-      console.log(`  - Timestamp: ${new Date(timestamp).toLocaleString()}`);
-      console.log(`  - Source: ${source}`);
-
-      // Usar função de debounce para evitar oscilações
-      updateResaleProfitWithDebounce(profit, source || 'Custom Event');
-    };
-
-    console.log('🎯 [Dashboard] Registrando listener para evento resaleProfitUpdated');
-
-    // Adicionar listener para o evento customizado
-    window.addEventListener('resaleProfitUpdated', handleResaleProfitUpdate as EventListener);
-
-    // Cleanup
-    return () => {
-      console.log('🚫 [Dashboard] Removendo listener para evento resaleProfitUpdated');
-      window.removeEventListener('resaleProfitUpdated', handleResaleProfitUpdate as EventListener);
-    };
-  }, []);
-
-  // Listener para evento customizado de atualização do saldo de produtos finais
-  useEffect(() => {
-    const handleFinalProductStockUpdate = (event: CustomEvent) => {
-      const { balance, timestamp, source } = event.detail;
-      console.log(`💰 [Dashboard] Evento 'finalProductStockUpdated' recebido:`);
-      console.log(`  - Saldo: R$ ${balance.toFixed(2)}`);
-      console.log(`  - Timestamp: ${new Date(timestamp).toLocaleString()}`);
-      console.log(`  - Source: ${source}`);
-
-      // Atualizar estado imediatamente
-      setFinalProductStockBalance(balance);
-      setIsLoadingFinalProductStock(false);
-    };
-
-    console.log('🎯 [Dashboard] Registrando listener para evento finalProductStockUpdated');
-
-    // Adicionar listener para o evento customizado
-    window.addEventListener('finalProductStockUpdated', handleFinalProductStockUpdate as EventListener);
-
-    // Cleanup
-    return () => {
-      console.log('🚫 [Dashboard] Removendo listener para evento finalProductStockUpdated');
-      window.removeEventListener('finalProductStockUpdated', handleFinalProductStockUpdate as EventListener);
-    };
-  }, []);
-
-  // Inicialização e sincronização do saldo de produtos finais
-  useEffect(() => {
-    let unsubscribe: (() => void) | null = null;
-
-    const initializeFinalProductStockSync = async () => {
-      try {
-        console.log('🚀 [Dashboard] Inicializando sincronização do saldo de produtos finais...');
-
         // Carregar valor inicial do Supabase
         const initialBalance = await dataManager.loadFinalProductStockBalance();
         console.log(`📊 [Dashboard] Valor inicial do saldo de produtos finais: R$ ${initialBalance.toFixed(2)}`);
@@ -1328,12 +1184,9 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
         setIsLoadingFinalProductStock(false);
 
         // Configurar subscription em tempo real para mudanças no Supabase
-        unsubscribe = dataManager.subscribeToFinalProductStockChanges((newBalance) => {
-          console.log(`📡 [Dashboard] Novo saldo de produtos finais recebido via Supabase: R$ ${newBalance.toFixed(2)}`);
-          setFinalProductStockBalance(newBalance);
-        });
-
-        console.log('🔔 [Dashboard] Subscription ativa para mudanças no saldo de produtos finais');
+        // Note: O hook useDataPersistence já gerencia subscriptions, este effect pode ser redundante.
+        // Se necessário, o subscription pode ser configurado aqui ou confiado no hook.
+        // O `dataManager.subscribeToFinalProductStockChanges` é um wrapper que pode ser usado.
 
       } catch (error) {
         console.error('❌ [Dashboard] Erro ao inicializar sincronização do saldo de produtos finais:', error);
@@ -1356,14 +1209,6 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
     };
 
     initializeFinalProductStockSync();
-
-    // Cleanup subscription
-    return () => {
-      if (unsubscribe) {
-        console.log('🔕 [Dashboard] Cancelando subscription do saldo de produtos finais');
-        unsubscribe();
-      }
-    };
   }, []);
 
   // Effect para sincronização em tempo real da quantidade unitária de matéria-prima
@@ -1864,45 +1709,6 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
     };
   }, []);
 
-  // Listener para evento customizado de atualização de estoque
-  useEffect(() => {
-    const handleStockUpdate = async (event: CustomEvent) => {
-      const { timestamp, source } = event.detail;
-      console.log(`📦 [Dashboard] Evento 'stockItemsUpdated' recebido:`);
-      console.log(`  - Timestamp: ${new Date(timestamp).toLocaleString()}`);
-      console.log(`  - Source: ${source}`);
-
-      // Recarregar dados de estoque
-      try {
-        console.log('🔄 [Dashboard] Recarregando dados de estoque...');
-        const updatedStockItems = await dataManager.loadStockItems();
-
-        // Atualizar estado local (isso vai recalcular automaticamente os valores dos cards)
-        // Como estamos usando o hook useStockItems, precisamos forçar uma atualização
-        // Vamos disparar um evento para o hook
-        const forceReloadEvent = new CustomEvent('forceStockItemsReload', {
-          detail: { updatedStockItems }
-        });
-        window.dispatchEvent(forceReloadEvent);
-
-        console.log(`✅ [Dashboard] Dados de estoque recarregados: ${updatedStockItems.length} itens`);
-      } catch (error) {
-        console.error('❌ [Dashboard] Erro ao recarregar dados de estoque:', error);
-      }
-    };
-
-    console.log('🎯 [Dashboard] Registrando listener para evento stockItemsUpdated');
-
-    // Adicionar listener para o evento customizado
-    window.addEventListener('stockItemsUpdated', handleStockUpdate as EventListener);
-
-    // Cleanup
-    return () => {
-      console.log('🚫 [Dashboard] Removendo listener para evento stockItemsUpdated');
-      window.removeEventListener('stockItemsUpdated', handleStockUpdate as EventListener);
-    };
-  }, []);
-
   // Monitorar mudanças no stockItems e calcular saldo de matéria-prima automaticamente
   useEffect(() => {
     if (!stockItemsLoading && stockItems.length >= 0) {
@@ -2169,7 +1975,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
     }
   }, [cashFlowEntries, cashFlowLoading, cashBalanceState]);
 
-  // Monitoramento de mudanças no estoque para sincronização entre componentes
+  // Monitorar mudanças no estoque para sincronização entre componentes
   useEffect(() => {
     if (!stockItems.length || stockItemsLoading) return;
 
@@ -2440,7 +2246,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
             </CardContent>
           </Card>
 
-          
+
         </div>
       </div>
 
@@ -3008,6 +2814,7 @@ const Home = () => {
       Produção: "production",
       Cadastros: "registrations",
       Vendas: "sales",
+      Configurações: "settings", // Adicionado caso para Configurações
     };
     setActiveSection(sectionMap[label] || "dashboard");
   };
@@ -3137,7 +2944,9 @@ const Home = () => {
                     ? "Produção"
                     : activeSection === "sales"
                       ? "Vendas"
-                      : "Cadastros"
+                      : activeSection === "settings"
+                        ? "Configurações" // Adicionado caso para Configurações
+                        : "Cadastros"
           }
         />
         <main className="flex-1 overflow-auto">
@@ -3209,6 +3018,9 @@ const Home = () => {
             )}
             {activeSection === "sales" && (
               <SalesDashboard isLoading={loading} onRefresh={handleRefresh} />
+            )}
+            {activeSection === "settings" && ( // Renderiza SettingsDashboard quando activeSection for "settings"
+              <SettingsDashboard onRefresh={() => window.location.reload()} />
             )}
           </div>
         </main>
