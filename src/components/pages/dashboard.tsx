@@ -48,6 +48,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
+import { TrendingDown } from "lucide-react";
 import { dataManager } from '../../utils/dataManager';
 import { autoSetupSupabase } from '../../utils/setupSupabaseTable';
 import { ensureSystemDataExists } from '../../utils/initializeSupabaseData';
@@ -70,6 +71,14 @@ import {
 // Imports de drag-and-drop removidos - não são mais necessários
 
 // Seção de Métricas Principais removida completamente conforme solicitado
+
+// Função para formatar valores em moeda
+const formatCurrency = (value: number) => {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL'
+  }).format(value);
+};
 
 // Componente para Gráfico de Lucro Empresarial
 interface EmpresarialProfitChartProps {
