@@ -1856,7 +1856,7 @@ const SalesDashboard = ({
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <div className="flex justify-center">
-        <TabsList className="inline-grid w-auto grid-cols-5 gap-2 bg-factory-800/50 border border-tire-600/30 p-1">
+        <TabsList className="inline-grid w-auto grid-cols-4 gap-2 bg-factory-800/50 border border-tire-600/30 p-1">
           <TabsTrigger
             value="pos"
             className="text-tire-300 data-[state=active]:text-white data-[state=active]:bg-neon-green/20"
@@ -1884,14 +1884,6 @@ const SalesDashboard = ({
           >
             <AlertTriangle className="h-4 w-4 mr-2" />
             Histórico de Garantias
-          </TabsTrigger>
-
-          <TabsTrigger
-            value="products"
-            className="text-tire-300 data-[state=active]:text-white data-[state=active]:bg-neon-green/20"
-          >
-            <Package className="h-4 w-4 mr-2" />
-            Produtos
           </TabsTrigger>
         </TabsList>
         </div>
@@ -4221,171 +4213,7 @@ const SalesDashboard = ({
           </Card>
         </TabsContent>
 
-        <TabsContent value="products">
-          <Card className="bg-factory-900/80 border-tire-600/30 max-w-7xl mx-auto">
-            <CardHeader>
-              <CardTitle className="text-tire-200 text-lg flex items-center justify-between">
-                Produtos Disponíveis no Estoque
-                <div className="text-sm font-normal text-tire-300">
-                  {availableProducts.length} produtos disponíveis
-                </div>
-              </CardTitle>
-              <div className="relative">
-                <Search className="absolute left-3 top-2.5 h-4 w-4 text-tire-400" />
-                <Input
-                  placeholder="Buscar produtos..."
-                  value={productsSearch}
-                  onChange={(e) => setProductsSearch(e.target.value)}
-                  className="pl-9 bg-factory-700/50 border-tire-600/30 text-white placeholder:text-tire-400"
-                />
-              </div>
-            </CardHeader>
-            <CardContent className="bg-factory-900/60 rounded-lg">
-              <div className="space-y-3 max-h-96 overflow-y-auto">
-                {filteredProducts.length === 0 ? (
-                  <div className="text-center py-8">
-                    <Package className="h-12 w-12 text-tire-500 mx-auto mb-3" />
-                    <p className="text-tire-400">
-                      {productsSearch
-                        ? "Nenhum produto encontrado com os filtros aplicados."
-                        : "Nenhum produto disponível no estoque"}
-                    </p>
-                  </div>
-                ) : (
-                  filteredProducts.map((product) => {
-                    // Calculate quantity sold for this product
-                    const quantitySold = finalProductSalesHistory.reduce(
-                      (total, sale) => {
-                        const productInfo = extractProductInfoFromSale(
-                          sale.description || "",
-                        );
-                        if (productInfo?.productId === product.id) {
-                          return total + (productInfo?.quantity || 0);
-                        }
-                        return total;
-                      },
-                      0,
-                    );
-
-                    return (
-                      <div
-                        key={product.id}
-                        className="p-4 bg-factory-700/30 rounded-lg border border-tire-600/20"
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <h4 className="text-white font-medium">
-                            {product.item_name}
-                          </h4>
-                          <div className="text-right">
-                            <span className="text-neon-purple font-bold text-lg">
-                              {formatCurrency(product.unit_cost)}
-                            </span>
-                            <p className="text-tire-400 text-xs">
-                              por {product.unit}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-4">
-                            <div className="text-tire-300">
-                              <span className="font-medium">Estoque:</span>
-                              <span className="ml-2 text-neon-green font-bold">
-                                {product.quantity.toFixed(0)} {product.unit}
-                              </span>
-                            </div>
-                            <div className="text-tire-300">
-                              <span className="font-medium">Vendido:</span>
-                              <span className="ml-2 text-neon-orange font-bold">
-                                {quantitySold.toFixed(0)} {product.unit}
-                              </span>
-                            </div>
-                            {product.min_level && (
-                              <div className="text-tire-400 text-sm">
-                                Min: {product.min_level} {product.unit}
-                              </div>
-                            )}
-                          </div>
-                          <div className="text-right">
-                            <p className="text-neon-blue font-bold">
-                              {formatCurrency(product.total_value)}
-                            </p>
-                            <p className="text-tire-400 text-xs">
-                              Valor Estoque
-                            </p>
-                          </div>
-                        </div>
-                        {product.last_updated && (
-                          <div className="text-tire-500 text-xs mt-2">
-                            Atualizado em:{" "}
-                            {new Date(product.last_updated).toLocaleDateString(
-                              "pt-BR",
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-              {filteredProducts.length > 0 && (
-                <div className="mt-4 p-4 bg-factory-800/50 rounded-lg border border-tire-600/30">
-                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                    <div className="text-center">
-                      <p className="text-tire-300 text-sm mb-1">
-                        Total Produtos
-                      </p>
-                      <p className="text-neon-blue font-bold text-lg">
-                        {filteredProducts.length}
-                      </p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-tire-300 text-sm mb-1">
-                        Qtd. Total Vendida
-                      </p>
-                      <p className="text-neon-orange font-bold text-lg">
-                        {filteredProducts
-                          .reduce((total, product) => {
-                            const quantitySold =
-                              finalProductSalesHistory.reduce((sum, sale) => {
-                                const productInfo = extractProductInfoFromSale(
-                                  sale.description || "",
-                                );
-                                if (productInfo?.productId === product.id) {
-                                  return sum + (productInfo?.quantity || 0);
-                                }
-                                return sum;
-                              }, 0);
-                            return total + quantitySold;
-                          }, 0)
-                          .toFixed(0)}
-                      </p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-tire-300 text-sm mb-1">
-                        Valor do Estoque
-                      </p>
-                      <p className="text-neon-green font-bold text-lg">
-                        {formatCurrency(totalStockValue)}
-                      </p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-tire-300 text-sm mb-1">
-                        Valor Médio/Produto
-                      </p>
-                      <p className="text-neon-purple font-bold text-lg">
-                        {filteredProducts.length > 0
-                          ? formatCurrency(
-                              totalStockValue / filteredProducts.length,
-                            )
-                          : formatCurrency(0)}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+        
       </Tabs>
     </div>
   );
