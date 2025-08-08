@@ -1730,13 +1730,22 @@ const SalesDashboard = ({
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div className="flex-1">
-                <p className="text-tire-300 text-sm font-medium text-center mb-2">Vendedores Ativos</p>
+                <p className="text-tire-300 text-sm font-medium text-center mb-2">Valor a Receber</p>
                 <p className="text-2xl font-bold text-neon-green text-center">
-                  {activeSalespeople.length}
+                  {formatCurrency(
+                    // Calcular valor total das vendas à prazo (produtos finais)
+                    finalProductSalesHistory
+                      .filter(sale => sale.category === "venda_a_prazo")
+                      .reduce((total, sale) => total + extractRealValueFromSale(sale), 0) +
+                    // Calcular valor total das vendas à prazo (produtos de revenda)
+                    resaleProductSalesHistory
+                      .filter(sale => sale.category === "venda_a_prazo")
+                      .reduce((total, sale) => total + extractRealValueFromSale(sale), 0)
+                  )}
                 </p>
               </div>
               <div className="text-neon-green ml-3">
-                <UserCheck className="h-8 w-8" />
+                <DollarSign className="h-8 w-8" />
               </div>
             </div>
           </CardContent>
