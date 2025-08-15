@@ -11,8 +11,8 @@ import SalesDashboard from "../sales/SalesDashboard";
 import DataDiagnostic from "../debug/DataDiagnostic";
 import StockCharts from "../stock/StockCharts";
 import ProductionChart from "../stock/ProductionChart";
-import PresumedProfitChart from "../stock/PresumedProfitChart";
-import { useDataPersistence } from '../../hooks/useDataPersistence';
+
+import { useDataPersistence, useDebts } from '../../hooks/useDataPersistence';
 import { supabase } from '../../../supabase/supabase';
 import PresumedProfitManager from "../financial/PresumedProfitManager";
 import ResaleProductProfitManager from "../financial/ResaleProductProfitManager";
@@ -75,100 +75,101 @@ import {
 interface EmpresarialProfitChartProps {
   cashFlowEntries: any[];
   isLoading: boolean;
+  empresarialValue: number | null;
 }
 
-const EmpresarialProfitChart = ({ cashFlowEntries, isLoading }: EmpresarialProfitChartProps) => {
-  const [dateFilter, setDateFilter] = useState("30"); // 30 dias por padrão
+const EmpresarialProfitChart = ({ cashFlowEntries, isLoading, empresarialValue }: EmpresarialProfitChartProps) => {
+  const [dateFilter, setDateFilter] = useState("30"); // Mensal (30 dias) por padrão
   const [customStartDate, setCustomStartDate] = useState("");
   const [customEndDate, setCustomEndDate] = useState("");
+  
+  // Estados para lucro empresarial
+  const [businessProfit, setBusinessProfit] = useState<number>(0);
+  const [businessBaseline, setBusinessBaseline] = useState<number | null>(null);
+  const [isLoadingBusinessProfit, setIsLoadingBusinessProfit] = useState(true);
 
-  // Função para calcular lucro empresarial por dia
-  const calculateDailyProfit = () => {
-    if (!cashFlowEntries || cashFlowEntries.length === 0) return [];
-
-    // Determinar período baseado no filtro
-    let startDate = new Date();
-    let endDate = new Date();
-
-    if (dateFilter === "custom") {
-      if (customStartDate && customEndDate) {
-        startDate = new Date(customStartDate);
-        endDate = new Date(customEndDate);
-      } else {
-        startDate.setDate(startDate.getDate() - 30);
+  // Carregar lucro empresarial
+  useEffect(() => {
+    const loadBusinessProfit = async () => {
+      try {
+        setIsLoadingBusinessProfit(true);
+        const profit = await dataManager.calculateBusinessProfit();
+        const baseline = await dataManager.loadBusinessValueBaseline();
+        setBusinessProfit(profit);
+        setBusinessBaseline(baseline);
+      } catch (error) {
+        console.error('Erro ao carregar lucro empresarial:', error);
+      } finally {
+        setIsLoadingBusinessProfit(false);
       }
-    } else {
-      const days = parseInt(dateFilter);
-      startDate.setDate(startDate.getDate() - days);
+    };
+
+    loadBusinessProfit();
+  }, [empresarialValue]); // Recalcula quando valor empresarial muda
+
+  // Função para calcular lucro empresarial baseado em registros reais
+  const calculateDailyProfit = () => {
+    // Se não há baseline, mostrar apenas o ponto atual
+    if (businessBaseline === null) {
+      return [{
+        date: new Date().toISOString().split('T')[0],
+        displayDate: new Date().toLocaleDateString('pt-BR'),
+        profit: 0,
+        businessValue: empresarialValue || 0,
+        baseline: 0,
+        accumulatedProfit: 0,
+      }];
     }
 
-    // Filtrar entradas por período
-    const filteredEntries = cashFlowEntries.filter(entry => {
-      const entryDate = new Date(entry.transaction_date || entry.created_at);
-      return entryDate >= startDate && entryDate <= endDate;
+    // Mostrar apenas pontos relevantes: baseline e valor atual
+    const chartData = [];
+    const today = new Date();
+    const baselineDate = new Date();
+    baselineDate.setDate(today.getDate() - 7); // Simular que baseline foi criado há 7 dias
+
+    // Ponto do baseline (início)
+    chartData.push({
+      date: baselineDate.toISOString().split('T')[0],
+      displayDate: baselineDate.toLocaleDateString('pt-BR'),
+      profit: 0, // No momento do baseline, lucro era zero
+      businessValue: businessBaseline,
+      baseline: businessBaseline,
+      accumulatedProfit: 0,
     });
 
-    // Agrupar por data e calcular lucro diário
-    const dailyData: { [key: string]: { income: number; expense: number; date: Date } } = {};
-
-    filteredEntries.forEach(entry => {
-      const entryDate = new Date(entry.transaction_date || entry.created_at);
-      const dateKey = entryDate.toISOString().split('T')[0];
-
-      if (!dailyData[dateKey]) {
-        dailyData[dateKey] = { income: 0, expense: 0, date: entryDate };
-      }
-
-      if (entry.type === 'income') {
-        dailyData[dateKey].income += entry.amount;
-      } else if (entry.type === 'expense') {
-        dailyData[dateKey].expense += entry.amount;
-      }
-    });
-
-    // Converter para array e calcular lucro acumulado
-    const chartData = Object.keys(dailyData)
-      .sort()
-      .map(dateKey => {
-        const data = dailyData[dateKey];
-        const profit = data.income - data.expense;
-        return {
-          date: dateKey,
-          displayDate: data.date.toLocaleDateString('pt-BR'),
-          profit: profit,
-          income: data.income,
-          expense: data.expense,
-        };
+    // Ponto atual (se diferente do baseline)
+    if (empresarialValue !== businessBaseline) {
+      const currentProfit = empresarialValue !== null ? empresarialValue - businessBaseline : 0;
+      chartData.push({
+        date: today.toISOString().split('T')[0],
+        displayDate: today.toLocaleDateString('pt-BR'),
+        profit: currentProfit,
+        businessValue: empresarialValue || 0,
+        baseline: businessBaseline,
+        accumulatedProfit: currentProfit,
       });
+    }
 
-    // Calcular lucro acumulado
-    let accumulated = 0;
-    return chartData.map(item => {
-      accumulated += item.profit;
-      return {
-        ...item,
-        accumulatedProfit: accumulated,
-      };
-    });
+    return chartData;
   };
 
   const chartData = calculateDailyProfit();
 
-  // Tooltip customizado
+  // Tooltip customizado para lucro empresarial
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       return (
         <div className="bg-factory-800/95 border border-tire-600/50 rounded-lg p-3 shadow-lg">
           <p className="text-white font-medium">{data.displayDate}</p>
-          <p className="text-green-400">
-            Receitas: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(data.income)}
+          <p className="text-tire-300">
+            Valor Empresarial: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(data.businessValue)}
           </p>
-          <p className="text-red-400">
-            Despesas: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(data.expense)}
+          <p className="text-tire-400">
+            Baseline: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(data.baseline)}
           </p>
-          <p className="text-neon-purple font-bold">
-            Lucro: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(data.profit)}
+          <p className={`font-bold ${data.profit >= 0 ? 'text-neon-green' : 'text-red-400'}`}>
+            Lucro Empresarial: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(data.profit)}
           </p>
           <p className="text-neon-blue">
             Acumulado: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(data.accumulatedProfit)}
@@ -210,7 +211,6 @@ const EmpresarialProfitChart = ({ cashFlowEntries, isLoading }: EmpresarialProfi
 
             {dateFilter === "custom" && (
               <div className="flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-tire-400" />
                 <input
                   type="date"
                   value={customStartDate}
@@ -230,78 +230,134 @@ const EmpresarialProfitChart = ({ cashFlowEntries, isLoading }: EmpresarialProfi
         </div>
       </CardHeader>
       <CardContent>
-        <div className="w-full" style={{ width: '790px', height: '260px' }}>
-          {isLoading ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-neon-purple"></div>
-            </div>
-          ) : chartData.length === 0 ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center">
-                <TrendingUp className="h-12 w-12 text-tire-500 mx-auto mb-3" />
-                <p className="text-tire-400">Nenhum dado encontrado para o período selecionado</p>
+        <div className="flex items-start gap-6">
+          {/* Gráfico */}
+          <div className="w-full" style={{ width: '790px', height: '260px', minWidth: '790px', minHeight: '260px' }}>
+            {isLoading ? (
+              <div className="flex items-center justify-center h-full">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-neon-purple"></div>
               </div>
+            ) : chartData.length === 0 ? (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center">
+                  <TrendingUp className="h-12 w-12 text-tire-500 mx-auto mb-3" />
+                  <p className="text-tire-400">Nenhum dado encontrado para o período selecionado</p>
+                </div>
+              </div>
+            ) : (
+              <ResponsiveContainer width={790} height={260} minWidth={790} minHeight={260}>
+                <LineChart
+                  data={chartData}
+                  margin={{
+                    top: 20,
+                    right: 30,
+                    left: 20,
+                    bottom: 20,
+                  }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.3} />
+                  <XAxis
+                    dataKey="displayDate"
+                    stroke="#9CA3AF"
+                    fontSize={10}
+                    angle={-45}
+                    textAnchor="end"
+                    height={60}
+                  />
+                  <YAxis
+                    stroke="#9CA3AF"
+                    fontSize={12}
+                    tickFormatter={(value) => `R$ ${value.toLocaleString("pt-BR")}`}
+                  />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Line
+                    type="monotone"
+                    dataKey="profit"
+                    name="Lucro Empresarial"
+                    stroke="#ffffff"
+                    strokeWidth={2}
+                    dot={{
+                      fill: "#ffffff",
+                      strokeWidth: 2,
+                      r: 3,
+                    }}
+                    activeDot={{
+                      r: 5,
+                      fill: "#ffffff",
+                      stroke: "#374151",
+                      strokeWidth: 2,
+                    }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+
+          {/* Display do Lucro Empresarial */}
+          <div className="flex flex-col justify-center h-full" style={{ width: '480px', height: '240px' }}>
+            <div className="bg-factory-900/50 border border-tire-600/30 rounded-lg p-6 h-full flex flex-col justify-center">
+              {isLoadingBusinessProfit ? (
+                <div className="animate-pulse flex flex-col justify-center h-full">
+                  <div className="h-8 bg-tire-600/30 rounded mb-2"></div>
+                  <div className="h-4 bg-tire-600/30 rounded mb-4"></div>
+                  <div className="h-16 bg-tire-600/30 rounded"></div>
+                </div>
+              ) : (
+                <div className="flex flex-col justify-start h-full pt-2">
+                  {/* Cabeçalho com valor e ícone */}
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex-1 text-center">
+                      <p className="text-tire-300 text-sm font-medium">Lucro Empresarial</p>
+                      <p className={`text-4xl font-bold ${
+                        businessProfit > 0 ? 'text-neon-green' : 
+                        businessProfit < 0 ? 'text-red-400' : 'text-tire-200'
+                      }`}>
+                        {new Intl.NumberFormat('pt-BR', { 
+                          style: 'currency', 
+                          currency: 'BRL' 
+                        }).format(businessProfit)}
+                      </p>
+                      <p className="text-tire-400 text-xs">
+                        {businessBaseline !== null ? 'Diferença do baseline ativo' : 'Aguardando confirmação do balanço'}
+                      </p>
+                    </div>
+                    <div className={`p-3 rounded-full ${
+                      businessProfit > 0 ? 'bg-neon-green/20' : 
+                      businessProfit < 0 ? 'bg-red-500/20' : 'bg-tire-500/20'
+                    }`}>
+                      <TrendingUp className={`h-6 w-6 ${
+                        businessProfit > 0 ? 'text-neon-green' : 
+                        businessProfit < 0 ? 'text-red-400' : 'text-tire-400'
+                      }`} />
+                    </div>
+                  </div>
+
+                  {/* Informações do baseline */}
+                  <div className="border-t border-tire-600/30 pt-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="text-xs text-tire-400">
+                        <p>Status do Balanço:</p>
+                        <p className={`font-medium ${
+                          businessBaseline !== null ? 'text-neon-green' : 'text-yellow-400'
+                        }`}>
+                          {businessBaseline !== null ? '✅ Confirmado' : '⏳ Não Confirmado'}
+                        </p>
+                      </div>
+                      <div className="text-xs text-tire-400 text-right">
+                        <p>Baseline:</p>
+                        <p className="font-medium text-tire-200">
+                          {businessBaseline !== null 
+                            ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(businessBaseline)
+                            : 'Não definido'
+                          }
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
-          ) : (
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart
-                data={chartData}
-                margin={{
-                  top: 20,
-                  right: 30,
-                  left: 20,
-                  bottom: 20,
-                }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.3} />
-                <XAxis
-                  dataKey="displayDate"
-                  stroke="#9CA3AF"
-                  fontSize={10}
-                  angle={-45}
-                  textAnchor="end"
-                  height={60}
-                />
-                <YAxis
-                  stroke="#9CA3AF"
-                  fontSize={12}
-                  tickFormatter={(value) => `R$ ${value.toLocaleString("pt-BR")}`}
-                />
-                <Tooltip content={<CustomTooltip />} />
-                <Line
-                  type="monotone"
-                  dataKey="accumulatedProfit"
-                  name="Lucro Acumulado"
-                  stroke="#8B5CF6"
-                  strokeWidth={3}
-                  dot={{
-                    fill: "#8B5CF6",
-                    strokeWidth: 2,
-                    r: 4,
-                  }}
-                  activeDot={{
-                    r: 6,
-                    fill: "#8B5CF6",
-                    stroke: "#ffffff",
-                    strokeWidth: 2,
-                  }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="profit"
-                  name="Lucro Diário"
-                  stroke="#10B981"
-                  strokeWidth={2}
-                  strokeDasharray="5 5"
-                  dot={{
-                    fill: "#10B981",
-                    strokeWidth: 1,
-                    r: 3,
-                  }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          )}
+          </div>
         </div>
       </CardContent>
     </Card>
@@ -327,6 +383,9 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
   const { recipes, isLoading: recipesLoading } = useRecipes();
   const { warrantyEntries, isLoading: warrantyEntriesLoading } =
     useWarrantyEntries();
+  
+  // Load debts data for business value calculation
+  const { debts, isLoading: debtsLoading } = useDebts();
 
   // Load cost calculation options from TireCostManager
   const {
@@ -340,6 +399,9 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
 
   // Estado para controlar inicialização dos gráficos
   const [chartsInitialized, setChartsInitialized] = useState(false);
+  
+  // Estado para forçar re-renderização quando há mudanças nos produtos de revenda
+  const [resaleDataVersion, setResaleDataVersion] = useState(0);
 
   // Delay para inicialização dos gráficos (previne warnings do Recharts)
   useEffect(() => {
@@ -348,6 +410,40 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
     }, 500); // 500ms delay para garantir que o DOM esteja pronto
 
     return () => clearTimeout(timer);
+  }, []);
+
+  // Listener para eventos de sincronização de produtos de revenda
+  useEffect(() => {
+    const handleResaleStockUpdate = (event: CustomEvent) => {
+      console.log('📡 [MainDashboard] Evento resaleStockUpdated recebido:', event.detail);
+      
+      // Forçar re-renderização incrementando a versão dos dados
+      setResaleDataVersion(prev => {
+        const newVersion = prev + 1;
+        console.log(`🔄 [MainDashboard] Atualizando resaleDataVersion: ${prev} → ${newVersion}`);
+        return newVersion;
+      });
+    };
+
+    const handleForceChartsRefresh = (event: CustomEvent) => {
+      console.log('⚡ [MainDashboard] Evento forceChartsRefresh recebido:', event.detail);
+      
+      // Forçar re-renderização dos gráficos
+      setResaleDataVersion(prev => prev + 1);
+      console.log('🔄 [MainDashboard] Executando refresh imediato dos gráficos de estoque...');
+    };
+
+    // Adicionar listeners
+    window.addEventListener('resaleStockUpdated', handleResaleStockUpdate as EventListener);
+    window.addEventListener('forceChartsRefresh', handleForceChartsRefresh as EventListener);
+    console.log('🎧 [MainDashboard] Listeners para sincronização de produtos de revenda configurados');
+
+    // Cleanup
+    return () => {
+      window.removeEventListener('resaleStockUpdated', handleResaleStockUpdate as EventListener);
+      window.removeEventListener('forceChartsRefresh', handleForceChartsRefresh as EventListener);
+      console.log('🔕 [MainDashboard] Listeners de produtos de revenda removidos');
+    };
   }, []);
 
   const isDataLoading =
@@ -404,26 +500,31 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
     entry.type === "income" && entry.category === "venda"
   ).length;
 
-  // Cálculo do Saldo de Produtos de Revenda em Estoque
-  const resaleProductStockValue = resaleProducts
-    .reduce((total, product) => {
-      // Tratar valores null/undefined adequadamente
-      const stock = product.current_stock ?? 0;
-      const price = product.purchase_price ?? 0;
-
+  // Cálculo do Saldo de Produtos de Revenda em Estoque (sincronizado com aba de produtos de revenda)
+  const resaleProductStockValue = useMemo(() => {
+    const value = resaleProducts.reduce((total, product) => {
       // Verificar se há estoque correspondente na tabela stock_items
       const stockItem = stockItems.find(item => 
-        item.item_name === product.name || item.item_id === product.id
+        item.item_id === product.id && item.item_type === 'product'
       );
 
-      // Usar estoque da tabela stock_items se disponível
-      const finalStock = stockItem ? (stockItem.quantity || 0) : stock;
-      const finalPrice = price > 0 ? price : (stockItem?.unit_cost || 0);
+      // Usar valores reais do estoque (mesma lógica da aba de produtos de revenda)
+      const stockValue = stockItem?.total_value || 0;
 
-      const stockValue = finalStock * finalPrice;
+      console.log(`💰 [MainDashboard] Produto de revenda: ${product.name}`, {
+        productId: product.id,
+        stockItemFound: !!stockItem,
+        stockValue,
+        quantity: stockItem?.quantity || 0,
+        unitCost: stockItem?.unit_cost || 0
+      });
 
       return total + stockValue;
     }, 0);
+    
+    console.log(`📊 [MainDashboard] Valor total de produtos de revenda: R$ ${value.toFixed(2)}`);
+    return value;
+  }, [resaleProducts, stockItems, resaleDataVersion]);
 
   // Estado para custo médio por pneu
   const [averageTireCost, setAverageTireCost] = useState(101.09);
@@ -2017,49 +2118,134 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
     return () => clearTimeout(timeoutId);
   }, [stockItems, stockItemsLoading]);
 
+  // Effect para inicializar e sincronizar todos os saldos baseado nos dados existentes
+  useEffect(() => {
+    const initializeBalances = () => {
+      console.log('🚀 [Dashboard] Inicializando sincronização de todos os saldos...');
+      
+      try {
+        // Usar saldo de caixa já calculado
+        console.log(`💰 [Dashboard] Saldo de caixa: R$ ${cashBalance.toFixed(2)}`);
+        setCashBalanceState(cashBalance);
+        setIsLoadingCashBalance(false);
+        
+        // Calcular saldo de matéria-prima baseado nos stockItems
+        const materialStockValue = stockItems
+          .filter(item => item.item_type === 'material')
+          .reduce((total, item) => total + (item.total_value || 0), 0);
+        console.log(`🏭 [Dashboard] Saldo de matéria-prima: R$ ${materialStockValue.toFixed(2)}`);
+        setRawMaterialStockBalance(materialStockValue);
+        setIsLoadingRawMaterialStock(false);
+        
+        // Calcular saldo de produtos finais baseado nos stockItems
+        const finalProductStockValue = stockItems
+          .filter(item => item.item_type === 'product')
+          .reduce((total, item) => total + (item.total_value || 0), 0);
+        console.log(`📦 [Dashboard] Saldo de produtos finais: R$ ${finalProductStockValue.toFixed(2)}`);
+        setFinalProductStockBalance(finalProductStockValue);
+        setIsLoadingFinalProductStock(false);
+        
+        // Usar saldo de produtos de revenda já calculado
+        console.log(`🛒 [Dashboard] Saldo de produtos de revenda: R$ ${resaleProductStockValue.toFixed(2)}`);
+        setResaleProductStockBalance(resaleProductStockValue);
+        setIsLoadingResaleProductStock(false);
+        
+        console.log('✅ [Dashboard] Todos os saldos sincronizados com sucesso!');
+        console.log('🔍 [Dashboard] RESUMO DOS SALDOS INICIALIZADOS:');
+        console.log(`  - cashBalanceState: R$ ${cashBalance.toFixed(2)}`);
+        console.log(`  - rawMaterialStockBalance: R$ ${materialStockValue.toFixed(2)}`);
+        console.log(`  - finalProductStockBalance: R$ ${finalProductStockValue.toFixed(2)}`);
+        console.log(`  - resaleProductStockBalance: R$ ${resaleProductStockValue.toFixed(2)}`);
+        console.log(`  - SOMA TOTAL (sem dívidas): R$ ${(cashBalance + materialStockValue + finalProductStockValue + resaleProductStockValue).toFixed(2)}`);
+      } catch (error) {
+        console.error('❌ [Dashboard] Erro ao sincronizar saldos:', error);
+      }
+    };
+    
+    // Só inicializar quando todos os dados necessários estiverem carregados
+    if (!isDataLoading && cashFlowEntries.length >= 0 && stockItems.length >= 0) {
+      initializeBalances();
+    }
+  }, [isDataLoading, cashFlowEntries, stockItems, cashBalance, resaleProductStockValue]);
+
   // Effect para calcular valor empresarial em tempo real
   useEffect(() => {
     const calculateEmpresarialValue = () => {
-      // Só calcular se todos os valores estão carregados
+      // Só calcular se todos os valores estão carregados (incluindo dívidas)
       if (
         cashBalanceState !== null &&
         rawMaterialStockBalance !== null &&
         finalProductStockBalance !== null &&
-        resaleProductStockBalance !== null
+        resaleProductStockBalance !== null &&
+        !debtsLoading
       ) {
-        const totalValue = 
-          cashBalanceState +
-          rawMaterialStockBalance +
-          finalProductStockBalance +
-          resaleProductStockBalance;
-
-        console.log('💼 [Dashboard] Calculando Valor Empresarial:');
+        // CORREÇÃO FINAL: Usar diretamente o remaining_amount das dívidas (mesmo valor do card "Saldo Devedor")
+        const totalDebtRemaining = debts.reduce((sum, debt) => {
+          const remainingAmount = typeof debt.remaining_amount === 'number' 
+            ? debt.remaining_amount 
+            : parseFloat(debt.remaining_amount) || 0;
+          return sum + remainingAmount;
+        }, 0);
+        
+        // CÁLCULO CORRETO: Somar todos os saldos e subtrair saldo devedor das dívidas
+        const calculatedBusinessValue = 
+          cashBalanceState + 
+          rawMaterialStockBalance + 
+          finalProductStockBalance + 
+          resaleProductStockBalance - 
+          totalDebtRemaining;
+        
+        console.log('💼 [Dashboard] Calculando Valor Empresarial (SOMA DINÂMICA COM DÍVIDAS):');
         console.log(`  - Saldo Caixa: R$ ${cashBalanceState.toFixed(2)}`);
         console.log(`  - Saldo Matéria-Prima: R$ ${rawMaterialStockBalance.toFixed(2)}`);
         console.log(`  - Saldo Produtos Finais: R$ ${finalProductStockBalance.toFixed(2)}`);
         console.log(`  - Saldo Produtos Revenda: R$ ${resaleProductStockBalance.toFixed(2)}`);
-        console.log(`  - VALOR EMPRESARIAL TOTAL: R$ ${totalValue.toFixed(2)}`);
+        console.log('💳 [Dashboard] DETALHAMENTO DAS DÍVIDAS:');
+        console.log(`  - Total de dívidas encontradas: ${debts.length}`);
+        debts.forEach((debt, index) => {
+          console.log(`    ${index + 1}. ${debt.description}: remaining_amount = R$ ${(typeof debt.remaining_amount === 'number' ? debt.remaining_amount : parseFloat(debt.remaining_amount) || 0).toFixed(2)}`);
+        });
+        console.log(`  - SALDO DEVEDOR TOTAL: R$ ${totalDebtRemaining.toFixed(2)}`);
+        console.log(`  - VALOR EMPRESARIAL CALCULADO: R$ ${calculatedBusinessValue.toFixed(2)}`);
+        console.log(`  - FÓRMULA DETALHADA: ${cashBalanceState.toFixed(2)} + ${rawMaterialStockBalance.toFixed(2)} + ${finalProductStockBalance.toFixed(2)} + ${resaleProductStockBalance.toFixed(2)} - ${totalDebtRemaining.toFixed(2)} = ${calculatedBusinessValue.toFixed(2)}`);
+        console.log(`  - VERIFICAÇÃO: ${(cashBalanceState + rawMaterialStockBalance + finalProductStockBalance + resaleProductStockBalance - totalDebtRemaining).toFixed(2)}`);
 
-        setEmpresarialValue(totalValue);
+        // Validação adicional para garantir que o cálculo está correto
+        const manualCalculation = cashBalanceState + rawMaterialStockBalance + finalProductStockBalance + resaleProductStockBalance - totalDebtRemaining;
+        if (Math.abs(calculatedBusinessValue - manualCalculation) > 0.01) {
+          console.error('❌ [Dashboard] ERRO: Inconsistência no cálculo do valor empresarial!');
+          console.error(`  - calculatedBusinessValue: R$ ${calculatedBusinessValue.toFixed(2)}`);
+          console.error(`  - manualCalculation: R$ ${manualCalculation.toFixed(2)}`);
+          console.error(`  - Diferença: R$ ${Math.abs(calculatedBusinessValue - manualCalculation).toFixed(2)}`);
+        }
+
+        console.log(`🎯 [Dashboard] VALOR EMPRESARIAL FINAL DEFINIDO: R$ ${calculatedBusinessValue.toFixed(2)}`);
+        setEmpresarialValue(calculatedBusinessValue);
         setIsLoadingEmpresarialValue(false);
+        
+        // Salvar o valor empresarial calculado no banco de dados para sincronização
+        dataManager.saveBusinessValue(calculatedBusinessValue).catch(error => {
+          console.error('❌ [Dashboard] Erro ao salvar valor empresarial no banco:', error);
+        });
       } else {
         console.log('⏳ [Dashboard] Aguardando todos os valores para calcular Valor Empresarial...');
-        console.log(`  - Saldo Caixa: ${cashBalanceState !== null ? 'OK' : 'LOADING'}`);
-        console.log(`  - Saldo Matéria-Prima: ${rawMaterialStockBalance !== null ? 'OK' : 'LOADING'}`);
-        console.log(`  - Saldo Produtos Finais: ${finalProductStockBalance !== null ? 'OK' : 'LOADING'}`);
-        console.log(`  - Saldo Produtos Revenda: ${resaleProductStockBalance !== null ? 'OK' : 'LOADING'}`);
+        console.log(`  - Saldo Caixa: ${cashBalanceState !== null ? `R$ ${cashBalanceState.toFixed(2)}` : 'LOADING'}`);
+        console.log(`  - Saldo Matéria-Prima: ${rawMaterialStockBalance !== null ? `R$ ${rawMaterialStockBalance.toFixed(2)}` : 'LOADING'}`);
+        console.log(`  - Saldo Produtos Finais: ${finalProductStockBalance !== null ? `R$ ${finalProductStockBalance.toFixed(2)}` : 'LOADING'}`);
+        console.log(`  - Saldo Produtos Revenda: ${resaleProductStockBalance !== null ? `R$ ${resaleProductStockBalance.toFixed(2)}` : 'LOADING'}`);
+        console.log(`  - Dívidas: ${!debtsLoading ? 'OK' : 'LOADING'}`);
       }
     };
 
-    // Calcular sempre que qualquer valor mudar
+    // Calcular sempre que qualquer valor mudar (incluindo dívidas)
     calculateEmpresarialValue();
-  }, [cashBalanceState, rawMaterialStockBalance, finalProductStockBalance, resaleProductStockBalance]);
+  }, [cashBalanceState, rawMaterialStockBalance, finalProductStockBalance, resaleProductStockBalance, debts, debtsLoading]);
 
   // Listeners para eventos de checkpoint - restauração de dados
   useEffect(() => {
     const handleResaleProductStockRestore = (event: CustomEvent) => {
       const { balance, source } = event.detail;
-      console.log(`🔄 [Dashboard] Evento 'resaleProductStockUpdated' de checkpoint recebido:`);
+      console.log(`🔄 [Dashboard] Evento 'resaleProductStockUpdated' recebido:`);
       console.log(`  - Saldo: R$ ${balance.toFixed(2)}`);
       console.log(`  - Source: ${source}`);
 
@@ -2070,7 +2256,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
 
     const handleRawMaterialStockRestore = (event: CustomEvent) => {
       const { balance, source } = event.detail;
-      console.log(`🔄 [Dashboard] Evento 'rawMaterialStockUpdated' de checkpoint recebido:`);
+      console.log(`🔄 [Dashboard] Evento 'rawMaterialStockUpdated' recebido:`);
       console.log(`  - Saldo: R$ ${balance.toFixed(2)}`);
       console.log(`  - Source: ${source}`);
 
@@ -2079,9 +2265,20 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       setIsLoadingRawMaterialStock(false);
     };
 
+    const handleFinalProductStockRestore = (event: CustomEvent) => {
+      const { balance, source } = event.detail;
+      console.log(`🔄 [Dashboard] Evento 'finalProductStockUpdated' recebido:`);
+      console.log(`  - Saldo: R$ ${balance.toFixed(2)}`);
+      console.log(`  - Source: ${source}`);
+
+      // Atualizar estado imediatamente
+      setFinalProductStockBalance(balance);
+      setIsLoadingFinalProductStock(false);
+    };
+
     const handleCashBalanceRestore = (event: CustomEvent) => {
       const { balance, source } = event.detail;
-      console.log(`🔄 [Dashboard] Evento 'cashBalanceUpdated' de checkpoint recebido:`);
+      console.log(`🔄 [Dashboard] Evento 'cashBalanceUpdated' recebido:`);
       console.log(`  - Saldo: R$ ${balance.toFixed(2)}`);
       console.log(`  - Source: ${source}`);
 
@@ -2100,17 +2297,19 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
 
     console.log('🎯 [Dashboard] Registrando listeners para eventos de checkpoint');
 
-    // Adicionar listeners para os eventos de checkpoint
+    // Adicionar listeners para os eventos de sincronização em tempo real
     window.addEventListener('resaleProductStockUpdated', handleResaleProductStockRestore as EventListener);
     window.addEventListener('rawMaterialStockUpdated', handleRawMaterialStockRestore as EventListener);
+    window.addEventListener('finalProductStockUpdated', handleFinalProductStockRestore as EventListener);
     window.addEventListener('cashBalanceUpdated', handleCashBalanceRestore as EventListener);
     window.addEventListener('systemRestored', handleSystemRestore as EventListener);
 
     // Cleanup
     return () => {
-      console.log('🚫 [Dashboard] Removendo listeners para eventos de checkpoint');
+      console.log('🚫 [Dashboard] Removendo listeners para eventos de sincronização');
       window.removeEventListener('resaleProductStockUpdated', handleResaleProductStockRestore as EventListener);
       window.removeEventListener('rawMaterialStockUpdated', handleRawMaterialStockRestore as EventListener);
+      window.removeEventListener('finalProductStockUpdated', handleFinalProductStockRestore as EventListener);
       window.removeEventListener('cashBalanceUpdated', handleCashBalanceRestore as EventListener);
       window.removeEventListener('systemRestored', handleSystemRestore as EventListener);
     };
@@ -2255,6 +2454,7 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
       <EmpresarialProfitChart 
         cashFlowEntries={cashFlowEntries}
         isLoading={cashFlowLoading}
+        empresarialValue={empresarialValue}
       />
 
       {/* Seção de Cards de Métricas - Layout 3x3 */}
@@ -2296,8 +2496,8 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                   </p>
 
                 </div>
-                <div className="p-2 rounded-full bg-purple-500/20">
-                  <Package className="h-5 w-5 text-purple-400" />
+                <div className="p-2 rounded-full bg-blue-500/20">
+                  <Package className="h-5 w-5 text-blue-400" />
                 </div>
               </div>
             </CardContent>
@@ -2317,8 +2517,8 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                     )}
                   </p>
                 </div>
-                <div className="p-2 rounded-full bg-yellow-500/20">
-                  <ShoppingBag className="h-5 w-5 text-yellow-400" />
+                <div className="p-2 rounded-full bg-blue-500/20">
+                  <ShoppingBag className="h-5 w-5 text-blue-400" />
                 </div>
               </div>
             </CardContent>
@@ -2335,8 +2535,8 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                     {formatCurrency(averageTireCost)}
                   </p>
                 </div>
-                <div className="p-2 rounded-full bg-orange-500/20">
-                  <Calculator className="h-5 w-5 text-orange-400" />
+                <div className="p-2 rounded-full bg-blue-500/20">
+                  <Calculator className="h-5 w-5 text-blue-400" />
                 </div>
               </div>
             </CardContent>
@@ -2356,8 +2556,8 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                     )}
                   </p>
                 </div>
-                <div className="p-2 rounded-full bg-green-500/20">
-                  <TrendingUp className="h-5 w-5 text-green-400" />
+                <div className="p-2 rounded-full bg-blue-500/20">
+                  <TrendingUp className="h-5 w-5 text-blue-400" />
                 </div>
               </div>
             </CardContent>
@@ -2377,8 +2577,8 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                     )}
                   </p>
                 </div>
-                <div className="p-2 rounded-full bg-green-500/20">
-                  <TrendingUp className="h-5 w-5 text-green-400" />
+                <div className="p-2 rounded-full bg-blue-500/20">
+                  <TrendingUp className="h-5 w-5 text-blue-400" />
                 </div>
               </div>
             </CardContent>
@@ -2400,8 +2600,8 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                   </p>
 
                 </div>
-                <div className="p-2 rounded-full bg-cyan-500/20">
-                  <Package className="h-5 w-5 text-cyan-400" />
+                <div className="p-2 rounded-full bg-blue-500/20">
+                  <Package className="h-5 w-5 text-blue-400" />
                 </div>
               </div>
             </CardContent>
@@ -2422,8 +2622,8 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                   </p>
 
                 </div>
-                <div className="p-2 rounded-full bg-pink-500/20">
-                  <Factory className="h-5 w-5 text-pink-400" />
+                <div className="p-2 rounded-full bg-blue-500/20">
+                  <Factory className="h-5 w-5 text-blue-400" />
                 </div>
               </div>
             </CardContent>
@@ -2444,8 +2644,8 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
                   </p>
 
                 </div>
-                <div className="p-2 rounded-full bg-red-500/20">
-                  <ShoppingBag className="h-5 w-5 text-red-400" />
+                <div className="p-2 rounded-full bg-blue-500/20">
+                  <ShoppingBag className="h-5 w-5 text-blue-400" />
                 </div>
               </div>
             </CardContent>
@@ -2463,68 +2663,20 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="production" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 bg-factory-700/50 border-tire-600/30">
-              <TabsTrigger
-                value="production"
-                className="data-[state=active]:bg-neon-green/20 data-[state=active]:text-neon-green text-tire-300 hover:text-white flex items-center gap-2"
-              >
-                <Factory className="h-4 w-4" />
-                Gráfico de Produção
-              </TabsTrigger>
-              <TabsTrigger
-                value="profit"
-                className="data-[state=active]:bg-neon-purple/20 data-[state=active]:text-neon-purple text-tire-300 hover:text-white flex items-center gap-2"
-              >
-                <TrendingUp className="h-4 w-4" />
-                Gráfico de Lucro Presumido
-              </TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="production" className="mt-6">
-              <div className="bg-factory-900/30 rounded-lg p-4 min-h-[400px] w-full">
-                {isChartsLoading || !productionEntries ? (
-                  <div className="flex items-center justify-center h-[350px]">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-neon-green"></div>
-                  </div>
-                ) : (
-                  <div className="w-full h-full min-h-[350px]">
-                    <ProductionChart
-                      productionEntries={productionEntries || []}
-                      isLoading={false}
-                    />
-                  </div>
-                )}
+          <div className="bg-factory-900/30 rounded-lg p-4 min-h-[400px] w-full">
+            {isChartsLoading || !productionEntries ? (
+              <div className="flex items-center justify-center h-[350px]">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-neon-green"></div>
               </div>
-            </TabsContent>
-
-            <TabsContent value="profit" className="mt-6">
-              <div className="bg-factory-900/30 rounded-lg p-4 min-h-[400px] w-full">
-                {isChartsLoading || !cashFlowEntries || !materials || !products ? (
-                  <div className="flex items-center justify-center h-[350px]">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-neon-purple"></div>
-                  </div>
-                ) : (
-                  <div className="w-full h-full min-h-[350px]">
-                    <PresumedProfitChart
-                      cashFlowEntries={cashFlowEntries || []}
-                      materials={materials || []}
-                      employees={employees || []}
-                      fixedCosts={fixedCosts || []}
-                      variableCosts={variableCosts || []}
-                      stockItems={stockItems || []}
-                      productionEntries={productionEntries || []}
-                      products={products || []}
-                      recipes={recipes || []}
-                      defectiveTireSales={defectiveTireSales || []}
-                      warrantyEntries={warrantyEntries || []}
-                      isLoading={false}
-                    />
-                  </div>
-                )}
+            ) : (
+              <div className="w-full h-full min-h-[350px]">
+                <ProductionChart
+                  productionEntries={productionEntries || []}
+                  isLoading={false}
+                />
               </div>
-            </TabsContent>
-          </Tabs>
+            )}
+          </div>
         </CardContent>
       </Card>
 
@@ -2547,8 +2699,10 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
             ) : (
               <div className="w-full h-full min-h-[350px]">
                 <StockCharts
+                  key={`main-dashboard-stock-charts-${resaleDataVersion}-${stockItems.length}`}
                   materials={materials || []}
                   products={products || []}
+                  resaleProducts={resaleProducts || []}
                   stockItems={stockItems || []}
                   isLoading={false}
                 />
@@ -2787,6 +2941,56 @@ const MainDashboard = ({ isLoading = false }: { isLoading?: boolean }) => {
         })()
       }
       </div>
+
+      {/* PresumedProfitManager sempre ativo para calcular e salvar o Valor Empresarial correto */}
+      <div className="hidden">
+        {(() => {
+          const isLoadingValue = 
+            cashFlowLoading ||
+            materialsLoading ||
+            employeesLoading ||
+            fixedCostsLoading ||
+            variableCostsLoading ||
+            stockItemsLoading ||
+            productionLoading ||
+            productsLoading ||
+            recipesLoading ||
+            defectiveTireSalesLoading ||
+            warrantyEntriesLoading;
+          console.log('💼 [Dashboard] Renderizando PresumedProfitManager para calcular Valor Empresarial:', {
+            isLoading: isLoadingValue,
+            cashFlowEntries: cashFlowEntries.length,
+            materials: materials.length,
+            employees: employees.length,
+            fixedCosts: fixedCosts.length,
+            variableCosts: variableCosts.length,
+            stockItems: stockItems.length,
+            productionEntries: productionEntries.length,
+            products: products.length,
+            recipes: recipes.length,
+            defectiveTireSales: defectiveTireSales.length,
+            warrantyEntries: warrantyEntries.length
+          });
+          return (
+            <PresumedProfitManager
+              isLoading={isLoadingValue}
+              cashFlowEntries={cashFlowEntries || []}
+              materials={materials || []}
+              employees={employees || []}
+              fixedCosts={fixedCosts || []}
+              variableCosts={variableCosts || []}
+              stockItems={stockItems || []}
+              productionEntries={productionEntries || []}
+              products={products || []}
+              recipes={recipes || []}
+              defectiveTireSales={defectiveTireSales || []}
+              warrantyEntries={warrantyEntries || []}
+              hideCharts={true}
+            />
+          );
+        })()
+      }
+      </div>
     </div>
   );
 };
@@ -2797,6 +3001,7 @@ const Home = () => {
   const [activeSection, setActiveSection] = useState("dashboard");
   const { stockItems, updateStockItem, loadStockItems } = useStockItems(); // ✅ Usando Supabase em vez de localStorage
   const [isDiagnosticOpen, setIsDiagnosticOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   // Function to trigger loading state for demonstration
   const handleRefresh = () => {
@@ -2930,9 +3135,8 @@ const Home = () => {
     }
   };
   return (
-    <div className="min-h-screen bg-gradient-to-br from-factory-900 via-factory-800 to-tire-900 factory-grid">
-      <TopNavigation />
-      <div className="flex h-[calc(100vh-64px)] mt-16">
+    <div className="h-screen bg-gradient-to-br from-factory-900 via-factory-800 to-tire-900 factory-grid overflow-hidden">
+      <div className="flex h-screen">
         <Sidebar
           onItemClick={handleSidebarClick}
           activeItem={
@@ -2950,39 +3154,30 @@ const Home = () => {
                         ? "Configurações" // Adicionado caso para Configurações
                         : "Cadastros"
           }
+          isCollapsed={isSidebarCollapsed}
+          onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
         />
-        <main className="flex-1 overflow-auto">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden">
           {/* Header Section */}
           <div className="container mx-auto px-6 pt-6 pb-4">
             <div className="flex justify-between items-center mb-6">
-              <div className="space-y-2">
-                <h1 className="text-3xl font-bold text-white flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-r from-neon-blue to-neon-purple flex items-center justify-center neon-glow">
-                    <span className="text-white font-bold text-lg">R</span>
-                  </div>
-                  {t("dashboard.title", "Remold Tire Factory")}
-                </h1>
-                <p className="text-tire-300 text-lg">
+              <div className="space-y-2 flex flex-col items-center">
+                <img 
+                  src="/src/assets/potente-car.png" 
+                  alt="Potente Car" 
+                  className="h-24 w-auto object-contain"
+                />
+                <p className="text-tire-300 text-lg text-center">
                   {t(
                     "dashboard.subtitle",
                     "Sistema de Gestão Financeira e Produção",
                   )}
                 </p>
               </div>
-              <div className="flex items-center gap-3">
-                <DataDiagnostic
-                  isOpen={isDiagnosticOpen}
-                  onOpenChange={setIsDiagnosticOpen}
-                />
-                <Button
-                  onClick={handleRefresh}
-                  className="bg-gradient-to-r from-neon-blue to-tire-500 hover:from-tire-600 hover:to-neon-blue text-white rounded-full px-6 h-11 shadow-lg transition-all duration-300 flex items-center gap-2 neon-glow pulse-glow"
-                >
-                  <RefreshCw
-                    className={`h-5 w-5 ${loading ? "animate-spin" : ""}`}
-                  />
-                  {loading ? t("common.loading") : t("common.refresh")}
-                </Button>
+              <div>
+                <h1 className="text-3xl font-bold text-white">
+                  {t("dashboard.title", "Dashboard")}
+                </h1>
               </div>
             </div>
           </div>

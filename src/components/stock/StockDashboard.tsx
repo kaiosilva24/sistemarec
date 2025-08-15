@@ -298,6 +298,12 @@ const StockDashboard = ({
       hex: "#06B6D4",
     },
     {
+      name: "Azul Claro",
+      color: "text-sky-300",
+      bgColor: "bg-factory-800/50",
+      hex: "#bbe5fc",
+    },
+    {
       name: "Branco",
       color: "text-white",
       bgColor: "bg-factory-800/50",
@@ -321,7 +327,7 @@ const StockDashboard = ({
       "#EC4899": "text-pink-400",
       "#EF4444": "text-red-400",
       "#EAB308": "text-yellow-400",
-      "#06B6D4": "text-neon-cyan",
+      "#bbe5fc": "text-sky-300",
       "#FFFFFF": "text-white",
       "#6B7280": "text-gray-400",
     };
@@ -536,7 +542,11 @@ const StockDashboard = ({
   // Use database hooks
   const { materials, isLoading: materialsLoading } = useMaterials();
   const { products, isLoading: productsLoading } = useProducts();
+  const { resaleProducts, isLoading: resaleProductsLoading } = useResaleProducts();
   const { stockItems, isLoading: stockLoading, updateStockItem } = useStockItems();
+  
+  // Estado para forçar re-renderização quando há mudanças nos produtos de revenda
+  const [resaleDataVersion, setResaleDataVersion] = useState(0);
 
   // Debug: monitorar quando stockItems é atualizado pelo hook
   useEffect(() => {
@@ -546,6 +556,36 @@ const StockDashboard = ({
       loading: stockLoading
     });
   }, [stockItems, stockLoading]);
+
+  // Listener para eventos de sincronização de produtos de revenda
+  useEffect(() => {
+    const handleResaleStockUpdate = (event: CustomEvent) => {
+      console.log('📡 [StockDashboard] Evento resaleStockUpdated recebido:', event.detail);
+      
+      // Forçar re-renderização incrementando a versão dos dados
+      setResaleDataVersion(prev => {
+        const newVersion = prev + 1;
+        console.log(`🔄 [StockDashboard] Atualizando resaleDataVersion: ${prev} → ${newVersion}`);
+        return newVersion;
+      });
+      
+      // Também forçar refresh dos dados se necessário
+      if (onRefresh && typeof onRefresh === 'function') {
+        console.log('🔄 [StockDashboard] Chamando onRefresh para sincronização...');
+        onRefresh();
+      }
+    };
+
+    // Adicionar listener
+    window.addEventListener('resaleStockUpdated', handleResaleStockUpdate as EventListener);
+    console.log('🎧 [StockDashboard] Listener para eventos de produtos de revenda configurado');
+
+    // Cleanup
+    return () => {
+      window.removeEventListener('resaleStockUpdated', handleResaleStockUpdate as EventListener);
+      console.log('🔕 [StockDashboard] Listener de produtos de revenda removido');
+    };
+  }, [onRefresh]);
 
   // Sincronização em tempo real dos custos do TireCostManager
   useEffect(() => {
@@ -634,7 +674,6 @@ const StockDashboard = ({
   }, []);
   const { averageCostPerTire, synchronizedCostData } =
     useCostCalculationOptions();
-  const { resaleProducts } = useResaleProducts();
 
   const handleStockUpdate = async (
     itemId: string,
@@ -1444,13 +1483,16 @@ const StockDashboard = ({
 
           <TabsContent value="dashboard">
             <StockCharts
+              key={`stock-charts-${resaleDataVersion}-${stockItems.length}`}
               isLoading={
                 materialsLoading ||
                 productsLoading ||
+                resaleProductsLoading ||
                 stockLoading
               }
               materials={materials}
               products={getAllProducts()}
+              resaleProducts={resaleProducts}
               stockItems={stockItems}
               productType="all"
             />

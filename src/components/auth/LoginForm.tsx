@@ -4,19 +4,22 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useNavigate, Link } from "react-router-dom";
-import AuthLayout from "./AuthLayout";
-import { useTranslation } from "react-i18next";
+import { LogIn } from "lucide-react";
+import potentCarLogo from "../../assets/potente-car.png";
 
 export default function LoginForm() {
-  const { t } = useTranslation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
   const { signIn } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsLoading(true);
+    setError("");
+    
     try {
       await signIn(email, password);
       navigate("/dashboard");
@@ -27,74 +30,106 @@ export default function LoginForm() {
       } else {
         setError("Ocorreu um erro ao fazer login. Tente novamente.");
       }
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
-    <AuthLayout>
-      <div className="bg-white rounded-2xl shadow-sm p-8 w-full max-w-md mx-auto">
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="space-y-2">
-            <Label
-              htmlFor="email"
-              className="text-sm font-medium text-gray-700"
-            >
-              {t("common.email")}
-            </Label>
-            <Input
-              id="email"
-              type="email"
-              placeholder="name@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="h-12 rounded-lg border-gray-300 focus:ring-blue-500 focus:border-blue-500"
+    <div className="min-h-screen bg-gradient-to-br from-factory-900 via-factory-800 to-tire-900 flex items-center justify-center p-4">
+      <div className="w-full max-w-md">
+        {/* Logo */}
+        <div className="text-center mb-8">
+          <div className="flex justify-center mb-4">
+            <img 
+              src={potentCarLogo} 
+              alt="Potente Car" 
+              className="h-20 w-auto object-contain"
             />
           </div>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
+          <p className="text-tire-300 text-lg">
+            Sistema de Gestão
+          </p>
+        </div>
+
+        {/* Login Card */}
+        <div className="bg-factory-800/90 backdrop-blur-md rounded-2xl border border-tire-600/30 p-8 shadow-2xl">
+          <div className="text-center mb-6">
+            <div className="inline-flex items-center justify-center w-12 h-12 bg-neon-blue/20 rounded-full mb-4">
+              <LogIn className="h-6 w-6 text-neon-blue" />
+            </div>
+            <h2 className="text-2xl font-semibold text-white">
+              Acesso ao Sistema
+            </h2>
+            <p className="text-tire-300 mt-2">
+              Entre com suas credenciais
+            </p>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="space-y-2">
+              <Label
+                htmlFor="email"
+                className="text-sm font-medium text-tire-200"
+              >
+                Email
+              </Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="seu-email@exemplo.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                disabled={isLoading}
+                className="h-12 bg-factory-700/50 border-tire-600/30 text-white placeholder:text-tire-400 focus:border-neon-blue focus:ring-neon-blue/20"
+              />
+            </div>
+            
+            <div className="space-y-2">
               <Label
                 htmlFor="password"
-                className="text-sm font-medium text-gray-700"
+                className="text-sm font-medium text-tire-200"
               >
-                {t("common.password")}
+                Senha
               </Label>
-              <Link
-                to="/forgot-password"
-                className="text-sm font-medium text-blue-600 hover:text-blue-500"
-              >
-                {t("common.forgotPassword")}
-              </Link>
+              <Input
+                id="password"
+                type="password"
+                placeholder="Digite sua senha"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                disabled={isLoading}
+                className="h-12 bg-factory-700/50 border-tire-600/30 text-white placeholder:text-tire-400 focus:border-neon-blue focus:ring-neon-blue/20"
+              />
             </div>
-            <Input
-              id="password"
-              type="password"
-              placeholder="Enter your password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              className="h-12 rounded-lg border-gray-300 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-          {error && <p className="text-sm text-red-500">{error}</p>}
-          <Button
-            type="submit"
-            className="w-full h-12 rounded-full bg-black text-white hover:bg-gray-800 text-sm font-medium"
-          >
-            {t("common.signIn")}
-          </Button>
 
-          <div className="text-sm text-center text-gray-600 mt-6">
-            {t("common.dontHaveAccount")}{" "}
-            <Link
-              to="/signup"
-              className="text-blue-600 hover:underline font-medium"
+            {error && (
+              <div className="p-3 bg-red-900/20 border border-red-600/30 rounded-lg">
+                <p className="text-sm text-red-400">{error}</p>
+              </div>
+            )}
+
+            <Button
+              type="submit"
+              disabled={isLoading}
+              className="w-full h-12 bg-neon-blue hover:bg-neon-blue/80 text-white font-medium rounded-lg transition-colors"
             >
-              {t("common.signUp")}
-            </Link>
-          </div>
-        </form>
+              {isLoading ? "Entrando..." : "Entrar"}
+            </Button>
+          </form>
+
+
+        </div>
+
+        {/* Footer */}
+        <div className="text-center mt-6">
+          <p className="text-tire-400 text-sm">
+            2025 Potencar - Sistema de Gestão
+          </p>
+        </div>
       </div>
-    </AuthLayout>
+    </div>
   );
 }

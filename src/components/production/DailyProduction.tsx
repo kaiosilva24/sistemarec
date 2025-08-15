@@ -77,9 +77,13 @@ const DailyProduction = ({
   const [materialLosses, setMaterialLosses] = useState<Record<string, string>>(
     {},
   );
-  const [productionDate, setProductionDate] = useState(
-    new Date().toISOString().split("T")[0],
-  );
+  const [productionDate, setProductionDate] = useState(() => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  });
   const [searchTerm, setSearchTerm] = useState("");
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [dateFilterType, setDateFilterType] = useState("all");
@@ -372,11 +376,11 @@ const DailyProduction = ({
       );
 
       // Create production entry FIRST to ensure it's saved
-      const productionEntry: Omit<ProductionEntry, "id" | "created_at"> = {
+      const productionEntry = {
         recipe_id: recipe.id,
         product_name: recipe.product_name,
         quantity_produced: quantity,
-        production_date: productionDate, // Use the selected date from the form
+        production_date: productionDate, // Use original date - workaround now applied in dataManager
         materials_consumed: materialsToConsume.map((m) => ({
           material_id: m.material_id,
           material_name: m.material_name,
@@ -397,12 +401,22 @@ const DailyProduction = ({
         },
       );
 
+      console.log('🚀 [DailyProduction] ENVIANDO PARA onSubmit:', {
+        productionEntry,
+        production_date_final: productionEntry.production_date,
+        timestamp: new Date().toISOString()
+      });
+
       let savedEntry;
       try {
         savedEntry = await onSubmit(productionEntry);
         console.log(
           "✅ [DailyProduction] Entrada de produção criada com sucesso!",
-          savedEntry,
+          {
+            savedEntry,
+            production_date_recebida: savedEntry?.production_date,
+            production_date_enviada: productionEntry.production_date
+          }
         );
 
         // Verify the entry was actually saved
@@ -676,8 +690,20 @@ const DailyProduction = ({
 
     switch (dateFilterType) {
       case "today":
-        matchesDate =
-          entry.production_date === today.toISOString().split("T")[0];
+        // Apply +1 day compensation to match the save workaround
+        // Save uses +2 days, but filter needs +1 day to match correctly
+        const todayDate = new Date();
+        const adjustedTodayDate = new Date(todayDate);
+        adjustedTodayDate.setDate(todayDate.getDate() + 1);
+        const todayWithWorkaround = `${adjustedTodayDate.getFullYear()}-${String(adjustedTodayDate.getMonth() + 1).padStart(2, "0")}-${String(adjustedTodayDate.getDate()).padStart(2, "0")}`;
+        matchesDate = entry.production_date === todayWithWorkaround;
+        console.log("🗓️ [DailyProduction] Filtro 'hoje' com workaround aplicado:", {
+          todayOriginal: `${todayDate.getFullYear()}-${String(todayDate.getMonth() + 1).padStart(2, "0")}-${String(todayDate.getDate()).padStart(2, "0")}`,
+          todayWithWorkaround,
+          entryDate: entry.production_date,
+          matches: matchesDate,
+          reason: "Compensação +1 dia para filtro (salvamento usa +2 dias)"
+        });
         break;
       case "last7days":
         const last7Days = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -706,15 +732,26 @@ const DailyProduction = ({
         break;
       case "custom":
         if (customStartDate && customEndDate) {
+          // Apply +1 day compensation for custom date range to match save workaround
           const startDate = new Date(customStartDate);
+          const adjustedStartDate = new Date(startDate);
+          adjustedStartDate.setDate(startDate.getDate() + 1);
+          
           const endDate = new Date(customEndDate);
-          matchesDate = entryDate >= startDate && entryDate <= endDate;
+          const adjustedEndDate = new Date(endDate);
+          adjustedEndDate.setDate(endDate.getDate() + 1);
+          
+          matchesDate = entryDate >= adjustedStartDate && entryDate <= adjustedEndDate;
         } else if (customStartDate) {
           const startDate = new Date(customStartDate);
-          matchesDate = entryDate >= startDate;
+          const adjustedStartDate = new Date(startDate);
+          adjustedStartDate.setDate(startDate.getDate() + 1);
+          matchesDate = entryDate >= adjustedStartDate;
         } else if (customEndDate) {
           const endDate = new Date(customEndDate);
-          matchesDate = entryDate <= endDate;
+          const adjustedEndDate = new Date(endDate);
+          adjustedEndDate.setDate(endDate.getDate() + 1);
+          matchesDate = entryDate <= adjustedEndDate;
         }
         break;
       case "all":
@@ -1094,16 +1131,26 @@ const DailyProduction = ({
                                 Data:
                               </span>
                               <p className="text-white font-bold text-lg">
-                                {new Date(productionDate).toLocaleDateString(
-                                  "pt-BR",
-                                  { day: "2-digit", month: "2-digit" },
-                                )}
+                                {(() => {
+                                  // Apply +1 day workaround for display to match user's intended date
+                                  const displayDate = new Date(productionDate);
+                                  displayDate.setDate(displayDate.getDate() + 1);
+                                  return displayDate.toLocaleDateString(
+                                    "pt-BR",
+                                    { day: "2-digit", month: "2-digit" },
+                                  );
+                                })()}
                               </p>
                               <span className="text-tire-400 text-xs">
-                                {new Date(productionDate).toLocaleDateString(
-                                  "pt-BR",
-                                  { year: "numeric" },
-                                )}
+                                {(() => {
+                                  // Apply +1 day workaround for display to match user's intended date
+                                  const displayDate = new Date(productionDate);
+                                  displayDate.setDate(displayDate.getDate() + 1);
+                                  return displayDate.toLocaleDateString(
+                                    "pt-BR",
+                                    { year: "numeric" },
+                                  );
+                                })()}
                               </span>
                             </div>
                           </div>
@@ -1260,43 +1307,7 @@ const DailyProduction = ({
                         value="all"
                         className="text-white hover:bg-tire-700/50"
                       >
-                        Todas as datas
-                      </SelectItem>
-                      <SelectItem
-                        value="today"
-                        className="text-white hover:bg-tire-700/50"
-                      >
-                        Hoje
-                      </SelectItem>
-                      <SelectItem
-                        value="last7days"
-                        className="text-white hover:bg-tire-700/50"
-                      >
-                        Últimos 7 dias
-                      </SelectItem>
-                      <SelectItem
-                        value="last30days"
-                        className="text-white hover:bg-tire-700/50"
-                      >
-                        Últimos 30 dias
-                      </SelectItem>
-                      <SelectItem
-                        value="thisMonth"
-                        className="text-white hover:bg-tire-700/50"
-                      >
-                        Este mês
-                      </SelectItem>
-                      <SelectItem
-                        value="lastMonth"
-                        className="text-white hover:bg-tire-700/50"
-                      >
-                        Mês passado
-                      </SelectItem>
-                      <SelectItem
-                        value="month"
-                        className="text-white hover:bg-tire-700/50"
-                      >
-                        Mês específico
+                        Todos os períodos
                       </SelectItem>
                       <SelectItem
                         value="custom"
@@ -1332,12 +1343,11 @@ const DailyProduction = ({
                         Data Inicial:
                       </Label>
                       <div className="relative">
-                        <CalendarDays className="absolute left-3 top-2.5 h-4 w-4 text-tire-400" />
                         <Input
                           type="date"
                           value={customStartDate}
                           onChange={(e) => setCustomStartDate(e.target.value)}
-                          className="pl-9 bg-factory-700/50 border-tire-600/30 text-white"
+                          className="bg-factory-700/50 border-tire-600/30 text-white"
                         />
                       </div>
                     </div>
@@ -1346,12 +1356,11 @@ const DailyProduction = ({
                         Data Final:
                       </Label>
                       <div className="relative">
-                        <CalendarDays className="absolute left-3 top-2.5 h-4 w-4 text-tire-400" />
                         <Input
                           type="date"
                           value={customEndDate}
                           onChange={(e) => setCustomEndDate(e.target.value)}
-                          className="pl-9 bg-factory-700/50 border-tire-600/30 text-white"
+                          className="bg-factory-700/50 border-tire-600/30 text-white"
                         />
                       </div>
                     </div>

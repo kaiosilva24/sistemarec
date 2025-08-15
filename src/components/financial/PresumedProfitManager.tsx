@@ -98,7 +98,7 @@ const PresumedProfitManager = ({
   warrantyEntries = [],
   hideCharts = false,
 }: PresumedProfitManagerProps) => {
-  const [dateFilter, setDateFilter] = useState("last30days");
+  const [dateFilter, setDateFilter] = useState("all");
   const [customStartDate, setCustomStartDate] = useState("");
   const [customEndDate, setCustomEndDate] = useState("");
   const [sortBy, setSortBy] = useState<"profit" | "revenue" | "margin">(
@@ -933,32 +933,49 @@ const PresumedProfitManager = ({
 
     switch (dateFilter) {
       case "today":
-        const todayStr = today.toISOString().split("T")[0];
+        // WORKAROUND: Compensate for +1 day UTC workaround in sales saving
+        // Since sales are saved with +1 day, we need to look for tomorrow's date
+        const tomorrow = new Date(today);
+        tomorrow.setDate(today.getDate() + 1);
+        const tomorrowStr = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, "0")}-${String(tomorrow.getDate()).padStart(2, "0")}`;
+        
+        console.log("🗓️ [PresumedProfitManager] TODAY FILTER DEBUG:", {
+          originalToday: today.toISOString().split("T")[0],
+          adjustedTomorrow: tomorrowStr,
+          note: "Looking for tomorrow's date to compensate UTC workaround"
+        });
+        
         filteredEntries = filteredEntries.filter(
           // CORREÇÃO: Usar transaction_date em vez de date
-          (entry) => entry.transaction_date === todayStr,
+          (entry) => entry.transaction_date === tomorrowStr,
         );
         console.log(
-          `📅 [PresumedProfitManager] Filtro 'hoje' (${todayStr}): ${filteredEntries.length} vendas de produtos finais com receitas`,
+          `📅 [PresumedProfitManager] Filtro 'hoje' (${tomorrowStr}): ${filteredEntries.length} vendas de produtos finais com receitas`,
         );
         break;
       case "last7days":
+        // WORKAROUND: Add +1 day to date range to compensate UTC workaround
         const last7Days = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+        const todayEnd7 = new Date(today);
+        todayEnd7.setDate(today.getDate() + 1); // Add +1 day
         filteredEntries = filteredEntries.filter((entry) => {
           // CORREÇÃO: Usar transaction_date em vez de date
           const entryDate = new Date(entry.transaction_date);
-          return entryDate >= last7Days && entryDate <= today;
+          return entryDate >= last7Days && entryDate <= todayEnd7;
         });
         console.log(
           `📅 [PresumedProfitManager] Filtro 'últimos 7 dias': ${filteredEntries.length} vendas de produtos finais com receitas`,
         );
         break;
       case "last30days":
+        // WORKAROUND: Add +1 day to date range to compensate UTC workaround
         const last30Days = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+        const todayEnd30 = new Date(today);
+        todayEnd30.setDate(today.getDate() + 1); // Add +1 day
         filteredEntries = filteredEntries.filter((entry) => {
           // CORREÇÃO: Usar transaction_date em vez de date
           const entryDate = new Date(entry.transaction_date);
-          return entryDate >= last30Days && entryDate <= today;
+          return entryDate >= last30Days && entryDate <= todayEnd30;
         });
         console.log(
           `📅 [PresumedProfitManager] Filtro 'últimos 30 dias': ${filteredEntries.length} vendas de produtos finais com receitas`,
@@ -966,8 +983,20 @@ const PresumedProfitManager = ({
         break;
       case "custom":
         if (customStartDate && customEndDate) {
+          // WORKAROUND: Add +1 day to custom dates to compensate UTC workaround
           const startDate = new Date(customStartDate);
+          startDate.setDate(startDate.getDate() + 1);
           const endDate = new Date(customEndDate);
+          endDate.setDate(endDate.getDate() + 1);
+          
+          console.log("🗓️ [PresumedProfitManager] CUSTOM FILTER DEBUG:", {
+            originalStartDate: customStartDate,
+            originalEndDate: customEndDate,
+            adjustedStartDate: startDate.toISOString().split("T")[0],
+            adjustedEndDate: endDate.toISOString().split("T")[0],
+            note: "Added +1 day to compensate UTC workaround"
+          });
+          
           filteredEntries = filteredEntries.filter((entry) => {
             // CORREÇÃO: Usar transaction_date em vez de date
             const entryDate = new Date(entry.transaction_date);
@@ -1456,6 +1485,38 @@ const PresumedProfitManager = ({
     saveAverageProfitPerTire();
   }, [summaryMetrics.averageProfitPerTire]);
 
+  // Salvar lucro empresarial total quando summaryMetrics mudarem
+  useEffect(() => {
+    const saveBusinessValue = async () => {
+      console.log(`💼 [PresumedProfitManager] Salvando Valor Empresarial e Lucro Empresarial: R$ ${summaryMetrics.totalProfit.toFixed(2)}`);
+      
+      if (summaryMetrics.totalProfit >= 0) {
+        try {
+          // Salvar o lucro total como valor empresarial no banco de dados
+          const businessValueSuccess = await dataManager.saveBusinessValue(summaryMetrics.totalProfit);
+          
+          // Salvar também como lucro empresarial separadamente
+          const businessProfitSuccess = await dataManager.saveBusinessProfit(summaryMetrics.totalProfit);
+          
+          if (businessValueSuccess && businessProfitSuccess) {
+            console.log(`✅ [PresumedProfitManager] Valor Empresarial e Lucro Empresarial salvos com sucesso: R$ ${summaryMetrics.totalProfit.toFixed(2)}`);
+          } else {
+            console.warn('⚠️ [PresumedProfitManager] Falha ao salvar alguns valores:', {
+              businessValue: businessValueSuccess,
+              businessProfit: businessProfitSuccess
+            });
+          }
+        } catch (error) {
+          console.error('❌ [PresumedProfitManager] Erro ao salvar valores empresariais:', error);
+        }
+      } else {
+        console.log(`⚠️ [PresumedProfitManager] Valores zero ou negativos, não salvando: R$ ${summaryMetrics.totalProfit.toFixed(2)}`);
+      }
+    };
+
+    saveBusinessValue();
+  }, [summaryMetrics.totalProfit]);
+
   // Listener para forçar recálculo quando há vendas
   useEffect(() => {
     const handleForceRecalc = () => {
@@ -1698,22 +1759,10 @@ const PresumedProfitManager = ({
               </SelectTrigger>
               <SelectContent className="bg-factory-800 border-tire-600/30">
                 <SelectItem
-                  value="today"
+                  value="all"
                   className="text-white hover:bg-tire-700/50"
                 >
-                  Hoje
-                </SelectItem>
-                <SelectItem
-                  value="last7days"
-                  className="text-white hover:bg-tire-700/50"
-                >
-                  Últimos 7 dias
-                </SelectItem>
-                <SelectItem
-                  value="last30days"
-                  className="text-white hover:bg-tire-700/50"
-                >
-                  Últimos 30 dias
+                  Todos os períodos
                 </SelectItem>
                 <SelectItem
                   value="custom"
@@ -1757,24 +1806,22 @@ const PresumedProfitManager = ({
             <div className="space-y-2">
               <Label className="text-tire-300 text-sm">Data Inicial:</Label>
               <div className="relative">
-                <Calendar className="absolute left-3 top-2.5 h-4 w-4 text-tire-400" />
                 <Input
                   type="date"
                   value={customStartDate}
                   onChange={(e) => setCustomStartDate(e.target.value)}
-                  className="pl-9 bg-factory-700/50 border-tire-600/30 text-white"
+                  className="bg-factory-700/50 border-tire-600/30 text-white"
                 />
               </div>
             </div>
             <div className="space-y-2">
               <Label className="text-tire-300 text-sm">Data Final:</Label>
               <div className="relative">
-                <Calendar className="absolute left-3 top-2.5 h-4 w-4 text-tire-400" />
                 <Input
                   type="date"
                   value={customEndDate}
                   onChange={(e) => setCustomEndDate(e.target.value)}
-                  className="pl-9 bg-factory-700/50 border-tire-600/30 text-white"
+                  className="bg-factory-700/50 border-tire-600/30 text-white"
                 />
               </div>
             </div>
@@ -1898,7 +1945,7 @@ const PresumedProfitManager = ({
                   />
                   <Bar
                     dataKey="quantidade"
-                    fill="#3B82F6"
+                    fill="#bbe5fc"
                     radius={[4, 4, 0, 0]}
                   />
                 </BarChart>

@@ -238,7 +238,7 @@ const ProductionRegistration = ({
                   value={productName}
                   onChange={(e) => setProductName(e.target.value)}
                   className="bg-factory-700/50 border-tire-600/30 text-white placeholder:text-tire-400"
-                  placeholder="Ex: Pneu Recauchutado 175/70R13"
+                  placeholder=""
                   required
                 />
               </div>

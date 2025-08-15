@@ -324,3 +324,36 @@ export interface ResaleProduct {
   created_at: string;
   updated_at?: string;
 }
+
+export interface PendingSale {
+  id: string;
+  customer_id: string;
+  customer_name: string;
+  salesperson_id: string;
+  salesperson_name: string;
+  product_id: string;
+  product_name: string;
+  product_type: "final" | "resale";
+  quantity: number;
+  unit_price: number;
+  total_value: number;
+  unit: string;
+  sale_date: string;
+  description: string;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface Debt {
+  id: string;
+  description: string;
+  total_amount: number;
+  paid_amount: number;
+  remaining_amount: number;
+  due_date: string;
+  status: "em_dia" | "vencida" | "paga";
+  category: string;
+  creditor: string;
+  created_at: string;
+  updated_at: string;
+}

@@ -22,6 +22,7 @@ import {
   X,
   CalendarDays,
   Trash2,
+  ShoppingCart,
 } from "lucide-react";
 import {
   CashFlowEntry,
@@ -33,6 +34,7 @@ import {
   Salesperson,
 } from "@/types/financial";
 import { useTranslation } from "react-i18next";
+import { useStockItems, useResaleProducts, useDebts } from "@/hooks/useDataPersistence";
 
 interface CashFlowManagerProps {
   cashFlowEntries?: CashFlowEntry[];
@@ -60,6 +62,9 @@ const CashFlowManager = ({
   isLoading = false,
 }: CashFlowManagerProps) => {
   const { t } = useTranslation();
+  const { stockItems, updateStockItem } = useStockItems();
+  const { resaleProducts } = useResaleProducts();
+  const { debts } = useDebts();
   const [type, setType] = useState<"income" | "expense">("expense");
   const [category, setCategory] = useState("");
   const [referenceId, setReferenceId] = useState("");
@@ -79,6 +84,159 @@ const CashFlowManager = ({
   const [customEndDate, setCustomEndDate] = useState("");
   const [filterCategory, setFilterCategory] = useState("all_categories");
 
+  // Estados para venda multi-produto
+  const [isMultiProductMode, setIsMultiProductMode] = useState(false);
+  const [productCart, setProductCart] = useState<Array<{
+    id: string;
+    name: string;
+    quantity: number;
+    unitPrice: number;
+    totalPrice: number;
+    productType: 'final' | 'resale';
+    originalProductId: string;
+  }>>([]);
+  const [selectedProductId, setSelectedProductId] = useState("");
+  const [selectedProductType, setSelectedProductType] = useState<'final' | 'resale'>('final');
+  const [productQuantity, setProductQuantity] = useState("");
+  const [productUnitPrice, setProductUnitPrice] = useState("");
+
+  // Obter produtos disponíveis
+  const getAvailableProducts = () => {
+    const finalProducts = stockItems
+      .filter(item => item.item_type === 'product' && item.quantity > 0)
+      .map(item => ({
+        id: item.item_id,
+        name: item.item_name,
+        type: 'final' as const,
+        availableQuantity: item.quantity,
+        suggestedPrice: item.unit_cost * 1.3 // Margem de 30%
+      }));
+
+    const resaleProductsAvailable = resaleProducts
+      .filter(product => {
+        const stockItem = stockItems.find(item => 
+          item.item_id === product.id && item.item_type === 'product'
+        );
+        return stockItem && stockItem.quantity > 0;
+      })
+      .map(product => {
+        const stockItem = stockItems.find(item => 
+          item.item_id === product.id && item.item_type === 'product'
+        );
+        return {
+          id: product.id,
+          name: product.name,
+          type: 'resale' as const,
+          availableQuantity: stockItem?.quantity || 0,
+          suggestedPrice: (stockItem?.total_value || 0) / (stockItem?.quantity || 1) * 1.2 // Margem de 20%
+        };
+      });
+
+    return [...finalProducts, ...resaleProductsAvailable];
+  };
+
+  // Funções para gerenciar carrinho de produtos
+  const addProductToCart = () => {
+    if (!selectedProductId || !productQuantity || !productUnitPrice) {
+      alert("Por favor, selecione um produto e preencha quantidade e preço.");
+      return;
+    }
+
+    const quantity = parseFloat(productQuantity);
+    const unitPrice = parseFloat(productUnitPrice);
+    
+    if (quantity <= 0 || unitPrice <= 0) {
+      alert("Quantidade e preço unitário devem ser maiores que zero.");
+      return;
+    }
+
+    // Encontrar produto selecionado
+    const availableProducts = getAvailableProducts();
+    const selectedProduct = availableProducts.find(p => p.id === selectedProductId);
+    
+    if (!selectedProduct) {
+      alert("Produto não encontrado.");
+      return;
+    }
+
+    // Verificar estoque disponível
+    if (quantity > selectedProduct.availableQuantity) {
+      alert(`Estoque insuficiente. Disponível: ${selectedProduct.availableQuantity}`);
+      return;
+    }
+
+    const totalPrice = quantity * unitPrice;
+    const newProduct = {
+      id: Date.now().toString(),
+      name: selectedProduct.name,
+      quantity,
+      unitPrice,
+      totalPrice,
+      productType: selectedProduct.type,
+      originalProductId: selectedProduct.id,
+    };
+
+    setProductCart([...productCart, newProduct]);
+    
+    // Limpar campos
+    setSelectedProductId("");
+    setProductQuantity("");
+    setProductUnitPrice("");
+  };
+
+  const removeProductFromCart = (productId: string) => {
+    setProductCart(productCart.filter(p => p.id !== productId));
+  };
+
+  const clearCart = () => {
+    setProductCart([]);
+  };
+
+  const getTotalCartValue = () => {
+    return productCart.reduce((total, product) => total + product.totalPrice, 0);
+  };
+
+  const handleMultiProductSale = async () => {
+    if (productCart.length === 0) {
+      alert("Adicione pelo menos um produto ao carrinho.");
+      return;
+    }
+
+    if (!referenceName.trim()) {
+      alert("Por favor, informe o nome do cliente.");
+      return;
+    }
+
+    const totalValue = getTotalCartValue();
+    const productDetails = productCart.map(p => 
+      `${p.name}: ${p.quantity} un. × R$ ${p.unitPrice.toFixed(2)} = R$ ${p.totalPrice.toFixed(2)}`
+    ).join(" | ");
+
+    const description = `VENDA MULTI-PRODUTO | Cliente: ${referenceName.trim()} | Produtos: ${productDetails} | Total: R$ ${totalValue.toFixed(2)}`;
+
+    // Corrigir data para compensar conversão UTC
+    const selectedDate = new Date(transactionDate + 'T00:00:00');
+    selectedDate.setDate(selectedDate.getDate() + 1);
+    const fixedTransactionDate = selectedDate.toISOString().split('T')[0];
+
+    await onSubmit({
+      type: "income",
+      category: "Venda Multi-Produto",
+      reference_id: undefined,
+      reference_name: referenceName.trim(),
+      amount: totalValue,
+      description,
+      transaction_date: fixedTransactionDate,
+    });
+
+    // Limpar formulário e carrinho
+    setReferenceName("");
+    clearCart();
+    setIsMultiProductMode(false);
+    
+    alert(`Venda registrada com sucesso!\n\nTotal: R$ ${totalValue.toFixed(2)}\nProdutos: ${productCart.length}`);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -97,15 +255,55 @@ const CashFlowManager = ({
     const categoryToSave =
       type === "expense" ? getCategoryLabel(category) : "Entrada de Caixa";
 
-    await onSubmit({
-      type,
-      category: categoryToSave, // Save category name in Portuguese
-      reference_id: referenceId || undefined,
-      reference_name: referenceName.trim(),
-      amount: parseFloat(amount),
-      description: description.trim() || undefined,
-      transaction_date: transactionDate,
-    });
+    // Corrigir data para compensar conversão UTC (mesmo fix do DailyProduction)
+    const selectedDate = new Date(transactionDate + 'T00:00:00');
+    selectedDate.setDate(selectedDate.getDate() + 1);
+    const fixedTransactionDate = selectedDate.toISOString().split('T')[0];
+
+    // Special handling for debt payments
+    if (type === "expense" && category === "debts") {
+      console.log("💳 [DEBT PAYMENT] Registrando pagamento de dívida:", {
+        amount: parseFloat(amount),
+        referenceName: referenceName.trim(),
+        description: description.trim(),
+        date: fixedTransactionDate
+      });
+
+      // Add special marker to description to identify debt payments
+      const debtDescription = description.trim() 
+        ? `PAGAMENTO_DIVIDA: ${description.trim()}` 
+        : `PAGAMENTO_DIVIDA: ${referenceName.trim()}`;
+
+      await onSubmit({
+        type,
+        category: categoryToSave, // Save category name in Portuguese
+        reference_id: referenceId || undefined,
+        reference_name: `💳 ${referenceName.trim()}`, // Add debt icon to reference name
+        amount: parseFloat(amount),
+        description: debtDescription,
+        transaction_date: fixedTransactionDate,
+      });
+
+      // Show success message with debt payment info
+      alert(
+        `Pagamento de dívida registrado com sucesso!\n\n` +
+        `💳 Dívida: ${referenceName.trim()}\n` +
+        `💰 Valor: ${formatCurrency(parseFloat(amount))}\n` +
+        `📅 Data: ${new Date(fixedTransactionDate).toLocaleDateString("pt-BR")}\n\n` +
+        `✅ Este valor será descontado do total de dívidas automaticamente.`
+      );
+    } else {
+      // Regular transaction handling
+      await onSubmit({
+        type,
+        category: categoryToSave, // Save category name in Portuguese
+        reference_id: referenceId || undefined,
+        reference_name: referenceName.trim(),
+        amount: parseFloat(amount),
+        description: description.trim() || undefined,
+        transaction_date: fixedTransactionDate,
+      });
+    }
 
     // Reset form
     setCategory("");
@@ -145,6 +343,10 @@ const CashFlowManager = ({
       case "variable_costs":
         name = variableCosts.find((v) => v.id === value)?.name || "";
         break;
+      case "debts":
+        const debt = debts.find((d) => d.id === value);
+        name = debt ? `${debt.description} (${debt.creditor})` : "";
+        break;
     }
     setReferenceName(name);
   };
@@ -155,6 +357,7 @@ const CashFlowManager = ({
     { value: "salespeople", label: "Vendedores", data: salespeople },
     { value: "fixed_costs", label: "Custos Fixos", data: fixedCosts },
     { value: "variable_costs", label: "Custos Variáveis", data: variableCosts },
+    { value: "debts", label: "Dívidas", data: debts }, // Categoria para pagamento de dívidas com dados reais
   ];
 
   const getIncomeCategories = () => [
@@ -214,51 +417,72 @@ const CashFlowManager = ({
       (filterCategory === "Venda" &&
         entry.category.toLowerCase().includes("venda"));
 
-    // Advanced date filtering
+    // Advanced date filtering with proper timezone handling
     let matchesDate = true;
     const entryDate = new Date(entry.transaction_date);
     const today = new Date();
 
     switch (dateFilterType) {
       case "today":
-        matchesDate =
-          entry.transaction_date === today.toISOString().split("T")[0];
+        // Use local date interval instead of string comparison
+        const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        const todayEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
+        matchesDate = entryDate >= todayStart && entryDate <= todayEnd;
         break;
       case "last7days":
-        const last7Days = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
-        matchesDate = entryDate >= last7Days;
+        const last7DaysStart = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+        last7DaysStart.setHours(0, 0, 0, 0);
+        matchesDate = entryDate >= last7DaysStart;
         break;
       case "last30days":
-        const last30Days = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
-        matchesDate = entryDate >= last30Days;
+        const last30DaysStart = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+        last30DaysStart.setHours(0, 0, 0, 0);
+        matchesDate = entryDate >= last30DaysStart;
         break;
       case "thisMonth":
-        const thisMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
-        matchesDate = entry.transaction_date.startsWith(thisMonth);
+        const thisMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+        const thisMonthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59);
+        matchesDate = entryDate >= thisMonthStart && entryDate <= thisMonthEnd;
         break;
       case "lastMonth":
-        const lastMonth = new Date(
-          today.getFullYear(),
-          today.getMonth() - 1,
-          1,
-        );
-        const lastMonthStr = `${lastMonth.getFullYear()}-${String(lastMonth.getMonth() + 1).padStart(2, "0")}`;
-        matchesDate = entry.transaction_date.startsWith(lastMonthStr);
+        const lastMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+        const lastMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0, 23, 59, 59);
+        matchesDate = entryDate >= lastMonthStart && entryDate <= lastMonthEnd;
         break;
-      case "month":
-        matchesDate =
-          !filterMonth || entry.transaction_date.startsWith(filterMonth);
-        break;
+
       case "custom":
         if (customStartDate && customEndDate) {
+          // WORKAROUND: Compensate for +1 day UTC workaround in transaction saving
+          // Since transactions are saved with +1 day, we need to add +1 day to filter dates too
           const startDate = new Date(customStartDate);
+          startDate.setDate(startDate.getDate() + 1);
+          startDate.setHours(0, 0, 0, 0);
           const endDate = new Date(customEndDate);
+          endDate.setDate(endDate.getDate() + 1);
+          endDate.setHours(23, 59, 59, 999);
+          
+          // Debug logs for custom date filtering
+          console.log("🗓️ [CUSTOM FILTER DEBUG] Cash Flow Transactions:", {
+            selectedStartDate: customStartDate,
+            selectedEndDate: customEndDate,
+            adjustedStartDate: startDate.toString(),
+            adjustedEndDate: endDate.toString(),
+            entryDate: entryDate.toString(),
+            entryTransactionDate: entry.transaction_date,
+            matchesDate: entryDate >= startDate && entryDate <= endDate,
+            note: "Added +1 day to compensate UTC workaround"
+          });
+          
           matchesDate = entryDate >= startDate && entryDate <= endDate;
         } else if (customStartDate) {
           const startDate = new Date(customStartDate);
+          startDate.setDate(startDate.getDate() + 1);
+          startDate.setHours(0, 0, 0, 0);
           matchesDate = entryDate >= startDate;
         } else if (customEndDate) {
           const endDate = new Date(customEndDate);
+          endDate.setDate(endDate.getDate() + 1);
+          endDate.setHours(23, 59, 59, 999);
           matchesDate = entryDate <= endDate;
         }
         break;
@@ -292,22 +516,220 @@ const CashFlowManager = ({
     setFilterCategory("all_categories");
   };
 
+  // Utility function to extract product info from sale description
+  const extractProductInfoFromSale = (description: string) => {
+    console.log('🔍 [FINANCIAL DELETE] Analisando descrição:', description);
+    
+    // Try multiple patterns to extract product ID and quantity
+    let productIdMatch = description.match(/ID_Produto: ([^|]+)/);
+    if (!productIdMatch) {
+      productIdMatch = description.match(/PRODUTO_ID: ([^|]+)/);
+    }
+    
+    let quantityMatch = description.match(/Qtd: (\d+)/);
+    if (!quantityMatch) {
+      quantityMatch = description.match(/QUANTIDADE: (\d+)/);
+    }
+    
+    console.log('🔍 [FINANCIAL DELETE] Matches encontrados:', { 
+      productIdMatch: productIdMatch?.[1], 
+      quantityMatch: quantityMatch?.[1] 
+    });
+    
+    if (productIdMatch && quantityMatch) {
+      const result = {
+        productId: productIdMatch[1].trim(),
+        quantity: parseInt(quantityMatch[1])
+      };
+      console.log('✅ [FINANCIAL DELETE] Produto extraído com sucesso:', result);
+      return result;
+    }
+    
+    console.log('❌ [FINANCIAL DELETE] Não foi possível extrair informações do produto');
+    return null;
+  };
+
   // Handle delete transaction
   const handleDeleteTransaction = async (entry: CashFlowEntry) => {
-    console.log('🔥 [DEBUG] handleDeleteTransaction called with:', entry);
-    const confirmMessage = `Tem certeza que deseja excluir esta transação?\n\nTipo: ${entry.type === "income" ? "Entrada" : "Saída"}\nValor: ${formatCurrency(entry.amount)}\nReferência: ${entry.reference_name}\nData: ${new Date(entry.transaction_date).toLocaleDateString("pt-BR")}`;
+    console.log('🔥 [FINANCIAL DELETE] Iniciando exclusão:', { entryId: entry.id, referenceName: entry.reference_name });
+    
+    const confirmMessage = `Tem certeza que deseja excluir esta transação?\n\nTipo: ${entry.type === "income" ? "Entrada" : "Saída"}\nValor: ${formatCurrency(entry.amount)}\nReferência: ${entry.reference_name}\nData: ${new Date(entry.transaction_date).toLocaleDateString("pt-BR")}\n\nSe for uma venda, os produtos serão devolvidos ao estoque.`;
 
     if (confirm(confirmMessage)) {
+      let stockRestored = false;
+      
       try {
-        const success = await onDelete(entry.id);
-        if (!success) {
-          alert("Erro ao excluir a transação. Tente novamente.");
+        console.log('🔥 [FINANCIAL DELETE] Usuário confirmou, iniciando processo...');
+        console.log('🔥 [FINANCIAL DELETE] Descrição da transação:', entry.description);
+        
+        // Check if this is a sale transaction that needs stock restoration
+        const isSaleTransaction = entry.category === "venda" || entry.category === "venda_prazo";
+        
+        if (isSaleTransaction && entry.description) {
+          console.log('🔥 [FINANCIAL DELETE] É uma venda, extraindo informações do produto...');
+          
+          // Extract product info from sale description
+          const productInfo = extractProductInfoFromSale(entry.description);
+          console.log('🔥 [FINANCIAL DELETE] Info do produto extraída:', productInfo);
+
+          // Check if it's a resale product or final product
+          const isResaleProduct = entry.description.includes("TIPO_PRODUTO: revenda");
+          const isFinalProduct = entry.description.includes("TIPO_PRODUTO: final");
+          
+          console.log('🔥 [FINANCIAL DELETE] Tipo de produto:', { isResaleProduct, isFinalProduct });
+
+          if (productInfo) {
+            console.log('🔥 [FINANCIAL DELETE] Produto ID para buscar:', productInfo.productId);
+            console.log('🔥 [FINANCIAL DELETE] Quantidade para retornar:', productInfo.quantity);
+            
+            // FIRST: Try to restore stock before deleting the transaction
+            try {
+              if (isResaleProduct) {
+                console.log('🔥 [FINANCIAL DELETE] Processando produto de revenda...');
+                // Handle resale product stock restoration in stock_items table
+                const stockItem = stockItems.find(
+                  (item) => {
+                    console.log('🔥 [FINANCIAL DELETE] Comparando item:', { 
+                      itemId: item.item_id, 
+                      itemType: item.item_type,
+                      searchingFor: productInfo.productId 
+                    });
+                    return item.item_id === productInfo.productId && item.item_type === "product";
+                  }
+                );
+
+                console.log('🔥 [FINANCIAL DELETE] Item de estoque encontrado (revenda):', stockItem);
+
+                if (stockItem) {
+                  // Return quantity to stock_items
+                  const newQuantity = stockItem.quantity + productInfo.quantity;
+                  const newTotalValue = newQuantity * stockItem.unit_cost;
+
+                  console.log('🔥 [FINANCIAL DELETE] Atualizando estoque revenda:', {
+                    stockItemId: stockItem.id,
+                    previousQuantity: stockItem.quantity,
+                    returnedQuantity: productInfo.quantity,
+                    newQuantity: newQuantity,
+                    newTotalValue: newTotalValue,
+                  });
+
+                  await updateStockItem(stockItem.id, {
+                    quantity: newQuantity,
+                    total_value: newTotalValue,
+                    last_updated: new Date().toISOString(),
+                  });
+
+                  console.log('✅ [FINANCIAL DELETE] Estoque de produto de revenda restaurado com sucesso!');
+                  stockRestored = true;
+                } else {
+                  console.error('❌ [FINANCIAL DELETE] Item de estoque não encontrado para produto de revenda:', productInfo.productId);
+                  console.log('🔥 [FINANCIAL DELETE] Itens disponíveis no estoque:', stockItems.map(item => ({
+                    id: item.item_id,
+                    name: item.item_name,
+                    type: item.item_type
+                  })));
+                }
+              } else if (isFinalProduct) {
+                console.log('🔥 [FINANCIAL DELETE] Processando produto final...');
+                // Handle final product stock restoration
+                const stockItem = stockItems.find(
+                  (item) => {
+                    console.log('🔥 [FINANCIAL DELETE] Comparando item final:', { 
+                      itemId: item.id, 
+                      itemName: item.item_name,
+                      searchingFor: productInfo.productId 
+                    });
+                    return item.id === productInfo.productId;
+                  }
+                );
+
+                console.log('🔥 [FINANCIAL DELETE] Item de estoque encontrado (final):', stockItem);
+
+                if (stockItem) {
+                  // Return quantity to stock
+                  const newQuantity = stockItem.quantity + productInfo.quantity;
+                  const newTotalValue = newQuantity * stockItem.unit_cost;
+
+                  console.log('🔥 [FINANCIAL DELETE] Atualizando estoque final:', {
+                    stockItemId: stockItem.id,
+                    previousQuantity: stockItem.quantity,
+                    returnedQuantity: productInfo.quantity,
+                    newQuantity: newQuantity,
+                    newTotalValue: newTotalValue,
+                  });
+
+                  await updateStockItem(stockItem.id, {
+                    quantity: newQuantity,
+                    total_value: newTotalValue,
+                    last_updated: new Date().toISOString(),
+                  });
+
+                  console.log('✅ [FINANCIAL DELETE] Estoque de produto final restaurado com sucesso!');
+                  stockRestored = true;
+                } else {
+                  console.error('❌ [FINANCIAL DELETE] Produto final não encontrado no estoque:', productInfo.productId);
+                  console.log('🔥 [FINANCIAL DELETE] Produtos finais disponíveis:', stockItems.filter(item => item.item_type === 'product').map(item => ({
+                    id: item.id,
+                    name: item.item_name,
+                    quantity: item.quantity
+                  })));
+                }
+              }
+            } catch (stockError) {
+              console.error('❌ [FINANCIAL DELETE] Erro ao restaurar estoque:', stockError);
+              alert(`Erro ao restaurar estoque: ${stockError.message || stockError}\n\nA transação NÃO foi excluída para manter integridade dos dados.`);
+              return; // Don't proceed with deletion if stock restoration fails
+            }
+          } else {
+            console.error('❌ [FINANCIAL DELETE] Não foi possível extrair informações do produto da venda');
+            console.log('🔥 [FINANCIAL DELETE] Descrição completa:', entry.description);
+          }
+        } else {
+          console.log('🔥 [FINANCIAL DELETE] Não é uma venda ou sem descrição, prosseguindo com exclusão normal');
+          stockRestored = true; // Allow deletion for non-sale transactions
         }
+
+        // SECOND: Only delete from cash flow if stock was restored successfully (or not needed)
+        console.log('🔥 [FINANCIAL DELETE] Deletando entrada do fluxo de caixa...');
+        try {
+          const success = await onDelete(entry.id);
+          if (!success) {
+            console.error('❌ [FINANCIAL DELETE] onDelete retornou false');
+            
+            // If stock was restored but cash flow deletion failed, we have a problem
+            if (stockRestored && isSaleTransaction) {
+              alert(`ATENÇÃO: O estoque foi restaurado, mas houve erro ao deletar a transação do fluxo de caixa.\n\nContate o suporte técnico.`);
+            } else {
+              alert("Erro ao excluir a transação. Tente novamente.");
+            }
+            return;
+          }
+          console.log('✅ [FINANCIAL DELETE] Entrada do fluxo de caixa deletada com sucesso!');
+        } catch (deleteError) {
+          console.error("❌ [FINANCIAL DELETE] Erro específico ao deletar do fluxo de caixa:", deleteError);
+          
+          // If stock was restored but cash flow deletion failed, we have a problem
+          if (stockRestored && isSaleTransaction) {
+            alert(`ATENÇÃO: O estoque foi restaurado, mas houve erro ao deletar a transação do fluxo de caixa.\n\nErro: ${deleteError.message || deleteError}\n\nContate o suporte técnico.`);
+          } else {
+            alert(`Erro ao excluir a transação: ${deleteError.message || deleteError}\n\nNenhuma alteração foi feita.`);
+          }
+          return;
+        }
+
+        // Success message
+        if (isSaleTransaction && stockRestored) {
+          alert(
+            `Transação excluída com sucesso!\n\n` +
+              `📦 Os produtos foram devolvidos ao estoque automaticamente.`,
+          );
+        } else {
+          alert('Transação excluída com sucesso!');
+        }
+        
       } catch (error) {
-        console.error("Erro ao excluir transação:", error);
-        alert(
-          "Erro ao excluir a transação. Verifique o console para mais detalhes.",
-        );
+        console.error("❌ [FINANCIAL DELETE] Erro geral ao excluir transação:", error);
+        alert(`Erro ao excluir a transação: ${error.message || error}\n\nVerifique o console para mais detalhes.`);
       }
     }
   };
@@ -475,15 +897,20 @@ const CashFlowManager = ({
                     <SelectContent className="bg-factory-800 border-tire-600/30">
                       {getCurrentCategoryData()
                         .filter((item: any) => !item.archived)
-                        .map((item: any) => (
-                          <SelectItem
-                            key={item.id}
-                            value={item.id}
-                            className="text-white hover:bg-tire-700/50"
-                          >
-                            {item.name}
-                          </SelectItem>
-                        ))}
+                        .map((item: any) => {
+                          return (
+                            <SelectItem
+                              key={item.id}
+                              value={item.id}
+                              className="text-white hover:bg-tire-700/50"
+                            >
+                              {category === "debts" 
+                                ? `${item.description} (${item.creditor}) - R$ ${(parseFloat(item.remaining_amount) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` 
+                                : item.name
+                              }
+                            </SelectItem>
+                          );
+                        })}
                     </SelectContent>
                   </Select>
                 </div>
@@ -552,19 +979,215 @@ const CashFlowManager = ({
                 />
               </div>
 
-              <Button
-                type="submit"
-                className="w-full bg-gradient-to-r from-neon-blue to-neon-green hover:from-neon-green hover:to-neon-blue text-white"
-                disabled={
-                  isLoading ||
-                  (type === "expense" && !category) ||
-                  !referenceName ||
-                  !amount
-                }
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Registrar Transação
-              </Button>
+              {/* Toggle para modo multi-produto (apenas para entradas) */}
+              {type === "income" && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-tire-300">Modo de Venda</Label>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setIsMultiProductMode(!isMultiProductMode);
+                        if (!isMultiProductMode) {
+                          setAmount("");
+                        } else {
+                          clearCart();
+                        }
+                      }}
+                      className={`text-xs ${
+                        isMultiProductMode 
+                          ? "text-neon-green bg-neon-green/10" 
+                          : "text-tire-300 hover:text-white"
+                      }`}
+                    >
+                      {isMultiProductMode ? "🛒 Multi-Produto" : "💰 Valor Único"}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Interface Multi-Produto */}
+              {type === "income" && isMultiProductMode && (
+                <div className="space-y-4 p-4 bg-factory-700/30 rounded-lg border border-tire-600/20">
+                  <div className="flex items-center gap-2 mb-3">
+                    <ShoppingCart className="h-4 w-4 text-neon-green" />
+                    <span className="text-tire-200 font-medium">Selecionar Produtos para Venda</span>
+                  </div>
+
+                  {/* Formulário para adicionar produto - Layout solicitado */}
+                  <div className="grid grid-cols-3 gap-4">
+                    {/* Seleção de Produto (Esquerda) */}
+                    <div className="space-y-2">
+                      <Label className="text-tire-300 text-sm font-medium">Produto</Label>
+                      <Select 
+                        value={selectedProductId} 
+                        onValueChange={(value) => {
+                          setSelectedProductId(value);
+                          // Auto-preencher preço sugerido
+                          const product = getAvailableProducts().find(p => p.id === value);
+                          if (product) {
+                            setProductUnitPrice(product.suggestedPrice.toFixed(2));
+                          }
+                        }}
+                      >
+                        <SelectTrigger className="bg-factory-600/50 border-tire-600/30 text-white">
+                          <SelectValue placeholder="Selecione um produto..." />
+                        </SelectTrigger>
+                        <SelectContent className="bg-factory-800 border-tire-600/30 max-h-60">
+                          {getAvailableProducts().map((product) => (
+                            <SelectItem
+                              key={product.id}
+                              value={product.id}
+                              className="text-white hover:bg-tire-700/50"
+                            >
+                              <div className="flex flex-col">
+                                <span className="font-medium">{product.name}</span>
+                                <span className="text-xs text-tire-400">
+                                  {product.type === 'final' ? '🏭' : '🛒'} Estoque: {product.availableQuantity} | Sugerido: R$ {product.suggestedPrice.toFixed(2)}
+                                </span>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Quantidade (Meio) */}
+                    <div className="space-y-2">
+                      <Label className="text-tire-300 text-sm font-medium">Quantidade</Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        value={productQuantity}
+                        onChange={(e) => setProductQuantity(e.target.value)}
+                        className="bg-factory-600/50 border-tire-600/30 text-white"
+                        placeholder="1"
+                      />
+                      {selectedProductId && (
+                        <p className="text-xs text-tire-400">
+                          Máx: {getAvailableProducts().find(p => p.id === selectedProductId)?.availableQuantity || 0}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Valor Unitário (Direita) */}
+                    <div className="space-y-2">
+                      <Label className="text-tire-300 text-sm font-medium">Valor Unitário (R$)</Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        value={productUnitPrice}
+                        onChange={(e) => setProductUnitPrice(e.target.value)}
+                        className="bg-factory-600/50 border-tire-600/30 text-white"
+                        placeholder="0,00"
+                      />
+                      {selectedProductId && productQuantity && productUnitPrice && (
+                        <p className="text-xs text-neon-green font-medium">
+                          Total: R$ {(parseFloat(productQuantity) * parseFloat(productUnitPrice)).toFixed(2)}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <Button
+                    type="button"
+                    onClick={addProductToCart}
+                    className="w-full bg-gradient-to-r from-neon-green to-neon-blue hover:from-neon-blue hover:to-neon-green text-white"
+                    disabled={!selectedProductId || !productQuantity || !productUnitPrice}
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Adicionar ao Carrinho
+                  </Button>
+
+                  {/* Carrinho de Produtos */}
+                  {productCart.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-tire-200 font-medium text-sm">Carrinho ({productCart.length} produtos)</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={clearCart}
+                          className="text-red-400 hover:text-red-300 text-xs"
+                        >
+                          <X className="h-3 w-3 mr-1" />
+                          Limpar
+                        </Button>
+                      </div>
+                      
+                      <div className="max-h-40 overflow-y-auto space-y-2">
+                        {productCart.map((product) => (
+                          <div
+                            key={product.id}
+                            className="flex items-center justify-between p-2 bg-factory-600/30 rounded border border-tire-600/20"
+                          >
+                            <div className="flex-1">
+                              <div className="text-white text-sm font-medium">{product.name}</div>
+                              <div className="text-tire-400 text-xs">
+                                {product.quantity} un. × R$ {product.unitPrice.toFixed(2)}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-neon-green font-bold text-sm">
+                                R$ {product.totalPrice.toFixed(2)}
+                              </span>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => removeProductFromCart(product.id)}
+                                className="text-red-400 hover:text-red-300 p-1 h-6 w-6"
+                              >
+                                <X className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Total do Carrinho */}
+                      <div className="flex justify-between items-center pt-2 border-t border-tire-600/30">
+                        <span className="text-tire-200 font-medium">Total da Venda:</span>
+                        <span className="text-neon-green font-bold text-lg">
+                          R$ {getTotalCartValue().toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Botões de ação */}
+              {type === "income" && isMultiProductMode ? (
+                <Button
+                  type="button"
+                  onClick={handleMultiProductSale}
+                  className="w-full bg-gradient-to-r from-neon-green to-neon-blue hover:from-neon-blue hover:to-neon-green text-white"
+                  disabled={isLoading || !referenceName || productCart.length === 0}
+                >
+                  <ShoppingCart className="h-4 w-4 mr-2" />
+                  Finalizar Venda Multi-Produto
+                </Button>
+              ) : (
+                <Button
+                  type="submit"
+                  className="w-full bg-gradient-to-r from-neon-blue to-neon-green hover:from-neon-green hover:to-neon-blue text-white"
+                  disabled={
+                    isLoading ||
+                    (type === "expense" && !category) ||
+                    !referenceName ||
+                    !amount
+                  }
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Registrar Transação
+                </Button>
+              )}
             </form>
           </CardContent>
         </Card>
@@ -691,8 +1314,7 @@ const CashFlowManager = ({
                       value={dateFilterType}
                       onValueChange={(value) => {
                         setDateFilterType(value);
-                        // Reset other date filters when changing type
-                        if (value !== "month") setFilterMonth("");
+                        // Reset custom date filters when changing type
                         if (value !== "custom") {
                           setCustomStartDate("");
                           setCustomEndDate("");
@@ -739,12 +1361,7 @@ const CashFlowManager = ({
                         >
                           Mês passado
                         </SelectItem>
-                        <SelectItem
-                          value="month"
-                          className="text-white hover:bg-tire-700/50"
-                        >
-                          Mês específico
-                        </SelectItem>
+
                         <SelectItem
                           value="custom"
                           className="text-white hover:bg-tire-700/50"
@@ -755,21 +1372,7 @@ const CashFlowManager = ({
                     </Select>
                   </div>
 
-                  {/* Filtro de Mês Específico */}
-                  {dateFilterType === "month" && (
-                    <div className="space-y-2">
-                      <Label className="text-tire-300 text-sm">Mês:</Label>
-                      <div className="relative">
-                        <Calendar className="absolute left-3 top-2.5 h-4 w-4 text-tire-400" />
-                        <Input
-                          type="month"
-                          value={filterMonth}
-                          onChange={(e) => setFilterMonth(e.target.value)}
-                          className="pl-9 bg-factory-700/50 border-tire-600/30 text-white"
-                        />
-                      </div>
-                    </div>
-                  )}
+
 
                   {/* Filtros de Período Personalizado */}
                   {dateFilterType === "custom" && (
@@ -779,12 +1382,11 @@ const CashFlowManager = ({
                           Data Inicial:
                         </Label>
                         <div className="relative">
-                          <CalendarDays className="absolute left-3 top-2.5 h-4 w-4 text-tire-400" />
                           <Input
                             type="date"
                             value={customStartDate}
                             onChange={(e) => setCustomStartDate(e.target.value)}
-                            className="pl-9 bg-factory-700/50 border-tire-600/30 text-white"
+                            className="bg-factory-700/50 border-tire-600/30 text-white"
                           />
                         </div>
                       </div>
@@ -793,12 +1395,11 @@ const CashFlowManager = ({
                           Data Final:
                         </Label>
                         <div className="relative">
-                          <CalendarDays className="absolute left-3 top-2.5 h-4 w-4 text-tire-400" />
                           <Input
                             type="date"
                             value={customEndDate}
                             onChange={(e) => setCustomEndDate(e.target.value)}
-                            className="pl-9 bg-factory-700/50 border-tire-600/30 text-white"
+                            className="bg-factory-700/50 border-tire-600/30 text-white"
                           />
                         </div>
                       </div>

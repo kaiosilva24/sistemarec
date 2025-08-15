@@ -35,7 +35,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signUp = async (email: string, password: string, fullName: string) => {
-    console.log("Signing up with:", { email, fullName });
+    console.log("🔄 [AUTH] Iniciando cadastro de usuário:", { email, fullName });
+    
     try {
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -47,15 +48,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         },
       });
 
-      console.log("Signup response:", { data, error });
+      console.log("📊 [AUTH] Resposta do Supabase:", { 
+        user: data.user ? "Criado" : "Não criado", 
+        session: data.session ? "Ativa" : "Inativa",
+        error: error?.message || "Nenhum erro"
+      });
 
       if (error) {
-        console.error("Signup error:", error);
+        console.error("❌ [AUTH] Erro no cadastro:", error);
         throw error;
       }
 
+      if (!data.user) {
+        console.error("❌ [AUTH] Usuário não foi criado pelo Supabase");
+        throw new Error("Falha ao criar usuário no Supabase");
+      }
+
+      console.log("✅ [AUTH] Usuário criado com sucesso:", {
+        id: data.user.id,
+        email: data.user.email,
+        confirmed: data.user.email_confirmed_at ? "Sim" : "Não"
+      });
+
       // Create user in public.users table
-      if (data.user) {
+      try {
         const { error: userError } = await supabase.from("users").insert([
           {
             id: data.user.id,
@@ -66,10 +82,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         ]);
 
         if (userError) {
-          console.error("Error creating user record:", userError);
-          // We don't throw here as the auth user was created successfully
+          console.error("⚠️ [AUTH] Erro ao criar registro na tabela users:", userError);
+          // Não fazemos throw aqui pois o usuário de auth foi criado com sucesso
+        } else {
+          console.log("✅ [AUTH] Registro criado na tabela users");
         }
+      } catch (tableError) {
+        console.error("⚠️ [AUTH] Erro na operação da tabela users:", tableError);
       }
+
+      console.log("🎉 [AUTH] Processo de cadastro concluído com sucesso!");
     } catch (error) {
       console.error("Signup process error:", error);
       // Provide more user-friendly error messages
@@ -102,7 +124,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         message: error.message,
         status: error.status,
         name: error.name,
-        cause: error.cause,
       });
 
       // Provide Portuguese error messages based on error details

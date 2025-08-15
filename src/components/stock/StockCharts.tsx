@@ -6,7 +6,7 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
+
   ResponsiveContainer,
   ReferenceLine,
   Cell,
@@ -242,6 +242,7 @@ const CustomTooltip: React.FC<CustomTooltipProps> = ({ active, payload, label })
 interface StockChartsProps {
   materials?: RawMaterial[];
   products?: Product[];
+  resaleProducts?: any[];
   stockItems?: StockItem[];
   productType?: "all" | "final" | "resale";
   isLoading?: boolean;
@@ -250,23 +251,32 @@ interface StockChartsProps {
 const StockCharts = ({
   materials = [],
   products = [],
+  resaleProducts = [],
   stockItems = [],
   productType = "all",
   isLoading = false,
 }: StockChartsProps) => {
   
-  // Log dos dados recebidos
+  // Log dos dados recebidos com foco em produtos de revenda
   console.log('🔍 [StockCharts] Dados recebidos:', {
     materialsCount: materials.length,
     productsCount: products.length,
+    resaleProductsCount: resaleProducts.length,
     stockItemsCount: stockItems.length,
     productType,
     isLoading,
-    stockItemsSample: stockItems.slice(0, 3).map(item => ({
+    resaleProductsSample: resaleProducts.slice(0, 3).map(item => ({
+      id: item.id,
+      name: item.name,
+      purchase_price: item.purchase_price
+    })),
+    resaleStockItemsSample: stockItems.filter(item => 
+      item.item_type === 'product' && 
+      resaleProducts.some(rp => rp.id === item.item_id)
+    ).slice(0, 3).map(item => ({
       id: item.id,
       item_id: item.item_id,
       item_name: item.item_name,
-      item_type: item.item_type,
       quantity: item.quantity,
       unit_cost: item.unit_cost,
       total_value: item.total_value
@@ -281,11 +291,14 @@ const StockCharts = ({
   const [productSortOrder, setProductSortOrder] = useState<"asc" | "desc">(
     "desc",
   );
+  
+  // Estado para controlar tipo de produto exibido
+  const [productDisplayType, setProductDisplayType] = useState<"final" | "resale">("final");
 
   // Estados para configuração de cores
   const [showColorSettings, setShowColorSettings] = useState(false);
   const [colorSettings, setColorSettings] = useState({
-    quantityColor: "#FF8C00", // Laranja para quantidade atual
+    quantityColor: "#bbe5fc", // Cor padrão azul claro
     lowStockColor: "#FF3838", // Vermelho para estoque baixo
   });
   const [isLoadingColors, setIsLoadingColors] = useState(true);
@@ -295,16 +308,8 @@ const StockCharts = ({
     const loadColorSettings = async () => {
       console.log('📁 [StockCharts] Iniciando carregamento das configurações de cores...');
       try {
-        // Tentar carregar do Supabase primeiro (sincronização entre navegadores)
-        console.log('🔍 [StockCharts] Tentando carregar do Supabase...');
-        const supabaseSettings = await dataManager.loadStockChartColors();
-        if (supabaseSettings) {
-          console.log('✅ [StockCharts] Configurações encontradas no Supabase:', supabaseSettings);
-          setColorSettings((prev) => ({ ...prev, ...supabaseSettings }));
-          console.log('✅ [StockCharts] Configurações carregadas do Supabase e aplicadas');
-          return;
-        }
-        console.log('⚠️ [StockCharts] Nenhuma configuração encontrada no Supabase');
+        // Usar configurações locais (funcionalidade Supabase removida temporariamente)
+        console.log('🔍 [StockCharts] Carregando configurações locais...');
         
         // Fallback 1: Tentar carregar do checkpoint localStorage
         console.log('🔍 [StockCharts] Tentando carregar do checkpoint localStorage...');
@@ -350,6 +355,9 @@ const StockCharts = ({
     updateCount: 0
   });
 
+  // Estado para forçar re-renderização dos dados de produtos de revenda
+  const [forceRefreshKey, setForceRefreshKey] = useState(0);
+
   // useEffect para configurar sincronização em tempo real via Supabase
   useEffect(() => {
     let supabaseSubscription: any = null;
@@ -358,28 +366,8 @@ const StockCharts = ({
       try {
         console.log('🔄 [StockCharts] Configurando sincronização em tempo real...');
         
-        // Configurar subscription do Supabase para mudanças na tabela stock_items
-        supabaseSubscription = dataManager.subscribeToStockChanges((payload) => {
-          console.log('📡 [StockCharts] Mudança detectada via Supabase Realtime:', payload);
-          
-          setRealTimeData(prev => ({
-            ...prev,
-            lastUpdate: new Date(),
-            updateCount: prev.updateCount + 1
-          }));
-          
-          // Disparar evento customizado para notificar outros componentes
-          const realtimeEvent = new CustomEvent('stockChartsRealTimeUpdate', {
-            detail: {
-              payload,
-              timestamp: Date.now(),
-              source: 'StockCharts-Supabase',
-              updateCount: realTimeData.updateCount + 1
-            }
-          });
-          
-          window.dispatchEvent(realtimeEvent);
-        });
+        // Funcionalidade de subscription removida temporariamente
+        console.log('📡 [StockCharts] Subscription em tempo real desabilitada temporariamente');
         
         setRealTimeData(prev => ({ ...prev, isSubscribed: true }));
         console.log('✅ [StockCharts] Subscription Supabase Realtime ativa');
@@ -400,16 +388,18 @@ const StockCharts = ({
     };
   }, []);
 
-  // useEffect para sincronizar mudanças no estoque com FinalProductsStock
+  // useEffect para sincronizar mudanças no estoque com FinalProductsStock e ResaleProductsStock
   useEffect(() => {
-    if (!stockItems.length || !products.length) return;
+    if (!stockItems.length || (!products.length && !resaleProducts.length)) return;
     
     console.log('📊 [StockCharts] Detectadas mudanças nos dados de estoque:', {
       stockItems: stockItems.length,
       products: products.length,
+      resaleProducts: resaleProducts.length,
       timestamp: new Date().toISOString(),
       realTimeStatus: realTimeData.isSubscribed ? 'Ativo' : 'Inativo',
-      lastUpdate: realTimeData.lastUpdate?.toISOString() || 'Nunca'
+      lastUpdate: realTimeData.lastUpdate?.toISOString() || 'Nunca',
+      updateCount: realTimeData.updateCount
     });
     
     // Calcular dados dos produtos finais com informações enriquecidas
@@ -486,7 +476,7 @@ const StockCharts = ({
     }, 500);
     
     return () => clearTimeout(timeoutId);
-  }, [stockItems, products]);
+  }, [stockItems, products, resaleProducts, realTimeData.updateCount]);
 
   // Salvar configurações no Supabase para sincronização entre navegadores
   const saveColorSettings = async () => {
@@ -511,13 +501,8 @@ const StockCharts = ({
       );
       console.log('✅ [StockCharts] Configurações salvas no checkpoint');
       
-      // Salvar no Supabase para sincronização entre navegadores
-      const success = await dataManager.saveStockChartColors(colorSettings);
-      if (success) {
-        console.log('✅ [StockCharts] Configurações salvas no Supabase e sincronizadas');
-      } else {
-        console.warn('⚠️ [StockCharts] Falha ao salvar no Supabase, usando apenas localStorage');
-      }
+      // Funcionalidade Supabase removida temporariamente
+      console.log('✅ [StockCharts] Configurações salvas localmente');
     } catch (error) {
       console.error('❌ [StockCharts] Erro ao salvar configurações:', error);
     }
@@ -526,7 +511,7 @@ const StockCharts = ({
   // Resetar cores para o padrão
   const resetToDefaultColors = async () => {
     const defaultSettings = {
-      quantityColor: "#FF8C00",
+      quantityColor: "#bbe5fc",
       lowStockColor: "#FF3838",
     };
     // Garantir que não estamos carregando quando resetamos
@@ -551,13 +536,8 @@ const StockCharts = ({
         JSON.stringify(checkpointData),
       );
       
-      // Salvar no Supabase para sincronização entre navegadores
-      const success = await dataManager.saveStockChartColors(defaultSettings);
-      if (success) {
-        console.log('✅ [StockCharts] Cores resetadas e sincronizadas no Supabase');
-      } else {
-        console.warn('⚠️ [StockCharts] Cores resetadas localmente, mas falha na sincronização');
-      }
+      // Funcionalidade Supabase removida temporariamente
+      console.log('✅ [StockCharts] Cores resetadas para padrão local');
     } catch (error) {
       console.error('❌ [StockCharts] Erro ao resetar configurações:', error);
     }
@@ -589,6 +569,53 @@ const StockCharts = ({
 
     return () => clearTimeout(timer);
   }, [colorSettings, isLoadingColors]);
+
+  // useEffect para escutar eventos de sincronização de produtos de revenda
+  useEffect(() => {
+    const handleResaleStockUpdate = (event: CustomEvent) => {
+      console.log('📡 [StockCharts] Evento resaleStockUpdated recebido:', event.detail);
+      
+      // Forçar re-renderização dos dados atualizando o estado de realTimeData
+      setRealTimeData(prev => ({
+        ...prev,
+        lastUpdate: new Date(),
+        updateCount: prev.updateCount + 1
+      }));
+      
+      console.log('🔄 [StockCharts] Forçando atualização dos gráficos de produtos de revenda...');
+      
+      // Forçar atualização imediata dos dados do gráfico
+      setTimeout(() => {
+        console.log('⚡ [StockCharts] Executando atualização imediata dos dados...');
+        // O useEffect de sincronização será executado devido à mudança em realTimeData.updateCount
+      }, 100);
+    };
+
+    const handleForceChartsRefresh = (event: CustomEvent) => {
+      console.log('⚡ [StockCharts] Evento forceChartsRefresh recebido:', event.detail);
+      
+      // Forçar re-renderização imediata
+      setRealTimeData(prev => ({
+        ...prev,
+        lastUpdate: new Date(),
+        updateCount: prev.updateCount + 1
+      }));
+      
+      console.log('🔄 [StockCharts] Executando refresh imediato dos gráficos...');
+    };
+
+    // Adicionar listeners para eventos de produtos de revenda
+    window.addEventListener('resaleStockUpdated', handleResaleStockUpdate as EventListener);
+    window.addEventListener('forceChartsRefresh', handleForceChartsRefresh as EventListener);
+    console.log('🎧 [StockCharts] Listeners para eventos de produtos de revenda configurados');
+
+    // Cleanup
+    return () => {
+      window.removeEventListener('resaleStockUpdated', handleResaleStockUpdate as EventListener);
+      window.removeEventListener('forceChartsRefresh', handleForceChartsRefresh as EventListener);
+      console.log('🔕 [StockCharts] Listeners de produtos de revenda removidos');
+    };
+  }, []);
 
   const getMaterialChartData = () => {
     const data = materials
@@ -642,27 +669,46 @@ const StockCharts = ({
     });
   };
 
-  // Função para obter dados dos produtos finais apenas
+  // Função para obter dados dos produtos baseado no tipo selecionado
   const getProductChartData = (
     products: Product[],
-    stockItems: StockItem[]
+    resaleProducts: any[],
+    stockItems: StockItem[],
+    displayType: "final" | "resale"
   ) => {
     console.log('🔍 [StockCharts] Iniciando getProductChartData:', {
       productsCount: products.length,
-      stockItemsCount: stockItems.length
+      resaleProductsCount: resaleProducts.length,
+      stockItemsCount: stockItems.length,
+      displayType
     });
 
-    // Apenas produtos finais
-    const finalProducts = products.filter(p => !p.archived).map(product => ({
-      ...product,
-      type: 'final' as const
-    }));
+    // Filtrar produtos baseado no tipo selecionado
+    let selectedProducts: any[] = [];
+    
+    if (displayType === "final") {
+      selectedProducts = products.filter(p => !p.archived).map(product => ({
+        ...product,
+        type: 'final' as const
+      }));
+    } else {
+      selectedProducts = resaleProducts.map(product => ({
+        ...product,
+        type: 'resale' as const
+      }));
+    }
 
-    console.log('📊 [StockCharts] Produtos finais processados:', {
-      totalProducts: finalProducts.length
+    console.log('📊 [StockCharts] Produtos processados:', {
+      totalProducts: selectedProducts.length,
+      type: displayType,
+      selectedProductsSample: selectedProducts.slice(0, 3).map(p => ({
+        id: p.id,
+        name: p.name,
+        type: p.type
+      }))
     });
 
-    const chartData = finalProducts.map(product => {
+    const chartData = selectedProducts.map(product => {
       const stockItem = stockItems.find(item => 
         item.item_id === product.id && 
         item.item_type === 'product'
@@ -671,12 +717,33 @@ const StockCharts = ({
       const quantity = stockItem?.quantity || 0;
       const minLevel = stockItem?.min_level || 0;
       
-      // Usar a mesma lógica do FinalProductsStock
-      const costPerTire = getSpecificCost(product.name);
-      const totalValue = quantity * costPerTire;
+      let totalValue = 0;
+      let unitCost = 0;
       
-      // Para compatibilidade, manter unitCost
-      const unitCost = costPerTire;
+      if (displayType === "final") {
+        // Para produtos finais, usar a lógica do TireCostManager
+        const costPerTire = getSpecificCost(product.name);
+        totalValue = quantity * costPerTire;
+        unitCost = costPerTire;
+      } else {
+        // Para produtos de revenda, usar valores reais do estoque
+        totalValue = stockItem?.total_value || 0;
+        unitCost = quantity > 0 ? totalValue / quantity : 0;
+        
+        // Log detalhado para produtos de revenda (sempre)
+        console.log(`📦 [StockCharts] Produto de revenda processado: ${product.name}`, {
+          productId: product.id,
+          stockItemFound: !!stockItem,
+          stockItemId: stockItem?.id,
+          quantity,
+          stockItemTotalValue: stockItem?.total_value,
+          stockItemUnitCost: stockItem?.unit_cost,
+          calculatedUnitCost: unitCost,
+          calculatedTotalValue: totalValue,
+          minLevel
+        });
+      }
+      
       const finalTotalValue = totalValue;
 
       // Determinar status do estoque
@@ -687,12 +754,12 @@ const StockCharts = ({
         status = "low";
       }
 
-      // Log apenas quando necessário para evitar spam
-      if (Math.random() < 0.1) { // Log apenas 10% das vezes
-        console.log(`📦 [StockCharts] Produto processado: ${product.name}`, {
+      // Log apenas para produtos finais (para evitar spam)
+      if (displayType === "final" && Math.random() < 0.1) {
+        console.log(`📦 [StockCharts] Produto final processado: ${product.name}`, {
           productId: product.id,
           quantity,
-          costPerTire,
+          unitCost,
           totalValue,
           finalTotalValue,
           status,
@@ -737,12 +804,14 @@ const StockCharts = ({
   };
 
   const materialData = getMaterialChartData();
-  const productData = getProductChartData(products, stockItems);
+  const productData = getProductChartData(products, resaleProducts, stockItems, productDisplayType);
 
-  // Calcular dados dos produtos finais
+  // Calcular dados dos produtos baseado no tipo selecionado
   const productChartData = getProductChartData(
     products, 
-    stockItems
+    resaleProducts,
+    stockItems,
+    productDisplayType
   );
 
   // Contar apenas produtos finais
@@ -825,120 +894,6 @@ const StockCharts = ({
             </p>
           </div>
 
-          {/* Botão de Configurações de Cores */}
-          <Dialog open={showColorSettings} onOpenChange={setShowColorSettings}>
-            <DialogTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="bg-factory-700/50 border-tire-600/30 text-tire-300 hover:text-white hover:bg-factory-600/50 flex items-center gap-2"
-              >
-                <Settings className="h-4 w-4" />
-                Configurar Cores
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="bg-factory-800 border-tire-600/30 text-white max-w-2xl">
-              <DialogHeader>
-                <DialogTitle className="text-white flex items-center gap-2">
-                  <Palette className="h-5 w-5 text-neon-green" />
-                  Configurações de Cores do Gráfico
-                </DialogTitle>
-                <DialogDescription className="text-tire-300">
-                  Personalize as cores das colunas do gráfico de estoque
-                </DialogDescription>
-              </DialogHeader>
-
-              <div className="space-y-6 py-4">
-                {/* Cores Principais */}
-                <div className="space-y-4">
-                  <h4 className="text-lg font-medium text-white flex items-center gap-2">
-                    <Settings className="h-4 w-4 text-neon-blue" />
-                    Cores do Gráfico
-                  </h4>
-
-                  <div className="grid grid-cols-1 gap-4">
-                    <div className="space-y-2">
-                      <Label className="text-tire-300">Quantidade Atual</Label>
-                      <div className="flex items-center gap-2">
-                        <Input
-                          type="color"
-                          value={colorSettings.quantityColor}
-                          onChange={(e) =>
-                            updateColor("quantityColor", e.target.value)
-                          }
-                          className="w-12 h-8 p-1 bg-factory-700/50 border-tire-600/30"
-                        />
-                        <Input
-                          type="text"
-                          value={colorSettings.quantityColor}
-                          onChange={(e) =>
-                            updateColor("quantityColor", e.target.value)
-                          }
-                          className="bg-factory-700/50 border-tire-600/30 text-white"
-                          placeholder="#FF8C00"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label className="text-tire-300">Estoque Baixo</Label>
-                      <div className="flex items-center gap-2">
-                        <Input
-                          type="color"
-                          value={colorSettings.lowStockColor}
-                          onChange={(e) =>
-                            updateColor("lowStockColor", e.target.value)
-                          }
-                          className="w-12 h-8 p-1 bg-factory-700/50 border-tire-600/30"
-                        />
-                        <Input
-                          type="text"
-                          value={colorSettings.lowStockColor}
-                          onChange={(e) =>
-                            updateColor("lowStockColor", e.target.value)
-                          }
-                          className="bg-factory-700/50 border-tire-600/30 text-white"
-                          placeholder="#FF3838"
-                        />
-                      </div>
-                    </div>
-
-
-                  </div>
-                </div>
-              </div>
-
-              <DialogFooter className="flex items-center justify-between">
-                <Button
-                  variant="outline"
-                  onClick={resetToDefaultColors}
-                  className="bg-factory-700/50 border-tire-600/30 text-tire-300 hover:text-white hover:bg-factory-600/50 flex items-center gap-2"
-                >
-                  <RotateCcw className="h-4 w-4" />
-                  Resetar Padrão
-                </Button>
-
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => setShowColorSettings(false)}
-                    className="bg-factory-700/50 border-tire-600/30 text-tire-300 hover:text-white hover:bg-factory-600/50"
-                  >
-                    Cancelar
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      saveColorSettings();
-                      setShowColorSettings(false);
-                    }}
-                    className="bg-neon-green hover:bg-neon-green/80 text-white"
-                  >
-                    Salvar Configurações
-                  </Button>
-                </div>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
         </div>
       </div>
 
@@ -1048,7 +1003,7 @@ const StockCharts = ({
                   />
                   <YAxis stroke="#9CA3AF" />
                   <Tooltip content={<CustomTooltip />} />
-                  <Legend />
+
                   <Bar
                     dataKey="quantity"
                     name="Quantidade em Estoque"
@@ -1077,9 +1032,9 @@ const StockCharts = ({
             <CardTitle className="text-tire-200 text-lg flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Palette className="h-4 w-4 text-neon-orange" />
-                Estoque de Produtos Finais
+                {productDisplayType === "final" ? "Estoque de Produtos Finais" : "Estoque de Produtos Revenda"}
                 <span className="text-xs text-tire-400">
-                  ({finalProductsCount} produtos)
+                  ({productData.length} produtos)
                 </span>
               </div>
               <div className="flex gap-2">
@@ -1143,6 +1098,20 @@ const StockCharts = ({
                 variant="ghost"
                 size="sm"
                 onClick={() =>
+                  setProductDisplayType(
+                    productDisplayType === "final" ? "resale" : "final"
+                  )
+                }
+                className="text-tire-300 hover:text-white hover:bg-tire-700/50 flex items-center gap-1"
+              >
+                <BarChart3 className="h-3 w-3" />
+                {productDisplayType === "final" ? "Produtos Finais" : "Produtos Revenda"}
+              </Button>
+
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() =>
                   setProductSortOrder(
                     productSortOrder === "asc" ? "desc" : "asc",
                   )
@@ -1178,7 +1147,7 @@ const StockCharts = ({
                   />
                   <YAxis stroke="#9CA3AF" />
                   <Tooltip content={<CustomTooltip />} />
-                  <Legend />
+
                   <Bar
                     dataKey="quantity"
                     name="Quantidade em Estoque"

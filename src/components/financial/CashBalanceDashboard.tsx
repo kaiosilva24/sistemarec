@@ -469,8 +469,8 @@ const CashBalanceDashboard = ({
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
+            <div className="h-80" style={{ minHeight: '320px', minWidth: '300px' }}>
+              <ResponsiveContainer width="100%" height="100%" minWidth={300} minHeight={320}>
                 <LineChart data={balanceChartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                   <XAxis dataKey="date" stroke="#9CA3AF" fontSize={12} />
@@ -513,8 +513,8 @@ const CashBalanceDashboard = ({
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
+            <div className="h-80" style={{ minHeight: '320px', minWidth: '300px' }}>
+              <ResponsiveContainer width="100%" height="100%" minWidth={300} minHeight={320}>
                 <RechartsPieChart>
                   <Tooltip
                     contentStyle={{

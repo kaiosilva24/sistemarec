@@ -7,6 +7,7 @@ import VariableCostsManager from "./VariableCostsManager";
 import DefectiveTireSalesManager from "./DefectiveTireSalesManager";
 import PresumedProfitManager from "./PresumedProfitManager";
 import ResaleProductProfitManager from "./ResaleProductProfitManager";
+import DebtManager from "./DebtManager";
 
 import RawMaterialDashboard from "./RawMaterialDashboard";
 import {
@@ -26,6 +27,7 @@ import {
   useCostSimulations,
   useWarrantyEntries,
   useResaleProducts,
+  useDebts,
 } from "@/hooks/useDataPersistence";
 import type {
   DefectiveTireSale,
@@ -92,12 +94,134 @@ const FinancialDashboard = ({
     useWarrantyEntries();
   const { resaleProducts, isLoading: resaleProductsLoading } =
     useResaleProducts();
+  const { debts, updateDebt, refreshDebts } = useDebts();
 
-  // Wrapper handlers to satisfy Promise<void> types
+  // Enhanced wrapper handler for cash flow entries with debt payment integration
   const handleAddCashFlowEntry = async (
     entryData: Omit<CashFlowEntry, "id" | "created_at">,
   ) => {
+    console.log("💰 [FinancialDashboard] Processando entrada de fluxo de caixa:", entryData);
+    
+    // First, add the cash flow entry
     await addCashFlowEntry(entryData);
+    
+    // Check if this is a debt payment (expense with "Dívidas" category)
+    if (entryData.type === "expense" && entryData.category === "Dívidas") {
+      console.log("💳 [FinancialDashboard] Detectado pagamento de dívida, processando...");
+      
+      // Try to find matching debt by name/description
+      const debtName = entryData.reference_name?.replace("💳 ", "").trim() || "";
+      const paymentAmount = entryData.amount;
+      
+      console.log("🔍 [FinancialDashboard] Procurando dívida:", {
+        debtName,
+        paymentAmount,
+        availableDebts: debts.map(d => ({ id: d.id, description: d.description, creditor: d.creditor }))
+      });
+      
+      // Find debt by matching name with description or creditor
+      const matchingDebt = debts.find(debt => {
+        const debtDescription = debt.description.toLowerCase();
+        const debtCreditor = debt.creditor.toLowerCase();
+        const searchName = debtName.toLowerCase();
+        
+        return debtDescription.includes(searchName) || 
+               debtCreditor.includes(searchName) ||
+               searchName.includes(debtDescription) ||
+               searchName.includes(debtCreditor);
+      });
+      
+      if (matchingDebt) {
+        console.log("✅ [FinancialDashboard] Dívida encontrada:", {
+          id: matchingDebt.id,
+          description: matchingDebt.description,
+          creditor: matchingDebt.creditor,
+          currentPaidAmount: matchingDebt.paid_amount,
+          currentRemainingAmount: matchingDebt.remaining_amount,
+          paymentAmount
+        });
+        
+        // Calculate new amounts with detailed logging
+        console.log("🧮 [FinancialDashboard] Cálculo detalhado:", {
+          paid_amount_atual: matchingDebt.paid_amount,
+          paid_amount_type: typeof matchingDebt.paid_amount,
+          remaining_amount_atual: matchingDebt.remaining_amount,
+          remaining_amount_type: typeof matchingDebt.remaining_amount,
+          payment_amount: paymentAmount,
+          payment_amount_type: typeof paymentAmount
+        });
+        
+        // Ensure all values are numbers to prevent calculation errors
+        const currentPaidAmount = Number(matchingDebt.paid_amount) || 0;
+        const currentRemainingAmount = Number(matchingDebt.remaining_amount) || 0;
+        const paymentAmountNum = Number(paymentAmount) || 0;
+        
+        const newPaidAmount = currentPaidAmount + paymentAmountNum;
+        const newRemainingAmount = Math.max(0, currentRemainingAmount - paymentAmountNum);
+        const newStatus = newRemainingAmount === 0 ? "paga" : matchingDebt.status;
+        
+        console.log("🧮 [FinancialDashboard] Valores convertidos e calculados:", {
+          currentPaidAmount,
+          currentRemainingAmount,
+          paymentAmountNum,
+          newPaidAmount,
+          newRemainingAmount,
+          newStatus
+        });
+        
+        console.log("💾 [FinancialDashboard] Atualizando dívida:", {
+          newPaidAmount,
+          newRemainingAmount,
+          newStatus
+        });
+        
+        // Update the debt with detailed logging
+        console.log("🔄 [FinancialDashboard] Chamando updateDebt com:", {
+          debtId: matchingDebt.id,
+          updates: {
+            paid_amount: newPaidAmount,
+            remaining_amount: newRemainingAmount,
+            status: newStatus
+          }
+        });
+        
+        const updateResult = await updateDebt(matchingDebt.id, {
+          paid_amount: newPaidAmount,
+          remaining_amount: newRemainingAmount,
+          status: newStatus
+        });
+        
+        console.log("📥 [FinancialDashboard] Resultado do updateDebt:", updateResult);
+        
+        // Refresh debts to update UI
+        console.log("🔄 [FinancialDashboard] Chamando refreshDebts...");
+        await refreshDebts();
+        console.log("✅ [FinancialDashboard] refreshDebts concluído");
+        
+        console.log("🎉 [FinancialDashboard] Pagamento de dívida processado com sucesso!");
+        
+        // Show success message
+        alert(
+          `✅ Pagamento de dívida processado com sucesso!\n\n` +
+          `💳 Dívida: ${matchingDebt.description}\n` +
+          `👤 Credor: ${matchingDebt.creditor}\n` +
+          `💰 Valor pago: R$ ${paymentAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n` +
+          `📊 Valor restante: R$ ${newRemainingAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n` +
+          `🏷️ Status: ${newStatus === 'paga' ? 'PAGA' : 'EM ABERTO'}`
+        );
+      } else {
+        console.log("⚠️ [FinancialDashboard] Nenhuma dívida encontrada para:", debtName);
+        console.log("📋 [FinancialDashboard] Dívidas disponíveis:", debts.map(d => `"${d.description}" (${d.creditor})`));
+        
+        // Show warning message
+        alert(
+          `⚠️ Pagamento registrado, mas nenhuma dívida correspondente foi encontrada.\n\n` +
+          `🔍 Nome procurado: "${debtName}"\n\n` +
+          `💡 Dica: Certifique-se de que o nome no campo "Para/De" corresponde à descrição ou credor de uma dívida cadastrada.\n\n` +
+          `📋 Dívidas disponíveis:\n${debts.map(d => `• ${d.description} (${d.creditor})`).join('\n')}`
+        );
+      }
+    }
   };
 
   const handleAddFixedCost = async (
@@ -117,7 +241,124 @@ const FinancialDashboard = ({
   };
 
   const handleDeleteCashFlowEntry = async (id: string) => {
-    await deleteCashFlowEntry(id);
+    console.log('🔥 [FinancialDashboard] handleDeleteCashFlowEntry chamada para ID:', id);
+    try {
+      // First, get the transaction details before deleting
+      const transactionToDelete = cashFlowEntries.find(entry => entry.id === id);
+      
+      if (!transactionToDelete) {
+        console.error('❌ [FinancialDashboard] Transação não encontrada para ID:', id);
+        return false;
+      }
+      
+      console.log('🔍 [FinancialDashboard] Transação encontrada:', {
+        id: transactionToDelete.id,
+        type: transactionToDelete.type,
+        category: transactionToDelete.category,
+        reference_name: transactionToDelete.reference_name,
+        amount: transactionToDelete.amount
+      });
+      
+      // Check if this is a debt payment that needs to be reversed
+      const isDebtPayment = transactionToDelete.type === "expense" && transactionToDelete.category === "Dívidas";
+      
+      if (isDebtPayment) {
+        console.log("💳 [FinancialDashboard] Detectado pagamento de dívida sendo excluído, revertendo...");
+        
+        // Find the matching debt
+        const debtName = transactionToDelete.reference_name?.replace("💳 ", "").trim() || "";
+        const paymentAmount = transactionToDelete.amount;
+        
+        console.log("🔍 [FinancialDashboard] Procurando dívida para reverter:", {
+          debtName,
+          paymentAmount,
+          availableDebts: debts.map(d => ({ id: d.id, description: d.description, creditor: d.creditor }))
+        });
+        
+        // Find debt by matching name with description or creditor
+        const matchingDebt = debts.find(debt => {
+          const debtDescription = debt.description.toLowerCase();
+          const debtCreditor = debt.creditor.toLowerCase();
+          const searchName = debtName.toLowerCase();
+          
+          return debtDescription.includes(searchName) || 
+                 debtCreditor.includes(searchName) ||
+                 searchName.includes(debtDescription) ||
+                 searchName.includes(debtCreditor);
+        });
+        
+        if (matchingDebt) {
+          console.log("✅ [FinancialDashboard] Dívida encontrada para reversão:", {
+            id: matchingDebt.id,
+            description: matchingDebt.description,
+            creditor: matchingDebt.creditor,
+            currentPaidAmount: matchingDebt.paid_amount,
+            currentRemainingAmount: matchingDebt.remaining_amount,
+            paymentAmountToReverse: paymentAmount
+          });
+          
+          // Calculate reversed amounts with detailed logging
+          console.log("🔄 [FinancialDashboard] Cálculo de reversão detalhado:", {
+            paid_amount_atual: matchingDebt.paid_amount,
+            paid_amount_type: typeof matchingDebt.paid_amount,
+            remaining_amount_atual: matchingDebt.remaining_amount,
+            remaining_amount_type: typeof matchingDebt.remaining_amount,
+            payment_amount_to_reverse: paymentAmount,
+            payment_amount_type: typeof paymentAmount
+          });
+          
+          // Ensure all values are numbers to prevent calculation errors
+          const currentPaidAmount = Number(matchingDebt.paid_amount) || 0;
+          const currentRemainingAmount = Number(matchingDebt.remaining_amount) || 0;
+          const paymentAmountNum = Number(paymentAmount) || 0;
+          
+          const newPaidAmount = Math.max(0, currentPaidAmount - paymentAmountNum);
+          const newRemainingAmount = currentRemainingAmount + paymentAmountNum;
+          const newStatus = newRemainingAmount > 0 ? (matchingDebt.status === "paga" ? "em_dia" : matchingDebt.status) : "paga";
+          
+          console.log("🔄 [FinancialDashboard] Valores de reversão convertidos e calculados:", {
+            currentPaidAmount,
+            currentRemainingAmount,
+            paymentAmountNum,
+            newPaidAmount,
+            newRemainingAmount,
+            newStatus
+          });
+          
+          console.log("💾 [FinancialDashboard] Revertendo dívida:", {
+            newPaidAmount,
+            newRemainingAmount,
+            newStatus
+          });
+          
+          // Update the debt with reversed amounts
+          await updateDebt(matchingDebt.id, {
+            paid_amount: newPaidAmount,
+            remaining_amount: newRemainingAmount,
+            status: newStatus,
+          });
+          
+          // Refresh debts to get updated data
+          await refreshDebts();
+          
+          console.log("✅ [FinancialDashboard] Dívida revertida com sucesso!");
+          
+          // Show success message to user
+          alert(`✅ Pagamento excluído com sucesso!\n\n💳 O valor de R$ ${paymentAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} foi devolvido à dívida "${matchingDebt.description}".`);
+        } else {
+          console.log("⚠️ [FinancialDashboard] Nenhuma dívida correspondente encontrada para reversão");
+          alert(`⚠️ Pagamento excluído, mas não foi possível encontrar a dívida correspondente para reverter o valor.\n\nVerifique manualmente a dívida: "${debtName}"`);
+        }
+      }
+      
+      // Now delete the cash flow entry
+      const success = await deleteCashFlowEntry(id);
+      console.log('🔥 [FinancialDashboard] Resultado da exclusão:', success);
+      return success;
+    } catch (error) {
+      console.error('❌ [FinancialDashboard] Erro ao deletar:', error);
+      return false;
+    }
   };
 
   // Enhanced defective tire sale handler that ensures immediate UI update
@@ -208,7 +449,7 @@ const FinancialDashboard = ({
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <div className="flex justify-center w-full">
-        <TabsList className="inline-flex flex-wrap items-center justify-evenly gap-2 bg-factory-800/50 p-2 border border-tire-600/30 mx-auto h-auto w-11/12">
+        <TabsList className="inline-flex flex-wrap items-center justify-evenly gap-2 bg-factory-800/50 p-2 border border-tire-600/30 mx-auto h-auto w-full">
           <TabsTrigger
             value="cashflow"
             className="text-tire-300 data-[state=active]:text-white data-[state=active]:bg-neon-green/20"
@@ -252,6 +493,12 @@ const FinancialDashboard = ({
             className="text-tire-300 data-[state=active]:text-white data-[state=active]:bg-neon-green/20"
           >
             Lucro Produto Revenda
+          </TabsTrigger>
+          <TabsTrigger
+            value="debts"
+            className="text-tire-300 data-[state=active]:text-white data-[state=active]:bg-neon-green/20"
+          >
+            Dívidas
           </TabsTrigger>
         </TabsList>
         </div>
@@ -375,6 +622,14 @@ const FinancialDashboard = ({
             }
             cashFlowEntries={cashFlowEntries}
             stockItems={stockItems}
+          />
+        </TabsContent>
+
+        <TabsContent value="debts">
+          <DebtManager
+            isLoading={isLoading}
+            onRefresh={onRefresh}
+            cashFlowEntries={cashFlowEntries}
           />
         </TabsContent>
       </Tabs>

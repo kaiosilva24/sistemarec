@@ -77,7 +77,7 @@ const ResaleProductProfitManager = ({
   hideCharts = false,
 }: ResaleProductProfitManagerProps) => {
   // Estados para filtros
-  const [dateFilter, setDateFilter] = useState("last30days");
+  const [dateFilter, setDateFilter] = useState("all");
   const [customStartDate, setCustomStartDate] = useState("");
   const [customEndDate, setCustomEndDate] = useState("");
   const [chartType, setChartType] = useState<"bar" | "line">("bar");
@@ -89,7 +89,7 @@ const ResaleProductProfitManager = ({
   // Estados para configuração de cores
   const [showColorSettings, setShowColorSettings] = useState(false);
   const [colorSettings, setColorSettings] = useState({
-    profitColor: "#06B6D4", // Ciano para produtos de revenda
+    profitColor: "#bbe5fc", // Azul claro para produtos de revenda
     revenueColor: "#3B82F6", // Azul para receita
     costColor: "#EF4444", // Vermelho para custo
     marginColor: "#F59E0B", // Laranja para margem
@@ -135,7 +135,7 @@ const ResaleProductProfitManager = ({
   // Resetar cores para o padrão
   const resetToDefaultColors = () => {
     const defaultSettings = {
-      profitColor: "#06B6D4",
+      profitColor: "#bbe5fc",
       revenueColor: "#3B82F6",
       costColor: "#EF4444",
       marginColor: "#F59E0B",
@@ -164,29 +164,58 @@ const ResaleProductProfitManager = ({
 
     switch (dateFilter) {
       case "today":
-        const todayStr = today.toISOString().split("T")[0];
+        // WORKAROUND: Compensate for +1 day UTC workaround in sales saving
+        // Since sales are saved with +1 day, we need to look for tomorrow's date
+        const tomorrow = new Date(today);
+        tomorrow.setDate(today.getDate() + 1);
+        const tomorrowStr = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, "0")}-${String(tomorrow.getDate()).padStart(2, "0")}`;
+        
+        console.log("🗓️ [ResaleProductProfitManager] TODAY FILTER DEBUG:", {
+          originalToday: today.toISOString().split("T")[0],
+          adjustedTomorrow: tomorrowStr,
+          note: "Looking for tomorrow's date to compensate UTC workaround"
+        });
+        
         filteredEntries = filteredEntries.filter(
-          (entry) => entry.transaction_date === todayStr,
+          (entry) => entry.transaction_date === tomorrowStr,
         );
         break;
       case "last7days":
+        // WORKAROUND: Add +1 day to date range to compensate UTC workaround
         const last7Days = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+        const todayEnd = new Date(today);
+        todayEnd.setDate(today.getDate() + 1); // Add +1 day
         filteredEntries = filteredEntries.filter((entry) => {
           const entryDate = new Date(entry.transaction_date);
-          return entryDate >= last7Days && entryDate <= today;
+          return entryDate >= last7Days && entryDate <= todayEnd;
         });
         break;
       case "last30days":
+        // WORKAROUND: Add +1 day to date range to compensate UTC workaround
         const last30Days = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+        const todayEnd30 = new Date(today);
+        todayEnd30.setDate(today.getDate() + 1); // Add +1 day
         filteredEntries = filteredEntries.filter((entry) => {
           const entryDate = new Date(entry.transaction_date);
-          return entryDate >= last30Days && entryDate <= today;
+          return entryDate >= last30Days && entryDate <= todayEnd30;
         });
         break;
       case "custom":
         if (customStartDate && customEndDate) {
+          // WORKAROUND: Add +1 day to custom dates to compensate UTC workaround
           const startDate = new Date(customStartDate);
+          startDate.setDate(startDate.getDate() + 1);
           const endDate = new Date(customEndDate);
+          endDate.setDate(endDate.getDate() + 1);
+          
+          console.log("🗓️ [ResaleProductProfitManager] CUSTOM FILTER DEBUG:", {
+            originalStartDate: customStartDate,
+            originalEndDate: customEndDate,
+            adjustedStartDate: startDate.toISOString().split("T")[0],
+            adjustedEndDate: endDate.toISOString().split("T")[0],
+            note: "Added +1 day to compensate UTC workaround"
+          });
+          
           filteredEntries = filteredEntries.filter((entry) => {
             const entryDate = new Date(entry.transaction_date);
             return entryDate >= startDate && entryDate <= endDate;
@@ -766,11 +795,11 @@ const ResaleProductProfitManager = ({
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-tire-300 text-sm">Lucro Total</p>
-                <p className="text-2xl font-bold text-neon-cyan">
+                <p className="text-2xl font-bold" style={{ color: '#00d4ff' }}>
                   {formatCurrency(summaryMetrics.totalProfit)}
                 </p>
               </div>
-              <div className="text-neon-cyan">
+              <div style={{ color: '#00d4ff' }}>
                 <TrendingUp className="h-8 w-8" />
               </div>
             </div>
@@ -819,7 +848,7 @@ const ResaleProductProfitManager = ({
           </Label>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
           <div className="space-y-2">
             <Label className="text-tire-300 text-sm">Período:</Label>
             <Select value={dateFilter} onValueChange={setDateFilter}>
@@ -828,22 +857,10 @@ const ResaleProductProfitManager = ({
               </SelectTrigger>
               <SelectContent className="bg-factory-800 border-tire-600/30">
                 <SelectItem
-                  value="today"
+                  value="all"
                   className="text-white hover:bg-tire-700/50"
                 >
-                  Hoje
-                </SelectItem>
-                <SelectItem
-                  value="last7days"
-                  className="text-white hover:bg-tire-700/50"
-                >
-                  Últimos 7 dias
-                </SelectItem>
-                <SelectItem
-                  value="last30days"
-                  className="text-white hover:bg-tire-700/50"
-                >
-                  Últimos 30 dias
+                  Todos os períodos
                 </SelectItem>
                 <SelectItem
                   value="custom"
@@ -915,31 +932,7 @@ const ResaleProductProfitManager = ({
             </Select>
           </div>
 
-          <div className="space-y-2">
-            <Label className="text-tire-300 text-sm">Tipo de Gráfico:</Label>
-            <Select
-              value={chartType}
-              onValueChange={(value: "bar" | "line") => setChartType(value)}
-            >
-              <SelectTrigger className="bg-factory-700/50 border-tire-600/30 text-white">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="bg-factory-800 border-tire-600/30">
-                <SelectItem
-                  value="bar"
-                  className="text-white hover:bg-tire-700/50"
-                >
-                  Barras
-                </SelectItem>
-                <SelectItem
-                  value="line"
-                  className="text-white hover:bg-tire-700/50"
-                >
-                  Linha
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+
         </div>
 
         {dateFilter === "custom" && (
@@ -947,24 +940,22 @@ const ResaleProductProfitManager = ({
             <div className="space-y-2">
               <Label className="text-tire-300 text-sm">Data Inicial:</Label>
               <div className="relative">
-                <Calendar className="absolute left-3 top-2.5 h-4 w-4 text-tire-400" />
                 <Input
                   type="date"
                   value={customStartDate}
                   onChange={(e) => setCustomStartDate(e.target.value)}
-                  className="pl-9 bg-factory-700/50 border-tire-600/30 text-white"
+                  className="bg-factory-700/50 border-tire-600/30 text-white"
                 />
               </div>
             </div>
             <div className="space-y-2">
               <Label className="text-tire-300 text-sm">Data Final:</Label>
               <div className="relative">
-                <Calendar className="absolute left-3 top-2.5 h-4 w-4 text-tire-400" />
                 <Input
                   type="date"
                   value={customEndDate}
                   onChange={(e) => setCustomEndDate(e.target.value)}
-                  className="pl-9 bg-factory-700/50 border-tire-600/30 text-white"
+                  className="bg-factory-700/50 border-tire-600/30 text-white"
                 />
               </div>
             </div>

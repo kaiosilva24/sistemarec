@@ -411,8 +411,27 @@ const RawMaterialStock = ({
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
+                <p className="text-tire-300 text-sm">Matéria Prima Unitária</p>
+                <p className="text-2xl font-bold text-neon-orange">
+                  {metrics.unitaryMaterialsQuantity}
+                </p>
+                <p className="text-xs text-tire-400 mt-1">
+                  {metrics.unitaryMaterialsInStock} tipos em estoque
+                </p>
+              </div>
+              <div className="text-neon-orange">
+                <span className="text-2xl">📦</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-neon-green" style={{ backgroundColor: '#173329' }}>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
                 <p className="text-tire-300 text-sm">Valor Total</p>
-                <p className="text-xl font-bold text-neon-cyan">
+                <p className="text-xl font-bold text-neon-green">
                   {new Intl.NumberFormat("pt-BR", {
                     style: "currency",
                     currency: "BRL",
@@ -424,25 +443,6 @@ const RawMaterialStock = ({
               </div>
               <div className="text-neon-cyan">
                 <span className="text-2xl">💎</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-factory-800/50 border-tire-600/30">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-tire-300 text-sm">Matéria Prima Unitária</p>
-                <p className="text-2xl font-bold text-neon-orange">
-                  {metrics.unitaryMaterialsQuantity}
-                </p>
-                <p className="text-xs text-tire-400 mt-1">
-                  {metrics.unitaryMaterialsInStock} tipos em estoque
-                </p>
-              </div>
-              <div className="text-neon-orange">
-                <span className="text-2xl">📦</span>
               </div>
             </div>
           </CardContent>

@@ -6,10 +6,8 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
-  LineChart,
-  Line,
+  Cell,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -61,16 +59,19 @@ const ProductionChart = ({
   const [customEndDate, setCustomEndDate] = useState("");
   const [selectedYear, setSelectedYear] = useState("");
   const [selectedMonth, setSelectedMonth] = useState("");
-  const [chartType, setChartType] = useState<"bar" | "line">("bar");
+
 
   // Estados para configuração de cores
   const [showColorSettings, setShowColorSettings] = useState(false);
   const [colorSettings, setColorSettings] = useState({
-    producedColor: "#10B981", // Verde para produção
+    producedColor: "#bbe5fc", // Cor padrão azul claro
     productionLossesColor: "#EF4444", // Vermelho para perdas de produção
     materialLossesColor: "#F59E0B", // Laranja para perdas de matéria-prima
     efficiencyColor: "#3B82F6", // Azul para eficiência
   });
+
+  // Estados para dados de estoque
+  const [stockData, setStockData] = useState<any[]>([]);
 
   // Carregar configurações salvas do localStorage
   useEffect(() => {
@@ -85,6 +86,12 @@ const ProductionChart = ({
     }
   }, []);
 
+  // Dados de estoque simplificados (sem verificação de estoque baixo)
+  useEffect(() => {
+    // Inicializar com dados vazios - funcionalidade de estoque baixo removida temporariamente
+    setStockData([]);
+  }, []);
+
   // Salvar configurações no localStorage
   const saveColorSettings = () => {
     localStorage.setItem(
@@ -96,7 +103,7 @@ const ProductionChart = ({
   // Resetar cores para o padrão
   const resetToDefaultColors = () => {
     const defaultSettings = {
-      producedColor: "#10B981",
+      producedColor: "#bbe5fc",
       productionLossesColor: "#EF4444",
       materialLossesColor: "#F59E0B",
       efficiencyColor: "#3B82F6",
@@ -128,55 +135,32 @@ const ProductionChart = ({
 
     // Aplicar filtros de data
     switch (dateFilterType) {
-      case "today":
-        const todayStr = today.toISOString().split("T")[0];
-        filteredEntries = filteredEntries.filter(
-          (entry) => entry.production_date === todayStr,
-        );
-        break;
-      case "yesterday":
-        const yesterdayStr = yesterday.toISOString().split("T")[0];
-        filteredEntries = filteredEntries.filter(
-          (entry) => entry.production_date === yesterdayStr,
-        );
-        break;
-      case "last7days":
-        const last7Days = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
-        filteredEntries = filteredEntries.filter((entry) => {
-          const entryDate = new Date(entry.production_date);
-          return entryDate >= last7Days && entryDate <= today;
-        });
-        break;
-      case "year":
-        if (selectedYear) {
-          filteredEntries = filteredEntries.filter((entry) =>
-            entry.production_date.startsWith(selectedYear),
-          );
-        }
-        break;
-      case "month":
-        if (selectedMonth) {
-          filteredEntries = filteredEntries.filter((entry) =>
-            entry.production_date.startsWith(selectedMonth),
-          );
-        }
+      case "all":
+        // Mostrar todos os dados sem filtro de data
         break;
       case "custom":
         if (customStartDate && customEndDate) {
+          // Apply +1 day workaround to match saved production dates
           const startDate = new Date(customStartDate);
+          startDate.setDate(startDate.getDate() + 1);
           const endDate = new Date(customEndDate);
+          endDate.setDate(endDate.getDate() + 1);
           filteredEntries = filteredEntries.filter((entry) => {
             const entryDate = new Date(entry.production_date);
             return entryDate >= startDate && entryDate <= endDate;
           });
         } else if (customStartDate) {
+          // Apply +1 day workaround to match saved production dates
           const startDate = new Date(customStartDate);
+          startDate.setDate(startDate.getDate() + 1);
           filteredEntries = filteredEntries.filter((entry) => {
             const entryDate = new Date(entry.production_date);
             return entryDate >= startDate;
           });
         } else if (customEndDate) {
+          // Apply +1 day workaround to match saved production dates
           const endDate = new Date(customEndDate);
+          endDate.setDate(endDate.getDate() + 1);
           filteredEntries = filteredEntries.filter((entry) => {
             const entryDate = new Date(entry.production_date);
             return entryDate <= endDate;
@@ -251,20 +235,24 @@ const ProductionChart = ({
     // Converter para array e ordenar por quantidade produzida (maior para menor)
     const chartData = Array.from(groupedData.values())
       .sort((a, b) => b.totalProduced - a.totalProduced)
-      .map((item) => ({
-        ...item,
-        efficiency:
-          item.totalProduced > 0
-            ? (
-                ((item.totalProduced - item.totalLosses) / item.totalProduced) *
-                100
-              ).toFixed(1)
-            : "0",
-        averagePerDay:
-          item.productionDays > 0
-            ? (item.totalProduced / item.productionDays).toFixed(1)
-            : "0",
-      }));
+      .map((item) => {
+        return {
+          ...item,
+          isLowStock: false, // Funcionalidade de estoque baixo removida
+          barColor: colorSettings.producedColor,
+          productionLossPercentage:
+            item.totalProduced > 0
+              ? (
+                  (item.totalProductionLosses / item.totalProduced) *
+                  100
+                ).toFixed(1)
+              : "0",
+          averagePerDay:
+            item.productionDays > 0
+              ? (item.totalProduced / item.productionDays).toFixed(1)
+              : "0",
+        };
+      });
 
     return chartData;
   };
@@ -286,10 +274,10 @@ const ProductionChart = ({
       0,
     );
     const totalLosses = totalProductionLosses + totalMaterialLosses;
-    const averageEfficiency =
+    const averageProductionLossPercentage =
       chartData.length > 0
         ? chartData.reduce(
-            (sum, item) => sum + parseFloat(item.efficiency),
+            (sum, item) => sum + parseFloat(item.productionLossPercentage),
             0,
           ) / chartData.length
         : 0;
@@ -302,7 +290,7 @@ const ProductionChart = ({
       totalProductionLosses,
       totalMaterialLosses,
       totalLosses,
-      averageEfficiency,
+      averageProductionLossPercentage,
       productionDays,
       averagePerDay,
     };
@@ -343,38 +331,89 @@ const ProductionChart = ({
   const hasActiveFilters =
     dateFilterType !== "all" ||
     customStartDate ||
-    customEndDate ||
     selectedYear ||
     selectedMonth;
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
-      const data = payload[0].payload;
+      const data = payload[0]?.payload;
+      
+      if (!data) return null;
+      
+      // Formatar quantidade com unidade
+      const formatQuantity = (quantity: number, unit: string = 'un') => {
+        return `${quantity || 0} ${unit}`;
+      };
+      
       return (
-        <div className="bg-factory-800 border border-tire-600/30 rounded-lg p-3 shadow-lg">
-          <p className="text-white font-medium">{data.productName}</p>
-          <p className="text-neon-green">
-            Produzido: {data.totalProduced} unidades
-          </p>
-          <p className="text-red-400">
-            Perdas de Produção: {data.totalProductionLosses} unidades
-          </p>
-          <p className="text-orange-400">
-            Perdas de Matéria-Prima: {data.totalMaterialLosses} unidades
-          </p>
-          <p className="text-gray-400">
-            Total de Perdas: {data.totalLosses} unidades
-          </p>
-          <p className="text-neon-blue">Eficiência: {data.efficiency}%</p>
-          <p className="text-neon-orange">
-            Média/Dia: {data.averagePerDay} unidades
-          </p>
-          <p className="text-tire-300 text-sm">
-            Dias de Produção: {data.productionDays}
-          </p>
-          <p className="text-tire-300 text-sm">
-            Entradas: {data.entries.length}
-          </p>
+        <div className="bg-factory-800/95 border border-tire-600/50 rounded-lg p-4 shadow-lg backdrop-blur-sm min-w-[280px]">
+          <div className="space-y-3">
+            {/* Cabeçalho com nome e tipo */}
+            <div className="border-b border-tire-600/30 pb-2">
+              <div className="font-semibold text-white text-sm">
+                {data.productName}
+              </div>
+              <div className="text-xs text-tire-400 mt-1">
+                Produto Final
+              </div>
+            </div>
+            
+            {/* Informações principais */}
+            <div className="space-y-2">
+              {/* Quantidade produzida */}
+              <div className="flex items-center justify-between">
+                <span className="text-tire-300 text-sm">Produzido:</span>
+                <span className="text-neon-green font-medium text-sm">
+                  {formatQuantity(data.totalProduced, 'unidades')}
+                </span>
+              </div>
+              
+              {/* Média por dia */}
+              <div className="flex items-center justify-between">
+                <span className="text-tire-300 text-sm">Média/Dia:</span>
+                <span className="text-neon-orange font-medium text-sm">
+                  {formatQuantity(parseFloat(data.averagePerDay), 'unidades')}
+                </span>
+              </div>
+            </div>
+            
+            {/* Perdas e estatísticas */}
+            <div className="pt-2 border-t border-tire-600/30">
+              <div className="space-y-2">
+                {/* Perdas de produção */}
+                <div className="flex items-center justify-between">
+                  <span className="text-tire-300 text-sm">Perdas Produção:</span>
+                  <span className="text-red-400 font-medium text-sm">
+                    {formatQuantity(data.totalProductionLosses, 'unidades')}
+                  </span>
+                </div>
+                
+                {/* Perdas de matéria-prima */}
+                <div className="flex items-center justify-between">
+                  <span className="text-tire-300 text-sm">Perdas Material:</span>
+                  <span className="text-orange-400 font-medium text-sm">
+                    {formatQuantity(data.totalMaterialLosses, 'unidades')}
+                  </span>
+                </div>
+                
+                {/* Total de perdas */}
+                <div className="flex items-center justify-between">
+                  <span className="text-tire-300 text-sm">Total Perdas:</span>
+                  <span className="text-gray-400 font-medium text-sm">
+                    {formatQuantity(data.totalLosses, 'unidades')}
+                  </span>
+                </div>
+              </div>
+              
+              {/* Informações adicionais */}
+              <div className="mt-3 pt-2 border-t border-tire-600/20">
+                <div className="text-xs text-tire-400 space-y-1">
+                  <div>Dias de Produção: {data.productionDays}</div>
+                  <div>Entradas: {data.entries.length}</div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       );
     }
@@ -608,12 +647,12 @@ const ProductionChart = ({
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-tire-300 text-sm">Total Produzido</p>
-                <p className="text-2xl font-bold text-neon-green">
+                <p className="text-2xl font-bold text-neon-purple">
                   {metrics.totalProduced.toLocaleString("pt-BR")}
                 </p>
               </div>
-              <div className="text-neon-green">
-                <Factory className="h-8 w-8" />
+              <div className="text-neon-purple">
+                <BarChart3 className="h-8 w-8" />
               </div>
             </div>
           </CardContent>
@@ -629,7 +668,7 @@ const ProductionChart = ({
                 </p>
               </div>
               <div className="text-red-400">
-                <TrendingUp className="h-8 w-8 rotate-180" />
+                <BarChart3 className="h-8 w-8" />
               </div>
             </div>
           </CardContent>
@@ -640,12 +679,12 @@ const ProductionChart = ({
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-tire-300 text-sm">Perdas de Material</p>
-                <p className="text-2xl font-bold text-orange-400">
+                <p className="text-2xl font-bold text-red-400">
                   {metrics.totalMaterialLosses.toLocaleString("pt-BR")}
                 </p>
               </div>
-              <div className="text-orange-400">
-                <TrendingUp className="h-8 w-8 rotate-180" />
+              <div className="text-red-400">
+                <BarChart3 className="h-8 w-8" />
               </div>
             </div>
           </CardContent>
@@ -655,13 +694,13 @@ const ProductionChart = ({
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-tire-300 text-sm">Eficiência Média</p>
-                <p className="text-2xl font-bold text-neon-blue">
-                  {metrics.averageEfficiency.toFixed(1)}%
+                <p className="text-tire-300 text-sm">Porcentagem de Perda</p>
+                <p className="text-2xl font-bold text-red-400">
+                  {metrics.averageProductionLossPercentage.toFixed(1)}%
                 </p>
               </div>
-              <div className="text-neon-blue">
-                <Activity className="h-8 w-8" />
+              <div className="text-red-400">
+                <BarChart3 className="h-8 w-8" />
               </div>
             </div>
           </CardContent>
@@ -672,12 +711,12 @@ const ProductionChart = ({
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-tire-300 text-sm">Dias de Produção</p>
-                <p className="text-2xl font-bold text-neon-orange">
+                <p className="text-2xl font-bold text-neon-purple">
                   {metrics.productionDays}
                 </p>
               </div>
-              <div className="text-neon-orange">
-                <Calendar className="h-8 w-8" />
+              <div className="text-neon-purple">
+                <BarChart3 className="h-8 w-8" />
               </div>
             </div>
           </CardContent>
@@ -709,7 +748,7 @@ const ProductionChart = ({
           </Label>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           {/* Tipo de Filtro */}
           <div className="space-y-2">
             <Label className="text-tire-300 text-sm">Período:</Label>
@@ -735,36 +774,6 @@ const ProductionChart = ({
                   className="text-white hover:bg-tire-700/50"
                 >
                   Todos os períodos
-                </SelectItem>
-                <SelectItem
-                  value="today"
-                  className="text-white hover:bg-tire-700/50"
-                >
-                  Hoje
-                </SelectItem>
-                <SelectItem
-                  value="yesterday"
-                  className="text-white hover:bg-tire-700/50"
-                >
-                  Ontem
-                </SelectItem>
-                <SelectItem
-                  value="last7days"
-                  className="text-white hover:bg-tire-700/50"
-                >
-                  Últimos 7 dias
-                </SelectItem>
-                <SelectItem
-                  value="year"
-                  className="text-white hover:bg-tire-700/50"
-                >
-                  Ano específico
-                </SelectItem>
-                <SelectItem
-                  value="month"
-                  className="text-white hover:bg-tire-700/50"
-                >
-                  Mês específico
                 </SelectItem>
                 <SelectItem
                   value="custom"
@@ -838,56 +847,29 @@ const ProductionChart = ({
               <div className="space-y-2">
                 <Label className="text-tire-300 text-sm">Data Inicial:</Label>
                 <div className="relative">
-                  <CalendarDays className="absolute left-3 top-2.5 h-4 w-4 text-tire-400" />
                   <Input
                     type="date"
                     value={customStartDate}
                     onChange={(e) => setCustomStartDate(e.target.value)}
-                    className="pl-9 bg-factory-700/50 border-tire-600/30 text-white"
+                    className="bg-factory-700/50 border-tire-600/30 text-white"
                   />
                 </div>
               </div>
               <div className="space-y-2">
                 <Label className="text-tire-300 text-sm">Data Final:</Label>
                 <div className="relative">
-                  <CalendarDays className="absolute left-3 top-2.5 h-4 w-4 text-tire-400" />
                   <Input
                     type="date"
                     value={customEndDate}
                     onChange={(e) => setCustomEndDate(e.target.value)}
-                    className="pl-9 bg-factory-700/50 border-tire-600/30 text-white"
+                    className="bg-factory-700/50 border-tire-600/30 text-white"
                   />
                 </div>
               </div>
             </>
           )}
 
-          {/* Tipo de Gráfico */}
-          <div className="space-y-2">
-            <Label className="text-tire-300 text-sm">Tipo de Gráfico:</Label>
-            <Select
-              value={chartType}
-              onValueChange={(value: "bar" | "line") => setChartType(value)}
-            >
-              <SelectTrigger className="bg-factory-700/50 border-tire-600/30 text-white">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="bg-factory-800 border-tire-600/30">
-                <SelectItem
-                  value="bar"
-                  className="text-white hover:bg-tire-700/50"
-                >
-                  Barras
-                </SelectItem>
-                <SelectItem
-                  value="line"
-                  className="text-white hover:bg-tire-700/50"
-                >
-                  Linha
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+
         </div>
 
         {/* Indicador de Filtros Ativos */}
@@ -934,99 +916,34 @@ const ProductionChart = ({
             </div>
           ) : (
             <ResponsiveContainer width="100%" height={400}>
-              {chartType === "bar" ? (
-                <BarChart
-                  data={chartData}
-                  margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
+              <BarChart
+                data={chartData}
+                margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                <XAxis
+                  dataKey="productName"
+                  stroke="#9CA3AF"
+                  angle={-45}
+                  textAnchor="end"
+                  height={80}
+                  fontSize={12}
+                />
+                <YAxis stroke="#9CA3AF" />
+                <Tooltip content={<CustomTooltip />} />
+                <Bar
+                  dataKey="totalProduced"
+                  name="Produzido"
+                  radius={[6, 6, 0, 0]}
                 >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                  <XAxis
-                    dataKey="productName"
-                    stroke="#9CA3AF"
-                    angle={-45}
-                    textAnchor="end"
-                    height={80}
-                    fontSize={12}
-                  />
-                  <YAxis stroke="#9CA3AF" />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Legend />
-                  <Bar
-                    dataKey="totalProduced"
-                    name="Produzido"
-                    fill={colorSettings.producedColor}
-                    radius={[6, 6, 0, 0]}
-                  />
-                  <Bar
-                    dataKey="totalProductionLosses"
-                    name="Perdas de Produção"
-                    fill={colorSettings.productionLossesColor}
-                    opacity={0.8}
-                    radius={[3, 3, 0, 0]}
-                  />
-                  <Bar
-                    dataKey="totalMaterialLosses"
-                    name="Perdas de Matéria-Prima"
-                    fill={colorSettings.materialLossesColor}
-                    opacity={0.8}
-                    radius={[3, 3, 0, 0]}
-                  />
-                </BarChart>
-              ) : (
-                <LineChart
-                  data={chartData}
-                  margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                  <XAxis
-                    dataKey="productName"
-                    stroke="#9CA3AF"
-                    angle={-45}
-                    textAnchor="end"
-                    height={80}
-                    fontSize={12}
-                  />
-                  <YAxis stroke="#9CA3AF" />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Legend />
-                  <Line
-                    type="monotone"
-                    dataKey="totalProduced"
-                    name="Produzido"
-                    stroke={colorSettings.producedColor}
-                    strokeWidth={3}
-                    dot={{
-                      fill: colorSettings.producedColor,
-                      strokeWidth: 2,
-                      r: 4,
-                    }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="totalProductionLosses"
-                    name="Perdas de Produção"
-                    stroke={colorSettings.productionLossesColor}
-                    strokeWidth={2}
-                    dot={{
-                      fill: colorSettings.productionLossesColor,
-                      strokeWidth: 2,
-                      r: 3,
-                    }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="totalMaterialLosses"
-                    name="Perdas de Matéria-Prima"
-                    stroke={colorSettings.materialLossesColor}
-                    strokeWidth={2}
-                    dot={{
-                      fill: colorSettings.materialLossesColor,
-                      strokeWidth: 2,
-                      r: 3,
-                    }}
-                  />
-                </LineChart>
-              )}
+                  {chartData.map((entry, index) => (
+                    <Cell
+                      key={`cell-${index}`}
+                      fill={colorSettings.producedColor}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
             </ResponsiveContainer>
           )}
         </CardContent>

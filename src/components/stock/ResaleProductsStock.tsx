@@ -236,6 +236,41 @@ const ResaleProductsStock = ({ isLoading = false }: ResaleProductsStockProps) =>
         }
 
         console.log("✅ Estoque atualizado com sucesso");
+        
+        // Disparar evento para sincronização em tempo real com StockCharts
+        console.log('📡 [ResaleProductsStock] Disparando evento de sincronização...');
+        window.dispatchEvent(new CustomEvent('resaleStockUpdated', {
+          detail: { 
+            productId: product.id,
+            productName: product.name,
+            operation: stockOperation,
+            newQuantity,
+            newUnitCost,
+            newTotalValue: newQuantity * newUnitCost,
+            timestamp: new Date().toISOString()
+          }
+        }));
+
+        // Forçar recarregamento dos dados de estoque para sincronização
+        console.log('🔄 [ResaleProductsStock] Forçando recarregamento dos dados de estoque...');
+        window.dispatchEvent(new CustomEvent('forceStockItemsReload', {
+          detail: {
+            source: 'ResaleProductsStock',
+            timestamp: new Date().toISOString()
+          }
+        }));
+
+        // Forçar atualização imediata dos gráficos
+        setTimeout(() => {
+          console.log('⚡ [ResaleProductsStock] Disparando evento de atualização imediata...');
+          window.dispatchEvent(new CustomEvent('forceChartsRefresh', {
+            detail: {
+              source: 'ResaleProductsStock',
+              productId: product.id,
+              timestamp: new Date().toISOString()
+            }
+          }));
+        }, 200);
       } else {
         // Create new stock entry - só permite adicionar
         if (stockOperation === "remove") {
@@ -266,6 +301,41 @@ const ResaleProductsStock = ({ isLoading = false }: ResaleProductsStockProps) =>
         }
 
         console.log("✅ Novo estoque criado com sucesso");
+        
+        // Disparar evento para sincronização em tempo real com StockCharts
+        console.log('📡 [ResaleProductsStock] Disparando evento de sincronização para novo estoque...');
+        window.dispatchEvent(new CustomEvent('resaleStockUpdated', {
+          detail: { 
+            productId: product.id,
+            productName: product.name,
+            operation: 'add',
+            newQuantity,
+            newUnitCost,
+            newTotalValue: newQuantity * newUnitCost,
+            timestamp: new Date().toISOString()
+          }
+        }));
+
+        // Forçar recarregamento dos dados de estoque para sincronização
+        console.log('🔄 [ResaleProductsStock] Forçando recarregamento dos dados de estoque para novo item...');
+        window.dispatchEvent(new CustomEvent('forceStockItemsReload', {
+          detail: {
+            source: 'ResaleProductsStock',
+            timestamp: new Date().toISOString()
+          }
+        }));
+
+        // Forçar atualização imediata dos gráficos para novo item
+        setTimeout(() => {
+          console.log('⚡ [ResaleProductsStock] Disparando evento de atualização imediata para novo item...');
+          window.dispatchEvent(new CustomEvent('forceChartsRefresh', {
+            detail: {
+              source: 'ResaleProductsStock',
+              productId: product.id,
+              timestamp: new Date().toISOString()
+            }
+          }));
+        }, 200);
       }
 
       toast({
@@ -504,7 +574,7 @@ const ResaleProductsStock = ({ isLoading = false }: ResaleProductsStockProps) =>
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-tire-300 text-sm">Total de Produtos</p>
-                <p className="text-2xl font-bold text-neon-cyan">{totalProducts}</p>
+                <p className="text-2xl font-bold text-white">{totalProducts}</p>
                 <p className="text-xs text-tire-400 mt-1">cadastrados</p>
               </div>
               <ShoppingCart className="h-8 w-8 text-neon-cyan" />
@@ -517,23 +587,10 @@ const ResaleProductsStock = ({ isLoading = false }: ResaleProductsStockProps) =>
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-tire-300 text-sm">Em Estoque</p>
-                <p className="text-2xl font-bold text-neon-green">{totalQuantity}</p>
+                <p className="text-2xl font-bold text-neon-orange">{totalQuantity}</p>
                 <p className="text-xs text-tire-400 mt-1">quantidade total</p>
               </div>
-              <Package2 className="h-8 w-8 text-neon-green" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-factory-800/50 border-tire-600/30">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-tire-300 text-sm">Valor Total</p>
-                <p className="text-2xl font-bold text-neon-orange">{formatCurrency(totalStockValue)}</p>
-                <p className="text-xs text-tire-400 mt-1">em estoque</p>
-              </div>
-              <DollarSign className="h-8 w-8 text-neon-orange" />
+              <Package2 className="h-8 w-8 text-neon-orange" />
             </div>
           </CardContent>
         </Card>
@@ -547,6 +604,19 @@ const ResaleProductsStock = ({ isLoading = false }: ResaleProductsStockProps) =>
                 <p className="text-xs text-tire-400 mt-1">alertas</p>
               </div>
               <AlertTriangle className="h-8 w-8 text-red-400" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-neon-green" style={{ backgroundColor: '#173329' }}>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-tire-300 text-sm">Valor Total</p>
+                <p className="text-2xl font-bold text-neon-green">{formatCurrency(totalStockValue)}</p>
+                <p className="text-xs text-tire-400 mt-1">em estoque</p>
+              </div>
+              <DollarSign className="h-8 w-8 text-neon-green" />
             </div>
           </CardContent>
         </Card>
@@ -585,7 +655,7 @@ const ResaleProductsStock = ({ isLoading = false }: ResaleProductsStockProps) =>
 
         <Dialog open={showStockDialog} onOpenChange={setShowStockDialog}>
           <DialogTrigger asChild>
-            <Button className="bg-neon-green hover:bg-neon-green/80 text-white">
+            <Button style={{ backgroundColor: '#49de80', color: '#1d1e21' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#3bc46e'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#49de80'}>
               <Plus className="h-4 w-4 mr-2" />
               Movimentar Estoque
             </Button>

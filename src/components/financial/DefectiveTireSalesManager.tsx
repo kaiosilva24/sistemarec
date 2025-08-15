@@ -21,6 +21,8 @@ import {
   CalendarDays,
   AlertTriangle,
   Trash2,
+  TrendingUp,
+  Award,
 } from "lucide-react";
 import { DefectiveTireSale } from "@/types/financial";
 import { useTranslation } from "react-i18next";
@@ -45,9 +47,11 @@ const DefectiveTireSalesManager = ({
   const [quantity, setQuantity] = useState("");
   const [unitPrice, setUnitPrice] = useState("");
   const [description, setDescription] = useState("");
-  const [saleDate, setSaleDate] = useState(
-    new Date().toISOString().split("T")[0],
-  );
+  // CORREÇÃO: Mostrar data atual (12) no campo, não +1 dia
+  const [saleDate, setSaleDate] = useState(() => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  });
   const [searchTerm, setSearchTerm] = useState("");
   const [dateFilterType, setDateFilterType] = useState("all");
   const [filterMonth, setFilterMonth] = useState("");
@@ -75,14 +79,25 @@ const DefectiveTireSalesManager = ({
     const unitPriceNum = parseFloat(unitPrice);
     const totalValue = quantityNum * unitPriceNum;
 
+    // WORKAROUND: Adicionar +1 dia à data antes de salvar para compensar conversão UTC do Supabase
+    const saleDateObj = new Date(saleDate);
+    saleDateObj.setDate(saleDateObj.getDate() + 1);
+    const adjustedSaleDate = saleDateObj.toISOString().split("T")[0];
+
     const saleData = {
       tire_name: tireName.trim(),
       quantity: quantityNum,
       unit_price: unitPriceNum,
       sale_value: totalValue,
       description: description.trim() || undefined,
-      sale_date: saleDate,
+      sale_date: adjustedSaleDate, // Data com +1 dia para compensar UTC
     };
+
+    console.log("📅 [DefectiveTireSalesManager] Ajuste de data para registro:", {
+      dataOriginalCampo: saleDate,
+      dataAjustadaParaSalvar: adjustedSaleDate,
+      motivo: "Compensar conversão UTC do Supabase",
+    });
 
     console.log(
       "🏭 [DefectiveTireSalesManager] INICIANDO registro de venda de pneu defeituoso:",
@@ -116,7 +131,9 @@ const DefectiveTireSalesManager = ({
       setQuantity("");
       setUnitPrice("");
       setDescription("");
-      setSaleDate(new Date().toISOString().split("T")[0]);
+      // CORREÇÃO: Reset para data atual (12) no campo, não +1 dia
+      const today = new Date();
+      setSaleDate(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`);
 
       console.log("✅ [DefectiveTireSalesManager] Formulário resetado");
     } catch (error) {
@@ -158,50 +175,55 @@ const DefectiveTireSalesManager = ({
       .toLowerCase()
       .includes(searchTerm.toLowerCase());
 
-    // Advanced date filtering
+    // Advanced date filtering with +1 day workaround for Supabase UTC conversion
     let matchesDate = true;
     const saleDate = new Date(sale.sale_date);
     const today = new Date();
 
+    // WORKAROUND: Add +1 day to compensate Supabase UTC conversion
+    const todayPlusOne = new Date(today);
+    todayPlusOne.setDate(today.getDate() + 1);
+
+    console.log("🔍 [DefectiveTireSalesManager] Filtro de data aplicado:", {
+      dateFilterType,
+      originalToday: today.toISOString().split("T")[0],
+      todayPlusOne: todayPlusOne.toISOString().split("T")[0],
+      saleDate: sale.sale_date,
+      allSales: defectiveTireSales.map(s => ({ tire_name: s.tire_name, sale_date: s.sale_date })),
+    });
+
     switch (dateFilterType) {
-      case "today":
-        matchesDate = sale.sale_date === today.toISOString().split("T")[0];
-        break;
-      case "last7days":
-        const last7Days = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
-        matchesDate = saleDate >= last7Days;
-        break;
-      case "last30days":
-        const last30Days = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
-        matchesDate = saleDate >= last30Days;
-        break;
-      case "thisMonth":
-        const thisMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
-        matchesDate = sale.sale_date.startsWith(thisMonth);
-        break;
-      case "lastMonth":
-        const lastMonth = new Date(
-          today.getFullYear(),
-          today.getMonth() - 1,
-          1,
-        );
-        const lastMonthStr = `${lastMonth.getFullYear()}-${String(lastMonth.getMonth() + 1).padStart(2, "0")}`;
-        matchesDate = sale.sale_date.startsWith(lastMonthStr);
-        break;
-      case "month":
-        matchesDate = !filterMonth || sale.sale_date.startsWith(filterMonth);
-        break;
       case "custom":
         if (customStartDate && customEndDate) {
-          const startDate = new Date(customStartDate);
-          const endDate = new Date(customEndDate);
-          matchesDate = saleDate >= startDate && saleDate <= endDate;
+          // CORREÇÃO: Adicionar +1 dia às datas do filtro para compensar
+          // o fato de que as vendas são salvas com +1 dia devido ao UTC do Supabase
+          const startDateObj = new Date(customStartDate);
+          startDateObj.setDate(startDateObj.getDate() + 1);
+          const adjustedStartDate = startDateObj.toISOString().split("T")[0];
+          
+          const endDateObj = new Date(customEndDate);
+          endDateObj.setDate(endDateObj.getDate() + 1);
+          const adjustedEndDate = endDateObj.toISOString().split("T")[0];
+          
+          matchesDate = sale.sale_date >= adjustedStartDate && sale.sale_date <= adjustedEndDate;
+          console.log("📅 [DefectiveTireSalesManager] Filtro personalizado aplicado:", {
+            originalStartDate: customStartDate,
+            originalEndDate: customEndDate,
+            adjustedStartDate,
+            adjustedEndDate,
+            saleDate: sale.sale_date,
+            matches: matchesDate,
+          });
         } else if (customStartDate) {
-          const startDate = new Date(customStartDate);
-          matchesDate = saleDate >= startDate;
+          const startDateObj = new Date(customStartDate);
+          startDateObj.setDate(startDateObj.getDate() + 1);
+          const adjustedStartDate = startDateObj.toISOString().split("T")[0];
+          matchesDate = sale.sale_date >= adjustedStartDate;
         } else if (customEndDate) {
-          const endDate = new Date(customEndDate);
-          matchesDate = saleDate <= endDate;
+          const endDateObj = new Date(customEndDate);
+          endDateObj.setDate(endDateObj.getDate() + 1);
+          const adjustedEndDate = endDateObj.toISOString().split("T")[0];
+          matchesDate = sale.sale_date <= adjustedEndDate;
         }
         break;
       case "all":
@@ -258,7 +280,7 @@ const DefectiveTireSalesManager = ({
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-4 mb-6">
         <Card className="bg-factory-800/50 border-tire-600/30">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -322,6 +344,52 @@ const DefectiveTireSalesManager = ({
             </div>
           </CardContent>
         </Card>
+
+        <Card className="bg-factory-800/50 border-tire-600/30">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-tire-300 text-sm">Maior Venda</p>
+                <p className="text-2xl font-bold text-yellow-400">
+                  {formatCurrency(
+                    filteredSales.length > 0 
+                      ? Math.max(...filteredSales.map(sale => sale.sale_value))
+                      : 0
+                  )}
+                </p>
+              </div>
+              <div className="text-yellow-400">
+                <TrendingUp className="h-8 w-8" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-factory-800/50 border-tire-600/30">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-tire-300 text-sm">Pneu + Vendido</p>
+                <p className="text-lg font-bold text-cyan-400 truncate">
+                  {(() => {
+                    if (filteredSales.length === 0) return "N/A";
+                    const tireCount = filteredSales.reduce((acc, sale) => {
+                      acc[sale.tire_name] = (acc[sale.tire_name] || 0) + sale.quantity;
+                      return acc;
+                    }, {} as Record<string, number>);
+                    const mostSold = Object.entries(tireCount).reduce((a, b) => 
+                      tireCount[a[0]] > tireCount[b[0]] ? a : b
+                    );
+                    return mostSold[0];
+                  })()}
+                </p>
+              </div>
+              <div className="text-cyan-400">
+                <Award className="h-8 w-8" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
@@ -344,7 +412,6 @@ const DefectiveTireSalesManager = ({
                   value={tireName}
                   onChange={(e) => setTireName(e.target.value)}
                   className="bg-factory-700/50 border-tire-600/30 text-white placeholder:text-tire-400"
-                  placeholder="Ex: Pneu 175/70 R13, Pneu Caminhão..."
                   required
                 />
               </div>
@@ -362,7 +429,6 @@ const DefectiveTireSalesManager = ({
                     value={quantity}
                     onChange={(e) => setQuantity(e.target.value)}
                     className="bg-factory-700/50 border-tire-600/30 text-white placeholder:text-tire-400"
-                    placeholder="1"
                     required
                   />
                 </div>
@@ -378,7 +444,6 @@ const DefectiveTireSalesManager = ({
                     value={unitPrice}
                     onChange={(e) => setUnitPrice(e.target.value)}
                     className="bg-factory-700/50 border-tire-600/30 text-white placeholder:text-tire-400"
-                    placeholder="0,00"
                     required
                   />
                 </div>
@@ -429,7 +494,6 @@ const DefectiveTireSalesManager = ({
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   className="bg-factory-700/50 border-tire-600/30 text-white placeholder:text-tire-400"
-                  placeholder="Detalhes sobre o defeito, comprador, etc..."
                   rows={3}
                 />
               </div>
@@ -518,43 +582,7 @@ const DefectiveTireSalesManager = ({
                         value="all"
                         className="text-white hover:bg-tire-700/50"
                       >
-                        Todas as datas
-                      </SelectItem>
-                      <SelectItem
-                        value="today"
-                        className="text-white hover:bg-tire-700/50"
-                      >
-                        Hoje
-                      </SelectItem>
-                      <SelectItem
-                        value="last7days"
-                        className="text-white hover:bg-tire-700/50"
-                      >
-                        Últimos 7 dias
-                      </SelectItem>
-                      <SelectItem
-                        value="last30days"
-                        className="text-white hover:bg-tire-700/50"
-                      >
-                        Últimos 30 dias
-                      </SelectItem>
-                      <SelectItem
-                        value="thisMonth"
-                        className="text-white hover:bg-tire-700/50"
-                      >
-                        Este mês
-                      </SelectItem>
-                      <SelectItem
-                        value="lastMonth"
-                        className="text-white hover:bg-tire-700/50"
-                      >
-                        Mês passado
-                      </SelectItem>
-                      <SelectItem
-                        value="month"
-                        className="text-white hover:bg-tire-700/50"
-                      >
-                        Mês específico
+                        Todos os períodos
                       </SelectItem>
                       <SelectItem
                         value="custom"
@@ -590,12 +618,11 @@ const DefectiveTireSalesManager = ({
                         Data Inicial:
                       </Label>
                       <div className="relative">
-                        <CalendarDays className="absolute left-3 top-2.5 h-4 w-4 text-tire-400" />
                         <Input
                           type="date"
                           value={customStartDate}
                           onChange={(e) => setCustomStartDate(e.target.value)}
-                          className="pl-9 bg-factory-700/50 border-tire-600/30 text-white"
+                          className="bg-factory-700/50 border-tire-600/30 text-white"
                         />
                       </div>
                     </div>
@@ -604,12 +631,11 @@ const DefectiveTireSalesManager = ({
                         Data Final:
                       </Label>
                       <div className="relative">
-                        <CalendarDays className="absolute left-3 top-2.5 h-4 w-4 text-tire-400" />
                         <Input
                           type="date"
                           value={customEndDate}
                           onChange={(e) => setCustomEndDate(e.target.value)}
-                          className="pl-9 bg-factory-700/50 border-tire-600/30 text-white"
+                          className="bg-factory-700/50 border-tire-600/30 text-white"
                         />
                       </div>
                     </div>
@@ -629,12 +655,6 @@ const DefectiveTireSalesManager = ({
                   {dateFilterType !== "all" && (
                     <div className="flex items-center gap-1 px-2 py-1 bg-neon-green/20 rounded text-neon-green text-xs">
                       <Calendar className="h-3 w-3" />
-                      {dateFilterType === "today" && "Hoje"}
-                      {dateFilterType === "last7days" && "Últimos 7 dias"}
-                      {dateFilterType === "last30days" && "Últimos 30 dias"}
-                      {dateFilterType === "thisMonth" && "Este mês"}
-                      {dateFilterType === "lastMonth" && "Mês passado"}
-                      {dateFilterType === "month" && `Mês: ${filterMonth}`}
                       {dateFilterType === "custom" && "Período personalizado"}
                     </div>
                   )}

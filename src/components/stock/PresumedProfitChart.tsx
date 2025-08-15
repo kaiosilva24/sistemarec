@@ -98,8 +98,18 @@ const PresumedProfitChart = ({
   warrantyEntries = [],
   isLoading = false,
 }: PresumedProfitChartProps) => {
+  // Log inicial para verificar dados recebidos
+  console.log("🚀 [PresumedProfitChart] Componente inicializado com dados:", {
+    cashFlowEntries: cashFlowEntries?.length || 0,
+    materials: materials?.length || 0,
+    employees: employees?.length || 0,
+    stockItems: stockItems?.length || 0,
+    products: products?.length || 0,
+    isLoading
+  });
+
   // Estados para filtros
-  const [dateFilter, setDateFilter] = useState("last30days");
+  const [dateFilter, setDateFilter] = useState("all");
   const [customStartDate, setCustomStartDate] = useState("");
   const [customEndDate, setCustomEndDate] = useState("");
   const [chartType, setChartType] = useState<"bar" | "line">("bar");
@@ -501,33 +511,33 @@ const PresumedProfitChart = ({
     return totalCost;
   };
 
-  // Filter cash flow entries by date
+  // Filter cash flow entries by date - ONLY FINAL PRODUCTS
   const getFilteredSales = () => {
     const today = new Date();
     let filteredEntries = cashFlowEntries.filter(
-      (entry) => entry.type === "income" && entry.category === "venda",
+      (entry) => 
+        entry.type === "income" && 
+        entry.category === "venda" &&
+        entry.description?.includes("TIPO_PRODUTO: final") // Only final products
     );
 
+    console.log("🔍 [PresumedProfitChart] Debug filtros (APENAS PRODUTOS FINAIS):", {
+      dateFilter,
+      totalCashFlowEntries: cashFlowEntries.length,
+      allSalesEntries: cashFlowEntries.filter(e => e.type === "income" && e.category === "venda").length,
+      finalProductSalesEntries: filteredEntries.length,
+      firstFewEntries: filteredEntries.slice(0, 3).map(entry => ({
+        date: entry.transaction_date,
+        amount: entry.amount,
+        description: entry.description?.substring(0, 80),
+        isFinalProduct: entry.description?.includes("TIPO_PRODUTO: final")
+      }))
+    });
+
     switch (dateFilter) {
-      case "today":
-        const todayStr = today.toISOString().split("T")[0];
-        filteredEntries = filteredEntries.filter(
-          (entry) => entry.transaction_date === todayStr,
-        );
-        break;
-      case "last7days":
-        const last7Days = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
-        filteredEntries = filteredEntries.filter((entry) => {
-          const entryDate = new Date(entry.transaction_date);
-          return entryDate >= last7Days && entryDate <= today;
-        });
-        break;
-      case "last30days":
-        const last30Days = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
-        filteredEntries = filteredEntries.filter((entry) => {
-          const entryDate = new Date(entry.transaction_date);
-          return entryDate >= last30Days && entryDate <= today;
-        });
+      case "all":
+        // Return all entries without date filtering
+        console.log("✅ [PresumedProfitChart] Usando filtro 'all' - mostrando todos os dados");
         break;
       case "custom":
         if (customStartDate && customEndDate) {
@@ -541,43 +551,103 @@ const PresumedProfitChart = ({
         break;
     }
 
+    console.log("📊 [PresumedProfitChart] Resultado final do filtro:", {
+      dateFilter,
+      totalEntriesReturned: filteredEntries.length,
+      entries: filteredEntries.map(entry => ({
+        date: entry.transaction_date,
+        amount: entry.amount
+      }))
+    });
+
     return filteredEntries;
   };
 
-  // Extract product info from sale description
+  // Extract product info from sale description - ONLY FINAL PRODUCTS
   const extractProductInfoFromSale = (description: string) => {
     try {
       if (!description || description.trim() === "") {
         return null;
       }
 
+      // Double check: only process final products
+      if (!description.includes("TIPO_PRODUTO: final")) {
+        console.log("🚫 [PresumedProfitChart] Ignorando venda não-final:", description.substring(0, 100));
+        return null;
+      }
+
       const productIdMatch = description.match(/ID_Produto: ([^\s|]+)/);
-      const quantityMatch = description.match(/Qtd: ([0-9.,]+)/);
+      const quantityMatch = description.match(/Qtd: ([0-9.,]+)(?:\s|$|\|)/); // Fixed regex from memory
       const productNameMatch = description.match(/Produto: ([^|]+)/);
       const unitPriceMatch = description.match(/Preço Unit: R\$\s*([0-9.,]+)/);
 
-      if (productIdMatch && quantityMatch) {
-        return {
-          productId: productIdMatch[1],
-          quantity: parseFloat(quantityMatch[1].replace(",", ".")),
-          productName: productNameMatch?.[1]?.trim() || "",
+      console.log("🔍 [PresumedProfitChart] Extraindo dados da venda final:", {
+        description: description.substring(0, 120),
+        productIdMatch: productIdMatch?.[1] || "N/A (venda multi-produto)",
+        quantityMatch: quantityMatch?.[1],
+        productNameMatch: productNameMatch?.[1]?.trim(),
+        unitPriceMatch: unitPriceMatch?.[1]
+      });
+
+      // CORREÇÃO: ID_Produto é opcional (vendas multi-produto não têm ID)
+      // Só precisa de quantidade e nome do produto
+      if (quantityMatch && productNameMatch) {
+        const rawQuantity = quantityMatch[1];
+        const parsedQuantity = parseFloat(rawQuantity.replace(",", "."));
+        
+        const extractedData = {
+          productId: productIdMatch?.[1] || "multi-product", // Optional for multi-product sales
+          quantity: parsedQuantity,
+          productName: productNameMatch[1].trim(),
           unitPrice: unitPriceMatch
             ? parseFloat(unitPriceMatch[1].replace(",", "."))
             : 0,
         };
+        
+        console.log("✅ [PresumedProfitChart] Dados extraídos com sucesso:", {
+          ...extractedData,
+          rawQuantityFromRegex: rawQuantity,
+          parsedQuantity: parsedQuantity,
+          quantityType: typeof parsedQuantity
+        });
+        return extractedData;
+      } else {
+        console.log("❌ [PresumedProfitChart] Falha na extração - campos obrigatórios não encontrados:", {
+          hasQuantity: !!quantityMatch,
+          hasProductName: !!productNameMatch,
+          quantityValue: quantityMatch?.[1],
+          productNameValue: productNameMatch?.[1]?.trim()
+        });
       }
     } catch (error) {
-      console.error("Erro ao extrair informações do produto:", error);
+      console.error("❌ [PresumedProfitChart] Erro ao extrair informações do produto:", error);
     }
     return null;
   };
 
   // Calculate profit data for each product
   const profitData = useMemo(() => {
+    console.log("🚀 [PresumedProfitChart] Iniciando cálculo de dados de lucro...");
+    
     const salesEntries = getFilteredSales();
+    console.log("📊 [PresumedProfitChart] Vendas filtradas para processamento:", {
+      totalSales: salesEntries.length,
+      salesData: salesEntries.map(entry => ({
+        date: entry.transaction_date,
+        amount: entry.amount,
+        description: entry.description?.substring(0, 100)
+      }))
+    });
+    
     const productMap = new Map<string, ProfitData>();
 
-    salesEntries.forEach((entry) => {
+    salesEntries.forEach((entry, index) => {
+      console.log(`🔍 [PresumedProfitChart] Processando venda ${index + 1}/${salesEntries.length}:`, {
+        amount: entry.amount,
+        date: entry.transaction_date,
+        description: entry.description?.substring(0, 120)
+      });
+      
       const productInfo = extractProductInfoFromSale(entry.description || "");
       let productName = "Produto Não Identificado";
       let quantity = 1;
@@ -585,12 +655,21 @@ const PresumedProfitChart = ({
       if (productInfo && productInfo.productName) {
         productName = productInfo.productName;
         quantity = productInfo.quantity;
+        console.log(`✅ [PresumedProfitChart] Produto identificado:`, {
+          productName,
+          quantity,
+          productId: productInfo.productId
+        });
       } else {
         // Fallback: try to extract product name from description
+        console.log("⚠️ [PresumedProfitChart] Falha na extração - tentando fallback...");
         if (entry.description) {
           const match = entry.description.match(/Produto: ([^|]+)/);
           if (match) {
             productName = match[1].trim();
+            console.log(`🔄 [PresumedProfitChart] Produto identificado via fallback: ${productName}`);
+          } else {
+            console.log("❌ [PresumedProfitChart] Fallback também falhou - usando nome genérico");
           }
         }
       }
@@ -612,6 +691,14 @@ const PresumedProfitChart = ({
       const totalCostForSale = unitCost * quantity;
       const profit = revenue - totalCostForSale;
 
+      console.log(`📊 [PresumedProfitChart] Somando quantidade para ${productName}:`, {
+        quantityToAdd: quantity,
+        previousTotalSales: existing.totalSales,
+        newTotalSales: existing.totalSales + quantity,
+        revenue: revenue,
+        salesCount: existing.salesCount + 1
+      });
+
       existing.totalSales += quantity;
       existing.totalRevenue += revenue;
       existing.totalCost += totalCostForSale;
@@ -619,6 +706,16 @@ const PresumedProfitChart = ({
       existing.salesCount += 1;
 
       productMap.set(productName, existing);
+    });
+
+    console.log("📈 [PresumedProfitChart] Mapa de produtos processados:", {
+      totalProducts: productMap.size,
+      products: Array.from(productMap.entries()).map(([name, data]) => ({
+        productName: name,
+        totalSales: data.totalSales,
+        totalRevenue: data.totalRevenue,
+        salesCount: data.salesCount
+      }))
     });
 
     // Calculate derived metrics
@@ -652,6 +749,20 @@ const PresumedProfitChart = ({
       }
       return sortOrder === "desc" ? bValue - aValue : aValue - bValue;
     });
+
+    console.log("🎯 [PresumedProfitChart] Resultado final do cálculo de lucro:", {
+      totalProductsInChart: result.length,
+      chartData: result.map(item => ({
+        productName: item.productName,
+        totalSales: item.totalSales,
+        totalRevenue: item.totalRevenue,
+        totalProfit: item.totalProfit,
+        profitMargin: item.profitMargin.toFixed(2) + '%',
+        salesCount: item.salesCount
+      }))
+    });
+
+
 
     return result;
   }, [
@@ -704,14 +815,14 @@ const PresumedProfitChart = ({
 
   // Limpar filtros
   const handleClearFilters = () => {
-    setDateFilter("last30days");
+    setDateFilter("all");
     setCustomStartDate("");
     setCustomEndDate("");
   };
 
   // Verificar se há filtros ativos
   const hasActiveFilters =
-    dateFilter !== "last30days" || customStartDate || customEndDate;
+    dateFilter !== "all" || customStartDate || customEndDate;
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
@@ -1044,22 +1155,10 @@ const PresumedProfitChart = ({
               </SelectTrigger>
               <SelectContent className="bg-factory-800 border-tire-600/30">
                 <SelectItem
-                  value="today"
+                  value="all"
                   className="text-white hover:bg-tire-700/50"
                 >
-                  Hoje
-                </SelectItem>
-                <SelectItem
-                  value="last7days"
-                  className="text-white hover:bg-tire-700/50"
-                >
-                  Últimos 7 dias
-                </SelectItem>
-                <SelectItem
-                  value="last30days"
-                  className="text-white hover:bg-tire-700/50"
-                >
-                  Últimos 30 dias
+                  Todos os períodos
                 </SelectItem>
                 <SelectItem
                   value="custom"
@@ -1131,31 +1230,7 @@ const PresumedProfitChart = ({
             </Select>
           </div>
 
-          <div className="space-y-2">
-            <Label className="text-tire-300 text-sm">Tipo de Gráfico:</Label>
-            <Select
-              value={chartType}
-              onValueChange={(value: "bar" | "line") => setChartType(value)}
-            >
-              <SelectTrigger className="bg-factory-700/50 border-tire-600/30 text-white">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="bg-factory-800 border-tire-600/30">
-                <SelectItem
-                  value="bar"
-                  className="text-white hover:bg-tire-700/50"
-                >
-                  Barras
-                </SelectItem>
-                <SelectItem
-                  value="line"
-                  className="text-white hover:bg-tire-700/50"
-                >
-                  Linha
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+
         </div>
 
         {dateFilter === "custom" && (
@@ -1163,24 +1238,22 @@ const PresumedProfitChart = ({
             <div className="space-y-2">
               <Label className="text-tire-300 text-sm">Data Inicial:</Label>
               <div className="relative">
-                <Calendar className="absolute left-3 top-2.5 h-4 w-4 text-tire-400" />
                 <Input
                   type="date"
                   value={customStartDate}
                   onChange={(e) => setCustomStartDate(e.target.value)}
-                  className="pl-9 bg-factory-700/50 border-tire-600/30 text-white"
+                  className="bg-factory-700/50 border-tire-600/30 text-white"
                 />
               </div>
             </div>
             <div className="space-y-2">
               <Label className="text-tire-300 text-sm">Data Final:</Label>
               <div className="relative">
-                <Calendar className="absolute left-3 top-2.5 h-4 w-4 text-tire-400" />
                 <Input
                   type="date"
                   value={customEndDate}
                   onChange={(e) => setCustomEndDate(e.target.value)}
-                  className="pl-9 bg-factory-700/50 border-tire-600/30 text-white"
+                  className="bg-factory-700/50 border-tire-600/30 text-white"
                 />
               </div>
             </div>

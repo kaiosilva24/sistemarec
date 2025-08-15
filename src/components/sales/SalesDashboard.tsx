@@ -34,7 +34,7 @@ import {
   AlertTriangle,
   BarChart3,
   ChevronDown,
-  Banknote, // Import Banknote icon
+  Plus,
 } from "lucide-react";
 import {
   BarChart,
@@ -79,7 +79,6 @@ const SalesDashboard = ({
   const [salesHistoryDateType, setSalesHistoryDateType] = useState("all");
   const [salesHistoryStartDate, setSalesHistoryStartDate] = useState("");
   const [salesHistoryEndDate, setSalesHistoryEndDate] = useState("");
-  const [salesHistoryPaymentFilter, setSalesHistoryPaymentFilter] = useState("all"); // Added for payment method filter
 
   // Warranty history filter states
   const [warrantyHistorySearch, setWarrantyHistorySearch] = useState("");
@@ -99,7 +98,6 @@ const SalesDashboard = ({
     useState("");
   const [resaleSalesHistoryEndDate, setResaleSalesHistoryEndDate] =
     useState("");
-  const [resaleSalesHistoryPaymentFilter, setResaleSalesHistoryPaymentFilter] = useState("all"); // Added for payment method filter
 
   // POS form states
   const [selectedSalesperson, setSelectedSalesperson] = useState("");
@@ -108,11 +106,13 @@ const SalesDashboard = ({
   const [unitPrice, setUnitPrice] = useState("");
   const [quantity, setQuantity] = useState("");
   const [saleValue, setSaleValue] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState(""); // Added for payment method
   const [isProcessingSale, setIsProcessingSale] = useState(false);
   const [productType, setProductType] = useState<
     "final" | "resale" | "warranty"
   >("final");
+  const [paymentMethod, setPaymentMethod] = useState<
+    "DINHEIRO" | "PIX" | "CARTÃO" | "A PRAZO"
+  >("DINHEIRO");
 
   // Autocomplete states for POS
   const [salespersonSearch, setSalespersonSearch] = useState("");
@@ -122,6 +122,18 @@ const SalesDashboard = ({
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   const [showProductDropdown, setShowProductDropdown] = useState(false);
 
+  // Estados para carrinho multi-produto - PADRÃO ATIVADO
+  const [isMultiProductMode, setIsMultiProductMode] = useState(true);
+  const [productCart, setProductCart] = useState<Array<{
+    id: string;
+    name: string;
+    type: 'final' | 'resale';
+    quantity: number;
+    unitPrice: number;
+    totalPrice: number;
+    originalProductId: string;
+  }>>([]);
+
   // Use database hooks
   const { salespeople, isLoading: salespeopleLoading } = useSalespeople();
   const {
@@ -129,8 +141,18 @@ const SalesDashboard = ({
     updateCustomer,
     isLoading: customersLoading,
   } = useCustomers();
-  const { stockItems, updateStockItem, deleteStockItem, isLoading: stockLoading } = useStockItems(); // Added deleteStockItem
-  const { cashFlowEntries, addCashFlowEntry, deleteCashFlowEntry, updateCashFlowEntry } = useCashFlow();
+  const {
+    stockItems,
+    updateStockItem,
+    isLoading: stockLoading,
+  } = useStockItems();
+  const {
+    cashFlowEntries,
+    addCashFlowEntry,
+    deleteCashFlowEntry,
+    updateCashFlowEntry,
+    isLoading: cashFlowLoading,
+  } = useCashFlow();
   const { addProductionEntry } = useProductionEntries();
   const {
     warrantyEntries,
@@ -155,56 +177,6 @@ const SalesDashboard = ({
 
   const formatPercentage = (value: number) => {
     return `${value.toFixed(2)}%`;
-  };
-
-  // Extract payment method from sale description
-  const extractPaymentMethodFromSale = (description: string) => {
-    try {
-      const paymentMatch = description.match(/Pagamento: ([^|]+)/);
-      if (paymentMatch) {
-        return paymentMatch[1].trim();
-      }
-      // Se não encontrar forma de pagamento, assume "À Vista" (para vendas antigas)
-      return "À Vista";
-    } catch (error) {
-      console.error("Erro ao extrair forma de pagamento:", error);
-      return "À Vista";
-    }
-  };
-
-  // Extract real value from installment sales (for sales history display)
-  const extractRealValueFromSale = (entry: any) => {
-    try {
-      if (entry.category === "venda_a_prazo" && entry.description) {
-        const realValueMatch = entry.description.match(/Valor_Real: ([0-9.]+)/);
-        if (realValueMatch) {
-          return parseFloat(realValueMatch[1]);
-        }
-      }
-      return entry.amount; // Return normal amount for non-installment sales
-    } catch (error) {
-      console.error("Erro ao extrair valor real:", error);
-      return entry.amount;
-    }
-  };
-
-  // Extract product info from sale description
-  const extractProductInfoFromSale = (description: string) => {
-    try {
-      // Extract product ID from description
-      const productIdMatch = description.match(/ID_Produto: ([^\s|]+)/);
-      const quantityMatch = description.match(/Qtd: ([0-9.]+)/);
-
-      if (productIdMatch && quantityMatch) {
-        return {
-          productId: productIdMatch[1],
-          quantity: parseFloat(quantityMatch[1]),
-        };
-      }
-    } catch (error) {
-      console.error("Erro ao extrair informações do produto:", error);
-    }
-    return null;
   };
 
   // Get resale product IDs to exclude them from final products
@@ -239,12 +211,12 @@ const SalesDashboard = ({
       product.name.toLowerCase().includes(productsSearch.toLowerCase()),
     );
 
-  // Filter final product sales history (cash flow entries with category "venda" or "venda_a_prazo" and product type "final")
+  // Filter final product sales history (cash flow entries with category "venda" or "venda_prazo" and product type "final")
   const finalProductSalesHistory = cashFlowEntries
     .filter(
       (entry) =>
         entry.type === "income" &&
-        (entry.category === "venda" || entry.category === "venda_a_prazo") &&
+        (entry.category === "venda" || entry.category === "venda_prazo") &&
         // Only include entries that:
         // 1. Explicitly have "TIPO_PRODUTO: final" OR
         // 2. Don't have any "TIPO_PRODUTO:" tag at all (for backward compatibility with older entries)
@@ -274,47 +246,61 @@ const SalesDashboard = ({
 
       switch (salesHistoryDateType) {
         case "today":
-          matchesDate =
-            entry.transaction_date === today.toISOString().split("T")[0];
+          const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+          const todayEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
+          matchesDate = entryDate >= todayStart && entryDate <= todayEnd;
           break;
         case "last7days":
-          const last7Days = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
-          matchesDate = entryDate >= last7Days;
+          const last7DaysStart = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+          last7DaysStart.setHours(0, 0, 0, 0);
+          matchesDate = entryDate >= last7DaysStart;
           break;
         case "last30days":
-          const last30Days = new Date(
-            today.getTime() - 30 * 24 * 60 * 60 * 1000,
-          );
-          matchesDate = entryDate >= last30Days;
+          const last30DaysStart = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+          last30DaysStart.setHours(0, 0, 0, 0);
+          matchesDate = entryDate >= last30DaysStart;
           break;
         case "thisMonth":
-          const thisMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
-          matchesDate = entry.transaction_date.startsWith(thisMonth);
+          const thisMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+          const thisMonthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59);
+          matchesDate = entryDate >= thisMonthStart && entryDate <= thisMonthEnd;
           break;
         case "lastMonth":
-          const lastMonth = new Date(
-            today.getFullYear(),
-            today.getMonth() - 1,
-            1,
-          );
-          const lastMonthStr = `${lastMonth.getFullYear()}-${String(lastMonth.getMonth() + 1).padStart(2, "0")}`;
-          matchesDate = entry.transaction_date.startsWith(lastMonthStr);
-          break;
-        case "month":
-          matchesDate =
-            !salesHistoryDateFilter ||
-            entry.transaction_date.startsWith(salesHistoryDateFilter);
+          const lastMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+          const lastMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0, 23, 59, 59);
+          matchesDate = entryDate >= lastMonthStart && entryDate <= lastMonthEnd;
           break;
         case "custom":
           if (salesHistoryStartDate && salesHistoryEndDate) {
+            // WORKAROUND: Compensate for +1 day UTC workaround in sales saving
+            // Since sales are saved with +1 day, we need to add +1 day to filter dates too
             const startDate = new Date(salesHistoryStartDate);
+            startDate.setDate(startDate.getDate() + 1);
+            startDate.setHours(0, 0, 0, 0);
             const endDate = new Date(salesHistoryEndDate);
+            endDate.setDate(endDate.getDate() + 1);
+            endDate.setHours(23, 59, 59, 999);
+            
+            // Debug logs for custom date filtering
+            console.log("🗓️ [CUSTOM FILTER DEBUG] Final Products:", {
+              selectedStartDate: salesHistoryStartDate,
+              selectedEndDate: salesHistoryEndDate,
+              adjustedStartDate: startDate.toString(),
+              adjustedEndDate: endDate.toString(),
+              entryDate: entryDate.toString(),
+              entryTransactionDate: entry.transaction_date,
+              matchesDate: entryDate >= startDate && entryDate <= endDate,
+              note: "Added +1 day to compensate UTC workaround"
+            });
+            
             matchesDate = entryDate >= startDate && entryDate <= endDate;
           } else if (salesHistoryStartDate) {
             const startDate = new Date(salesHistoryStartDate);
+            startDate.setHours(0, 0, 0, 0);
             matchesDate = entryDate >= startDate;
           } else if (salesHistoryEndDate) {
             const endDate = new Date(salesHistoryEndDate);
+            endDate.setHours(23, 59, 59, 999);
             matchesDate = entryDate <= endDate;
           }
           break;
@@ -324,30 +310,7 @@ const SalesDashboard = ({
           break;
       }
 
-      // Payment method filtering
-      let matchesPayment = true;
-      if (salesHistoryPaymentFilter !== "all") {
-        const paymentMethod = extractPaymentMethodFromSale(entry.description || "");
-        const normalizedPayment = (() => {
-          switch (paymentMethod) {
-            case "Dinheiro": return "cash";
-            case "Cartão": return "card";
-            case "PIX": return "pix";
-            case "À Prazo": return "installment";
-            case "À Vista":
-            default: return "cash_default";
-          }
-        })();
-
-        if (salesHistoryPaymentFilter === "cash_default") {
-          // Para "À Vista", incluir tanto "À Vista" quanto vendas antigas sem forma de pagamento especificada
-          matchesPayment = paymentMethod === "À Vista" || (!entry.description || !entry.description.includes("Pagamento:"));
-        } else {
-          matchesPayment = normalizedPayment === salesHistoryPaymentFilter;
-        }
-      }
-
-      return matchesSearch && matchesDate && matchesPayment;
+      return matchesSearch && matchesDate;
     })
     .sort(
       (a, b) =>
@@ -355,12 +318,12 @@ const SalesDashboard = ({
         new Date(a.transaction_date).getTime(),
     );
 
-  // Filter resale product sales history (cash flow entries with category "venda" or "venda_a_prazo" and product type "resale")
+  // Filter resale product sales history (cash flow entries with category "venda" or "venda_prazo" and product type "resale")
   const resaleProductSalesHistory = cashFlowEntries
     .filter(
       (entry) =>
         entry.type === "income" &&
-        (entry.category === "venda" || entry.category === "venda_a_prazo") &&
+        (entry.category === "venda" || entry.category === "venda_prazo") &&
         entry.description &&
         entry.description.includes("TIPO_PRODUTO: revenda"),
     )
@@ -381,47 +344,61 @@ const SalesDashboard = ({
 
       switch (resaleSalesHistoryDateType) {
         case "today":
-          matchesDate =
-            entry.transaction_date === today.toISOString().split("T")[0];
+          const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+          const todayEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
+          matchesDate = entryDate >= todayStart && entryDate <= todayEnd;
           break;
         case "last7days":
-          const last7Days = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
-          matchesDate = entryDate >= last7Days;
+          const last7DaysStart = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+          last7DaysStart.setHours(0, 0, 0, 0);
+          matchesDate = entryDate >= last7DaysStart;
           break;
         case "last30days":
-          const last30Days = new Date(
-            today.getTime() - 30 * 24 * 60 * 60 * 1000,
-          );
-          matchesDate = entryDate >= last30Days;
+          const last30DaysStart = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+          last30DaysStart.setHours(0, 0, 0, 0);
+          matchesDate = entryDate >= last30DaysStart;
           break;
         case "thisMonth":
-          const thisMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
-          matchesDate = entry.transaction_date.startsWith(thisMonth);
+          const thisMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+          const thisMonthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59);
+          matchesDate = entryDate >= thisMonthStart && entryDate <= thisMonthEnd;
           break;
         case "lastMonth":
-          const lastMonth = new Date(
-            today.getFullYear(),
-            today.getMonth() - 1,
-            1,
-          );
-          const lastMonthStr = `${lastMonth.getFullYear()}-${String(lastMonth.getMonth() + 1).padStart(2, "0")}`;
-          matchesDate = entry.transaction_date.startsWith(lastMonthStr);
-          break;
-        case "month":
-          matchesDate =
-            !resaleSalesHistoryDateFilter ||
-            entry.transaction_date.startsWith(resaleSalesHistoryDateFilter);
+          const lastMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+          const lastMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0, 23, 59, 59);
+          matchesDate = entryDate >= lastMonthStart && entryDate <= lastMonthEnd;
           break;
         case "custom":
           if (resaleSalesHistoryStartDate && resaleSalesHistoryEndDate) {
+            // WORKAROUND: Compensate for +1 day UTC workaround in sales saving
+            // Since sales are saved with +1 day, we need to add +1 day to filter dates too
             const startDate = new Date(resaleSalesHistoryStartDate);
+            startDate.setDate(startDate.getDate() + 1);
+            startDate.setHours(0, 0, 0, 0);
             const endDate = new Date(resaleSalesHistoryEndDate);
+            endDate.setDate(endDate.getDate() + 1);
+            endDate.setHours(23, 59, 59, 999);
+            
+            // Debug logs for custom date filtering
+            console.log("🗓️ [CUSTOM FILTER DEBUG] Resale Products:", {
+              selectedStartDate: resaleSalesHistoryStartDate,
+              selectedEndDate: resaleSalesHistoryEndDate,
+              adjustedStartDate: startDate.toString(),
+              adjustedEndDate: endDate.toString(),
+              entryDate: entryDate.toString(),
+              entryTransactionDate: entry.transaction_date,
+              matchesDate: entryDate >= startDate && entryDate <= endDate,
+              note: "Added +1 day to compensate UTC workaround"
+            });
+            
             matchesDate = entryDate >= startDate && entryDate <= endDate;
           } else if (resaleSalesHistoryStartDate) {
             const startDate = new Date(resaleSalesHistoryStartDate);
+            startDate.setHours(0, 0, 0, 0);
             matchesDate = entryDate >= startDate;
           } else if (resaleSalesHistoryEndDate) {
             const endDate = new Date(resaleSalesHistoryEndDate);
+            endDate.setHours(23, 59, 59, 999);
             matchesDate = entryDate <= endDate;
           }
           break;
@@ -431,30 +408,7 @@ const SalesDashboard = ({
           break;
       }
 
-      // Payment method filtering
-      let matchesPayment = true;
-      if (resaleSalesHistoryPaymentFilter !== "all") {
-        const paymentMethod = extractPaymentMethodFromSale(entry.description || "");
-        const normalizedPayment = (() => {
-          switch (paymentMethod) {
-            case "Dinheiro": return "cash";
-            case "Cartão": return "card";
-            case "PIX": return "pix";
-            case "À Prazo": return "installment";
-            case "À Vista":
-            default: return "cash_default";
-          }
-        })();
-
-        if (resaleSalesHistoryPaymentFilter === "cash_default") {
-          // Para "À Vista", incluir tanto "À Vista" quanto vendas antigas sem forma de pagamento especificada
-          matchesPayment = paymentMethod === "À Vista" || (!entry.description || !entry.description.includes("Pagamento:"));
-        } else {
-          matchesPayment = normalizedPayment === resaleSalesHistoryPaymentFilter;
-        }
-      }
-
-      return matchesSearch && matchesDate && matchesPayment;
+      return matchesSearch && matchesDate;
     })
     .sort(
       (a, b) =>
@@ -487,8 +441,8 @@ const SalesDashboard = ({
 
       switch (warrantyHistoryDateType) {
         case "today":
-          matchesDate =
-            warranty.warranty_date === today.toISOString().split("T")[0];
+          const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+          matchesDate = warranty.warranty_date === todayStr;
           break;
         case "last7days":
           const last7Days = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -569,6 +523,41 @@ const SalesDashboard = ({
 
     return stockItem && stockItem.quantity > 0;
   });
+
+  // Function to extract payment method from transaction description
+  const extractPaymentMethodFromSale = (description: string): string => {
+    console.log("🔍 [DEBUG] Extracting payment method from:", description);
+    
+    // Try multiple patterns to catch different formats
+    let methodMatch = description.match(/Método:\s*([^|]+)/);
+    if (!methodMatch) {
+      methodMatch = description.match(/Método:\s*([^\s]+)/);
+    }
+    if (!methodMatch) {
+      methodMatch = description.match(/Método\s*:\s*([A-Z\s]+)/);
+    }
+    
+    const result = methodMatch ? methodMatch[1].trim() : "N/A";
+    console.log("🔍 [DEBUG] Extracted payment method:", result);
+    return result;
+  };
+
+  // Function to get payment method icon
+  const getPaymentMethodIcon = (method: string): string => {
+    console.log("🔍 [DEBUG] Getting icon for payment method:", method);
+    const cleanMethod = method.trim().toUpperCase();
+    
+    switch (cleanMethod) {
+      case "DINHEIRO": return "💵";
+      case "PIX": return "📱";
+      case "CARTÃO": return "💳";
+      case "A PRAZO": return "📅";
+      case "N/A": return "❓";
+      default: 
+        console.log("🔍 [DEBUG] Unknown payment method, using default icon");
+        return "💰";
+    }
+  };
 
   const averageCommission =
     activeSalespeople.length > 0
@@ -810,7 +799,6 @@ const SalesDashboard = ({
     setUnitPrice("");
     setQuantity("");
     setSaleValue("");
-    setPaymentMethod(""); // Reset payment method
     setShowProductDropdown(false);
   }, [productType]);
 
@@ -831,57 +819,6 @@ const SalesDashboard = ({
       setSaleValue("");
     }
   }, [unitPrice, quantity, productType]);
-
-  // Function to handle launching a sale to cash
-  const handleLaunchToCash = async (saleId: string, saleName: string) => {
-    console.log('🔥 [handleLaunchToCash] called with:', { saleId, saleName });
-
-    // Find the sale from cashFlowEntries
-    const sale = cashFlowEntries.find(entry => entry.id === saleId);
-
-    if (!sale) {
-      alert('Erro: Venda não encontrada para lançar no caixa.');
-      return;
-    }
-
-    // Extract the real value from the sale
-    const realValue = extractRealValueFromSale(sale);
-    
-    console.log('💰 [handleLaunchToCash] Valores:', {
-      currentAmount: sale.amount,
-      realValue: realValue,
-      saleName: saleName
-    });
-
-    // Confirm the action with the real value shown
-    if (!confirm(`Tem certeza que deseja lançar a venda "${saleName}" no caixa?\n\nValor que será lançado: ${formatCurrency(realValue)}`)) {
-      return;
-    }
-
-    try {
-      // Update the cash flow entry: change category from 'venda_a_prazo' to 'venda' and set the real amount
-      await updateCashFlowEntry(saleId, {
-        ...sale,
-        category: 'venda',
-        amount: realValue, // Use the actual real value
-        description: sale.description?.replace(/VENDA_A_PRAZO: true/, 'VENDA_A_PRAZO: false').replace(/À Prazo/g, 'Dinheiro') || sale.description, // Mark as no longer 'a prazo' and change payment method
-      });
-
-      console.log('✅ [handleLaunchToCash] Venda lançada no caixa:', {
-        saleId,
-        previousAmount: sale.amount,
-        newAmount: realValue,
-        category: 'venda'
-      });
-
-      alert(`Venda "${saleName}" lançada no caixa com sucesso!\n\nValor lançado: ${formatCurrency(realValue)}`);
-      onRefresh(); // Trigger a refresh of the data
-    } catch (error) {
-      console.error("Erro ao lançar venda no caixa:", error);
-      alert("Erro ao lançar a venda no caixa. Tente novamente.");
-    }
-  };
-
 
   // Handle sale/warranty confirmation
   const handleConfirmSale = async () => {
@@ -909,8 +846,7 @@ const SalesDashboard = ({
         !saleValue ||
         parseFloat(unitPrice) <= 0 ||
         parseFloat(quantity) <= 0 ||
-        parseFloat(saleValue) <= 0 ||
-        !paymentMethod // Added validation for payment method
+        parseFloat(saleValue) <= 0
       ) {
         alert("Por favor, preencha todos os campos corretamente.");
         return;
@@ -1032,7 +968,7 @@ const SalesDashboard = ({
         setQuantity("");
         setSaleValue("");
         setProductType("final");
-        setPaymentMethod(""); // Reset payment method
+        setPaymentMethod("DINHEIRO");
 
         alert(
           `Garantia registrada com sucesso!\n\n` +
@@ -1046,38 +982,51 @@ const SalesDashboard = ({
             `📊 Garantia registrada no histórico de perdas\n` +
             `👤 Total de garantias do cliente: ${currentWarrantyCount + 1}`,
         );
+        
+        // Auto refresh to reload data and prepare for next warranty
+        onRefresh();
       } else {
         // Handle regular sale process
         if (productType === "final" && product) {
           // Final product sale - ALWAYS mark with TIPO_PRODUTO: final
-          // Only register in cash flow if payment method is NOT "installment" (À Prazo)
-          if (paymentMethod !== "installment") {
+          // WORKAROUND: Add +1 day to compensate Supabase UTC conversion
+          const today = new Date();
+          const tomorrow = new Date(today);
+          tomorrow.setDate(today.getDate() + 1);
+          const todayLocal = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, "0")}-${String(tomorrow.getDate()).padStart(2, "0")}`;
+          console.log("🗓️ [SALES DEBUG] Registrando venda produto final:", {
+            originalDate: `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`,
+            dateUsed: todayLocal,
+            note: "WORKAROUND: Adding +1 day to compensate Supabase UTC conversion"
+          });
+          
+          // Only register in cash flow if not a credit sale
+          if (paymentMethod !== "A PRAZO") {
             await addCashFlowEntry({
               type: "income",
               category: "venda",
               reference_name: `Venda para ${customer.name} - ${product.item_name}`,
               amount: parseFloat(saleValue),
-              description: `TIPO_PRODUTO: final | Vendedor: ${salesperson.name} | Produto: ${product.item_name} | Qtd: ${quantity} ${product.unit} | Preço Unit: ${formatCurrency(parseFloat(unitPrice))} | Pagamento: ${(() => {
-                switch (paymentMethod) {
-                  case "cash": return "Dinheiro";
-                  case "card": return "Cartão";
-                  case "pix": return "PIX";
-                  case "installment": return "À Prazo";
-                  default: return "À Vista";
-                }
-              })()} | ID_Produto: ${product.id}`,
-              transaction_date: new Date().toISOString().split("T")[0],
+              description: `TIPO_PRODUTO: final | Vendedor: ${salesperson.name} | Produto: ${product.item_name} | Qtd: ${quantity} ${product.unit} | Preço Unit: ${formatCurrency(parseFloat(unitPrice))} | Método: ${paymentMethod} | ID_Produto: ${product.id}`,
+              transaction_date: todayLocal,
             });
           } else {
-            // For installment sales, we still create a record but with a special marker for tracking
-            // This allows the sale to appear in sales history but not affect cash flow balance
+            // For credit sales, create a pending sale entry that will be added to cash flow when payment is received
             await addCashFlowEntry({
               type: "income",
-              category: "venda_a_prazo", // Different category to distinguish from cash sales
-              reference_name: `Venda À Prazo para ${customer.name} - ${product.item_name}`,
-              amount: 0, // Zero amount to not affect cash flow balance
-              description: `TIPO_PRODUTO: final | VENDA_A_PRAZO: true | Valor_Real: ${parseFloat(saleValue)} | Vendedor: ${salesperson.name} | Produto: ${product.item_name} | Qtd: ${quantity} ${product.unit} | Preço Unit: ${formatCurrency(parseFloat(unitPrice))} | Pagamento: À Prazo | ID_Produto: ${product.id}`,
-              transaction_date: new Date().toISOString().split("T")[0],
+              category: "venda_prazo",
+              reference_name: `[PENDENTE] Venda para ${customer.name} - ${product.item_name}`,
+              amount: 0,
+              description: `TIPO_PRODUTO: final | Vendedor: ${salesperson.name} | Produto: ${product.item_name} | Qtd: ${quantity} ${product.unit} | Preço Unit: ${formatCurrency(parseFloat(unitPrice))} | Método: A PRAZO | ID_Produto: ${product.id} | Valor_Original: ${saleValue} | Status: PENDENTE`,
+              transaction_date: todayLocal,
+            });
+            
+            console.log(`💳 [CREDIT SALE] Venda a prazo registrada como pendente:`, {
+              customer: customer.name,
+              product: product.item_name,
+              value: parseFloat(saleValue),
+              paymentMethod: "A PRAZO",
+              status: "PENDENTE"
             });
           }
 
@@ -1104,33 +1053,44 @@ const SalesDashboard = ({
           );
         } else if (productType === "resale" && resaleProduct) {
           // Resale product sale - ALWAYS mark with TIPO_PRODUTO: revenda
-          // Only register in cash flow if payment method is NOT "installment" (À Prazo)
-          if (paymentMethod !== "installment") {
+          // WORKAROUND: Add +1 day to compensate Supabase UTC conversion
+          const today = new Date();
+          const tomorrow = new Date(today);
+          tomorrow.setDate(today.getDate() + 1);
+          const todayLocal = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, "0")}-${String(tomorrow.getDate()).padStart(2, "0")}`;
+          console.log("🗓️ [SALES DEBUG] Registrando venda produto revenda:", {
+            originalDate: `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`,
+            dateUsed: todayLocal,
+            note: "WORKAROUND: Adding +1 day to compensate Supabase UTC conversion"
+          });
+          
+          // Only register in cash flow if not a credit sale
+          if (paymentMethod !== "A PRAZO") {
             await addCashFlowEntry({
               type: "income",
               category: "venda",
               reference_name: `Venda para ${customer.name} - ${resaleProduct.name}`,
               amount: parseFloat(saleValue),
-              description: `TIPO_PRODUTO: revenda | Vendedor: ${salesperson.name} | Produto: ${resaleProduct.name} | Qtd: ${quantity} ${resaleProduct.unit} | Preço Unit: ${formatCurrency(parseFloat(unitPrice))} | Pagamento: ${(() => {
-                switch (paymentMethod) {
-                  case "cash": return "Dinheiro";
-                  case "card": return "Cartão";
-                  case "pix": return "PIX";
-                  case "installment": return "À Prazo";
-                  default: return "À Vista";
-                }
-              })()} | ID_Produto: ${resaleProduct.id}`,
-              transaction_date: new Date().toISOString().split("T")[0],
+              description: `TIPO_PRODUTO: revenda | Vendedor: ${salesperson.name} | Produto: ${resaleProduct.name} | Qtd: ${quantity} ${resaleProduct.unit} | Preço Unit: ${formatCurrency(parseFloat(unitPrice))} | Método: ${paymentMethod} | ID_Produto: ${resaleProduct.id}`,
+              transaction_date: todayLocal,
             });
           } else {
-            // For installment sales, we still create a record but with a special marker for tracking
+            // For credit sales, create a pending sale entry that will be added to cash flow when payment is received
             await addCashFlowEntry({
               type: "income",
-              category: "venda_a_prazo", // Different category to distinguish from cash sales
-              reference_name: `Venda À Prazo para ${customer.name} - ${resaleProduct.name}`,
-              amount: 0, // Zero amount to not affect cash flow balance
-              description: `TIPO_PRODUTO: revenda | VENDA_A_PRAZO: true | Valor_Real: ${parseFloat(saleValue)} | Vendedor: ${salesperson.name} | Produto: ${resaleProduct.name} | Qtd: ${quantity} ${resaleProduct.unit} | Preço Unit: ${formatCurrency(parseFloat(unitPrice))} | Pagamento: À Prazo | ID_Produto: ${resaleProduct.id}`,
-              transaction_date: new Date().toISOString().split("T")[0],
+              category: "venda_prazo",
+              reference_name: `[PENDENTE] Venda para ${customer.name} - ${resaleProduct.name}`,
+              amount: 0,
+              description: `TIPO_PRODUTO: revenda | Vendedor: ${salesperson.name} | Produto: ${resaleProduct.name} | Qtd: ${quantity} ${resaleProduct.unit} | Preço Unit: ${formatCurrency(parseFloat(unitPrice))} | Método: A PRAZO | ID_Produto: ${resaleProduct.id} | Valor_Original: ${saleValue} | Status: PENDENTE`,
+              transaction_date: todayLocal,
+            });
+            
+            console.log(`💳 [CREDIT SALE] Venda a prazo registrada como pendente:`, {
+              customer: customer.name,
+              product: resaleProduct.name,
+              value: parseFloat(saleValue),
+              paymentMethod: "A PRAZO",
+              status: "PENDENTE"
             });
           }
 
@@ -1169,15 +1129,8 @@ const SalesDashboard = ({
           }
         }
 
-        // Reset form
-        setSelectedSalesperson("");
-        setSelectedCustomer("");
-        setSelectedProduct("");
-        setUnitPrice("");
-        setQuantity("");
-        setSaleValue("");
-        setProductType("final");
-        setPaymentMethod(""); // Reset payment method
+        // Reset form completely for continuous sales
+        resetFormForContinuousSales();
 
         const productName =
           productType === "final" ? product?.item_name : resaleProduct?.name;
@@ -1197,6 +1150,9 @@ const SalesDashboard = ({
             `Vendedor: ${salesperson.name}\n\n` +
             `📦 Estoque atualizado automaticamente`,
         );
+        
+        // Auto refresh to reload data and prepare for next sale
+        onRefresh();
       }
     } catch (error) {
       console.error(
@@ -1211,7 +1167,189 @@ const SalesDashboard = ({
     }
   };
 
+  // Handle multi-product sale confirmation
+  const handleMultiProductSale = async () => {
+    // Validation for multi-product sale
+    if (!selectedSalesperson || !selectedCustomer || productCart.length === 0) {
+      alert("Por favor, preencha todos os campos e adicione produtos ao carrinho.");
+      return;
+    }
 
+    const customer = activeCustomers.find((c) => c.id === selectedCustomer);
+    const salesperson = activeSalespeople.find((s) => s.id === selectedSalesperson);
+
+    if (!customer || !salesperson) {
+      alert("Erro: Dados não encontrados.");
+      return;
+    }
+
+    setIsProcessingSale(true);
+
+    try {
+      // Process each product in the cart
+      for (const cartItem of productCart) {
+        // WORKAROUND: Add +1 day to compensate Supabase UTC conversion
+        const today = new Date();
+        const tomorrow = new Date(today);
+        tomorrow.setDate(today.getDate() + 1);
+        const todayLocal = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, "0")}-${String(tomorrow.getDate()).padStart(2, "0")}`;
+        
+        console.log("🗓️ [MULTI-PRODUCT SALE DEBUG] Registrando venda multi-produto:", {
+          originalDate: `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`,
+          dateUsed: todayLocal,
+          paymentMethod: paymentMethod,
+          cartItem: cartItem.name,
+          note: "WORKAROUND: Adding +1 day to compensate Supabase UTC conversion"
+        });
+
+        // Record transaction with payment method - apply credit sale logic
+        if (paymentMethod !== "A PRAZO") {
+          await addCashFlowEntry({
+            type: "income",
+            category: "venda",
+            reference_name: `Venda Multi-Produto para ${customer.name} - ${cartItem.name}`,
+            amount: cartItem.totalPrice,
+            description: `TIPO_PRODUTO: ${cartItem.type === 'resale' ? 'revenda' : cartItem.type} | Vendedor: ${salesperson.name} | Produto: ${cartItem.name} | Qtd: ${cartItem.quantity} unidades | Preço Unit: ${formatCurrency(cartItem.unitPrice)} | Método: ${paymentMethod} | ID_Produto: ${cartItem.originalProductId}`,
+            transaction_date: todayLocal,
+          });
+        } else {
+          // For credit sales, create a pending sale entry that will be added to cash flow when payment is received
+          await addCashFlowEntry({
+            type: "income",
+            category: "venda_prazo",
+            reference_name: `[PENDENTE] Venda Multi-Produto para ${customer.name} - ${cartItem.name}`,
+            amount: 0,
+            description: `TIPO_PRODUTO: ${cartItem.type === 'resale' ? 'revenda' : cartItem.type} | Vendedor: ${salesperson.name} | Produto: ${cartItem.name} | Qtd: ${cartItem.quantity} unidades | Preço Unit: ${formatCurrency(cartItem.unitPrice)} | Método: A PRAZO | ID_Produto: ${cartItem.originalProductId} | Valor_Original: ${cartItem.totalPrice} | Status: PENDENTE`,
+            transaction_date: todayLocal,
+          });
+          
+          console.log(`💳 [CREDIT SALE - MULTI] Venda multi-produto a prazo registrada como pendente:`, {
+            customer: customer.name,
+            product: cartItem.name,
+            originalValue: cartItem.totalPrice,
+            method: paymentMethod
+          });
+        }
+
+        // Update stock based on product type
+        if (cartItem.type === 'final') {
+          const product = availableProducts.find((p) => p.id === cartItem.originalProductId);
+          if (product) {
+            const newQuantity = product.quantity - cartItem.quantity;
+            const newTotalValue = newQuantity * product.unit_cost;
+
+            await updateStockItem(product.id, {
+              quantity: newQuantity,
+              total_value: newTotalValue,
+              last_updated: new Date().toISOString(),
+            });
+          }
+        } else if (cartItem.type === 'resale') {
+          const stockItem = stockItems.find(
+            (item) => item.item_id === cartItem.originalProductId && item.item_type === "product"
+          );
+          if (stockItem) {
+            const newQuantity = stockItem.quantity - cartItem.quantity;
+            const newTotalValue = newQuantity * stockItem.unit_cost;
+
+            await updateStockItem(stockItem.id, {
+              quantity: newQuantity,
+              total_value: newTotalValue,
+              last_updated: new Date().toISOString(),
+            });
+          }
+        }
+      }
+
+      // Store values before reset for alert message
+      const totalValue = productCart.reduce((sum, item) => sum + item.totalPrice, 0);
+      const totalItems = productCart.length;
+
+      // Reset form and cart completely for continuous sales
+      resetFormForContinuousSales();
+
+      alert(
+        `Venda Multi-Produto registrada com sucesso!\n\n` +
+          `Cliente: ${customer.name}\n` +
+          `Vendedor: ${salesperson.name}\n` +
+          `Método de Pagamento: ${paymentMethod}\n` +
+          `Total de Itens: ${totalItems}\n` +
+          `Valor Total: ${formatCurrency(totalValue)}\n\n` +
+          `📦 Estoque atualizado automaticamente`
+      );
+
+      // Auto refresh to reload data
+      onRefresh();
+    } catch (error) {
+      console.error("Erro ao registrar venda multi-produto:", error);
+      alert("Erro ao processar venda. Tente novamente.");
+    } finally {
+      setIsProcessingSale(false);
+    }
+  };
+
+  // Extract product info from sale description
+  const extractProductInfoFromSale = (description: string) => {
+    const productIdMatch = description.match(/ID_Produto: ([^|]+)/);
+    const quantityMatch = description.match(/Qtd: ([0-9.]+)(?:\s|$)/);
+    
+    if (productIdMatch && quantityMatch) {
+      return {
+        productId: productIdMatch[1].trim(),
+        quantity: parseFloat(quantityMatch[1]),
+      };
+    }
+    
+    return null;
+  };
+
+  // Extract original value from credit sale description
+  const extractOriginalValueFromSale = (description: string) => {
+    const originalValueMatch = description.match(/Valor_Original: ([0-9.]+)/);
+    return originalValueMatch ? parseFloat(originalValueMatch[1]) : null;
+  };
+
+  // Get display amount for sales history (shows original value for credit sales)
+  const getDisplayAmount = (sale: any) => {
+    // If it's a credit sale (venda_prazo), show the original value
+    if (sale.category === "venda_prazo" && sale.description) {
+      const originalValue = extractOriginalValueFromSale(sale.description);
+      return originalValue || sale.amount;
+    }
+    // For regular sales, show the actual amount
+    return sale.amount;
+  };
+
+  // Check if sale is a credit sale (A PRAZO) and still pending
+  const isCreditSale = (description: string) => {
+    return description.includes("Método: A PRAZO") && description.includes("Status: PENDENTE");
+  };
+
+  // Handle credit sale payment confirmation
+  const handleConfirmCreditPayment = async (saleId: string, saleName: string, originalValue: number) => {
+    if (confirm(`Confirmar recebimento do pagamento a prazo?\n\nVenda: ${saleName}\nValor: ${formatCurrency(originalValue)}\n\nIsso irá adicionar o valor ao fluxo de caixa.`)) {
+      try {
+        // Find the sale to update
+        const sale = cashFlowEntries.find((entry) => entry.id === saleId);
+        
+        if (sale) {
+          // Update the cash flow entry with the original value and change status
+          await updateCashFlowEntry(saleId, {
+            amount: originalValue,
+            category: "venda", // Change from venda_prazo to venda
+            reference_name: sale.reference_name.replace("[PENDENTE] ", ""),
+            description: sale.description?.replace("Status: PENDENTE", "Status: PAGO")
+          });
+          
+          alert(`Pagamento confirmado com sucesso!\n\nValor de ${formatCurrency(originalValue)} adicionado ao fluxo de caixa.`);
+          onRefresh();
+        }
+      } catch (error) {
+        console.error("Erro ao confirmar pagamento:", error);
+        alert("Erro ao confirmar o pagamento. Tente novamente.");
+      }
+    }
+  };
 
   // Test function to verify onClick works
   const testClick = () => {
@@ -1219,122 +1357,196 @@ const SalesDashboard = ({
     console.log('🔥 TEST: Button click detected!');
   };
 
+  // Complete form reset for continuous sales flow
+  const resetFormForContinuousSales = () => {
+    // Reset main form fields
+    setSelectedSalesperson("");
+    setSelectedCustomer("");
+    setSelectedProduct("");
+    setUnitPrice("");
+    setQuantity("");
+    setSaleValue("");
+    setProductType("final");
+    setPaymentMethod("DINHEIRO");
+    
+    // Reset autocomplete search fields and dropdowns for smooth continuous flow
+    setSalespersonSearch("");
+    setCustomerSearch("");
+    setProductSearch("");
+    setShowSalespersonDropdown(false);
+    setShowCustomerDropdown(false);
+    setShowProductDropdown(false);
+    
+    // Reset multi-product cart
+    setProductCart([]);
+    
+    console.log('✅ [CONTINUOUS SALES] Formulário resetado para próxima venda');
+  };
+
   // Handle delete sale
   const handleDeleteSale = async (saleId: string, saleName: string) => {
-    console.log('🔥 [handleDeleteSale] called with:', { saleId, saleName });
-
-    // Temporarily removing confirm dialog for testing
-    console.log('🔥 [handleDeleteSale] Skipping confirmation dialog for testing');
-
-    if (true) { // Always proceed for testing
-      console.log('🔥 [handleDeleteSale] User confirmed deletion, proceeding...');
+    console.log('🔥 [DELETE SALE] Iniciando exclusão:', { saleId, saleName });
+    
+    if (confirm(`Tem certeza que deseja excluir a venda: ${saleName}?\n\nEsta ação irá devolver os produtos ao estoque.`)) {
+      let stockRestored = false;
+      
       try {
-        console.log('🔥 [handleDeleteSale] Starting deletion process...');
+        console.log('🔥 [DELETE SALE] Usuário confirmou, iniciando processo...');
+        
         // Find the sale to get product information
         const sale = cashFlowEntries.find((entry) => entry.id === saleId);
-        console.log('🔥 [handleDeleteSale] Found sale:', sale);
+        console.log('🔥 [DELETE SALE] Venda encontrada:', sale);
 
         if (sale && sale.description) {
+          console.log('🔥 [DELETE SALE] Descrição da venda:', sale.description);
+          
           // Extract product info from sale description
           const productInfo = extractProductInfoFromSale(sale.description);
+          console.log('🔥 [DELETE SALE] Info do produto extraída:', productInfo);
 
           // Check if it's a resale product or final product
-          const isResaleProduct = sale.description.includes(
-            "TIPO_PRODUTO: revenda",
-          );
+          const isResaleProduct = sale.description.includes("TIPO_PRODUTO: revenda");
+          const isFinalProduct = sale.description.includes("TIPO_PRODUTO: final");
+          
+          console.log('🔥 [DELETE SALE] Tipo de produto:', { isResaleProduct, isFinalProduct });
 
           if (productInfo) {
-            if (isResaleProduct) {
-              // Handle resale product stock restoration in stock_items table
-              const stockItem = stockItems.find(
-                (item) =>
-                  item.item_id === productInfo.productId &&
-                  item.item_type === "product",
-              );
+            console.log('🔥 [DELETE SALE] Produto ID para buscar:', productInfo.productId);
+            console.log('🔥 [DELETE SALE] Quantidade para retornar:', productInfo.quantity);
+            
+            // FIRST: Try to restore stock before deleting the transaction
+            try {
+              if (isResaleProduct) {
+                console.log('🔥 [DELETE SALE] Processando produto de revenda...');
+                // Handle resale product stock restoration in stock_items table
+                const stockItem = stockItems.find(
+                  (item) => {
+                    console.log('🔥 [DELETE SALE] Comparando item:', { 
+                      itemId: item.item_id, 
+                      itemType: item.item_type,
+                      searchingFor: productInfo.productId 
+                    });
+                    return item.item_id === productInfo.productId && item.item_type === "product";
+                  }
+                );
 
-              if (stockItem) {
-                // Return quantity to stock_items
-                const newQuantity = stockItem.quantity + productInfo.quantity;
-                const newTotalValue = newQuantity * stockItem.unit_cost;
+                console.log('🔥 [DELETE SALE] Item de estoque encontrado (revenda):', stockItem);
 
-                await updateStockItem(stockItem.id, {
-                  quantity: newQuantity,
-                  total_value: newTotalValue,
-                  last_updated: new Date().toISOString(),
-                });
+                if (stockItem) {
+                  // Return quantity to stock_items
+                  const newQuantity = stockItem.quantity + productInfo.quantity;
+                  const newTotalValue = newQuantity * stockItem.unit_cost;
 
-                console.log(
-                  `✅ [SalesDashboard] Estoque de produto de revenda restaurado:`,
-                  {
-                    productId: productInfo.productId,
+                  console.log('🔥 [DELETE SALE] Atualizando estoque revenda:', {
                     stockItemId: stockItem.id,
                     previousQuantity: stockItem.quantity,
                     returnedQuantity: productInfo.quantity,
                     newQuantity: newQuantity,
                     newTotalValue: newTotalValue,
-                  },
+                  });
+
+                  await updateStockItem(stockItem.id, {
+                    quantity: newQuantity,
+                    total_value: newTotalValue,
+                    last_updated: new Date().toISOString(),
+                  });
+
+                  console.log('✅ [DELETE SALE] Estoque de produto de revenda restaurado com sucesso!');
+                  stockRestored = true;
+                } else {
+                  console.error('❌ [DELETE SALE] Item de estoque não encontrado para produto de revenda:', productInfo.productId);
+                  console.log('🔥 [DELETE SALE] Itens disponíveis no estoque:', stockItems.map(item => ({
+                    id: item.item_id,
+                    name: item.item_name,
+                    type: item.item_type
+                  })));
+                }
+              } else if (isFinalProduct) {
+                console.log('🔥 [DELETE SALE] Processando produto final...');
+                // Handle final product stock restoration
+                const stockItem = stockItems.find(
+                  (item) => {
+                    console.log('🔥 [DELETE SALE] Comparando item final:', { 
+                      itemId: item.id, 
+                      itemName: item.item_name,
+                      searchingFor: productInfo.productId 
+                    });
+                    return item.id === productInfo.productId;
+                  }
                 );
-              } else {
-                console.warn(
-                  `⚠️ [SalesDashboard] Item de estoque não encontrado para produto de revenda:`,
-                  productInfo.productId,
-                );
-              }
-            } else {
-              // Handle final product stock restoration
-              const stockItem = stockItems.find(
-                (item) => item.id === productInfo.productId,
-              );
 
-              if (stockItem) {
-                // Return quantity to stock
-                const newQuantity = stockItem.quantity + productInfo.quantity;
-                const newTotalValue = newQuantity * stockItem.unit_cost;
+                console.log('🔥 [DELETE SALE] Item de estoque encontrado (final):', stockItem);
 
-                await updateStockItem(stockItem.id, {
-                  quantity: newQuantity,
-                  total_value: newTotalValue,
-                  last_updated: new Date().toISOString(),
-                });
+                if (stockItem) {
+                  // Return quantity to stock
+                  const newQuantity = stockItem.quantity + productInfo.quantity;
+                  const newTotalValue = newQuantity * stockItem.unit_cost;
 
-                console.log(
-                  `✅ [SalesDashboard] Estoque de produto final restaurado:`,
-                  {
-                    productId: stockItem.id,
-                    productName: stockItem.item_name,
+                  console.log('🔥 [DELETE SALE] Atualizando estoque final:', {
+                    stockItemId: stockItem.id,
                     previousQuantity: stockItem.quantity,
                     returnedQuantity: productInfo.quantity,
                     newQuantity: newQuantity,
                     newTotalValue: newTotalValue,
-                  },
-                );
-              } else {
-                console.warn(
-                  `⚠️ [SalesDashboard] Produto final não encontrado no estoque:`,
-                  productInfo.productId,
-                );
+                  });
+
+                  await updateStockItem(stockItem.id, {
+                    quantity: newQuantity,
+                    total_value: newTotalValue,
+                    last_updated: new Date().toISOString(),
+                  });
+
+                  console.log('✅ [DELETE SALE] Estoque de produto final restaurado com sucesso!');
+                  stockRestored = true;
+                } else {
+                  console.error('❌ [DELETE SALE] Produto final não encontrado no estoque:', productInfo.productId);
+                  console.log('🔥 [DELETE SALE] Produtos finais disponíveis:', stockItems.filter(item => item.item_type === 'product').map(item => ({
+                    id: item.id,
+                    name: item.item_name,
+                    quantity: item.quantity
+                  })));
+                }
               }
+            } catch (stockError) {
+              console.error('❌ [DELETE SALE] Erro ao restaurar estoque:', stockError);
+              alert(`Erro ao restaurar estoque: ${stockError.message || stockError}\n\nA venda NÃO foi excluída para manter integridade dos dados.`);
+              return; // Don't proceed with deletion if stock restoration fails
             }
           } else {
-            console.warn(
-              `⚠️ [SalesDashboard] Não foi possível extrair informações do produto da venda`,
-            );
+            console.error('❌ [DELETE SALE] Não foi possível extrair informações do produto da venda');
+            console.log('🔥 [DELETE SALE] Descrição completa:', sale.description);
           }
+        } else {
+          console.error('❌ [DELETE SALE] Venda não encontrada ou sem descrição');
         }
 
-        // Delete the sale from cash flow
-        console.log('🔥 [handleDeleteSale] About to call deleteCashFlowEntry with saleId:', saleId);
-        await deleteCashFlowEntry(saleId);
-        console.log('🔥 [handleDeleteSale] deleteCashFlowEntry completed successfully');
+        // SECOND: Only delete from cash flow if stock was restored successfully
+        console.log('🔥 [DELETE SALE] Deletando entrada do fluxo de caixa...');
+        try {
+          await deleteCashFlowEntry(saleId);
+          console.log('✅ [DELETE SALE] Entrada do fluxo de caixa deletada com sucesso!');
+        } catch (deleteError) {
+          console.error("❌ [DELETE SALE] Erro específico ao deletar do fluxo de caixa:", deleteError);
+          
+          // If stock was restored but cash flow deletion failed, we have a problem
+          if (stockRestored) {
+            alert(`ATENÇÃO: O estoque foi restaurado, mas houve erro ao deletar a transação do fluxo de caixa.\n\nErro: ${deleteError.message || deleteError}\n\nContate o suporte técnico.`);
+          } else {
+            alert(`Erro ao deletar a transação: ${deleteError.message || deleteError}\n\nNenhuma alteração foi feita.`);
+          }
+          return;
+        }
 
         alert(
           `Venda excluída com sucesso!\n\n` +
             `📦 Os produtos foram devolvidos ao estoque automaticamente.`,
         );
-        onRefresh(); // Trigger a refresh of the data
+        
+        // Refresh data to update UI
+        onRefresh();
       } catch (error) {
-        console.error("Erro ao excluir venda:", error);
-        alert("Erro ao excluir a venda. Tente novamente.");
+        console.error("❌ [DELETE SALE] Erro geral ao excluir venda:", error);
+        alert(`Erro ao excluir a venda: ${error.message || error}\n\nVerifique o console para mais detalhes.`);
       }
     }
   };
@@ -1346,7 +1558,6 @@ const SalesDashboard = ({
     setSalesHistoryDateType("all");
     setSalesHistoryStartDate("");
     setSalesHistoryEndDate("");
-    setSalesHistoryPaymentFilter("all"); // Clear payment filter
   };
 
   // Clear resale filters
@@ -1356,7 +1567,6 @@ const SalesDashboard = ({
     setResaleSalesHistoryDateType("all");
     setResaleSalesHistoryStartDate("");
     setResaleSalesHistoryEndDate("");
-    setResaleSalesHistoryPaymentFilter("all"); // Clear payment filter
   };
 
   // Clear warranty filters
@@ -1374,8 +1584,7 @@ const SalesDashboard = ({
     salesHistoryDateType !== "all" ||
     salesHistoryDateFilter ||
     salesHistoryStartDate ||
-    salesHistoryEndDate ||
-    salesHistoryPaymentFilter !== "all"; // Include payment filter
+    salesHistoryEndDate;
 
   // Check if any resale filter is active
   const hasActiveResaleFilters =
@@ -1383,8 +1592,7 @@ const SalesDashboard = ({
     resaleSalesHistoryDateType !== "all" ||
     resaleSalesHistoryDateFilter ||
     resaleSalesHistoryStartDate ||
-    resaleSalesHistoryEndDate ||
-    resaleSalesHistoryPaymentFilter !== "all"; // Include payment filter
+    resaleSalesHistoryEndDate;
 
   // Check if any warranty filter is active
   const hasActiveWarrantyFilters =
@@ -1478,7 +1686,6 @@ const SalesDashboard = ({
             `📦 Os produtos foram devolvidos ao estoque automaticamente.\n` +
             `👤 Contador de garantias do cliente foi atualizado.`,
         );
-        onRefresh(); // Trigger a refresh of the data
       } catch (error) {
         console.error("Erro ao excluir garantia:", error);
         alert("Erro ao excluir a garantia. Tente novamente.");
@@ -1494,7 +1701,28 @@ const SalesDashboard = ({
 
     const productSalesMap = new Map();
 
-    finalProductSalesHistory.forEach((sale) => {
+    // Filter out credit sales that are still pending (not yet recorded in finance)
+    const filteredSalesHistory = finalProductSalesHistory.filter((sale) => {
+      // Exclude credit sales that are still pending
+      if (sale.category === "venda_prazo" && sale.description && isCreditSale(sale.description)) {
+        console.log("🚫 [CHART FILTER] Excluindo venda a prazo pendente do gráfico:", {
+          saleId: sale.id,
+          referenceName: sale.reference_name,
+          amount: sale.amount,
+          category: sale.category
+        });
+        return false; // Exclude from chart
+      }
+      return true; // Include in chart
+    });
+
+    console.log("📊 [CHART FILTER] Vendas filtradas para o gráfico:", {
+      totalSales: finalProductSalesHistory.length,
+      filteredSales: filteredSalesHistory.length,
+      excludedCreditSales: finalProductSalesHistory.length - filteredSalesHistory.length
+    });
+
+    filteredSalesHistory.forEach((sale) => {
       const productInfo = extractProductInfoFromSale(sale.description || "");
 
       if (productInfo && productInfo.productId) {
@@ -1519,7 +1747,9 @@ const SalesDashboard = ({
         const productData = productSalesMap.get(productName);
         productData.totalSales += 1;
         productData.totalQuantity += productInfo.quantity;
-        productData.totalValue += sale.amount;
+        // For credit sales that were paid, use the original value for chart calculation
+        const saleValue = sale.category === "venda_prazo" ? getDisplayAmount(sale) : sale.amount;
+        productData.totalValue += saleValue;
         productData.salesCount += 1;
       }
     });
@@ -1547,7 +1777,28 @@ const SalesDashboard = ({
 
     const productSalesMap = new Map();
 
-    resaleProductSalesHistory.forEach((sale) => {
+    // Filter out credit sales that are still pending (not yet recorded in finance)
+    const filteredResaleSalesHistory = resaleProductSalesHistory.filter((sale) => {
+      // Exclude credit sales that are still pending
+      if (sale.category === "venda_prazo" && sale.description && isCreditSale(sale.description)) {
+        console.log("🚫 [RESALE CHART FILTER] Excluindo venda a prazo pendente do gráfico:", {
+          saleId: sale.id,
+          referenceName: sale.reference_name,
+          amount: sale.amount,
+          category: sale.category
+        });
+        return false; // Exclude from chart
+      }
+      return true; // Include in chart
+    });
+
+    console.log("📊 [RESALE CHART FILTER] Vendas de revenda filtradas para o gráfico:", {
+      totalSales: resaleProductSalesHistory.length,
+      filteredSales: filteredResaleSalesHistory.length,
+      excludedCreditSales: resaleProductSalesHistory.length - filteredResaleSalesHistory.length
+    });
+
+    filteredResaleSalesHistory.forEach((sale) => {
       const productInfo = extractProductInfoFromSale(sale.description || "");
 
       if (productInfo && productInfo.productId) {
@@ -1572,7 +1823,9 @@ const SalesDashboard = ({
         const productData = productSalesMap.get(productName);
         productData.totalSales += 1;
         productData.totalQuantity += productInfo.quantity;
-        productData.totalValue += sale.amount;
+        // For credit sales that were paid, use the original value for chart calculation
+        const saleValue = sale.category === "venda_prazo" ? getDisplayAmount(sale) : sale.amount;
+        productData.totalValue += saleValue;
         productData.salesCount += 1;
       }
     });
@@ -1599,7 +1852,7 @@ const SalesDashboard = ({
   const finalProductSalesMetrics = useMemo(() => {
     const totalSales = finalProductSalesHistory.length;
     const totalValue = finalProductSalesHistory.reduce(
-      (sum, sale) => sum + extractRealValueFromSale(sale),
+      (sum, sale) => sum + sale.amount,
       0,
     );
     const totalQuantity = finalProductSalesHistory.reduce((total, sale) => {
@@ -1618,7 +1871,7 @@ const SalesDashboard = ({
   const resaleProductSalesMetrics = useMemo(() => {
     const totalSales = resaleProductSalesHistory.length;
     const totalValue = resaleProductSalesHistory.reduce(
-      (sum, sale) => sum + extractRealValueFromSale(sale),
+      (sum, sale) => sum + sale.amount,
       0,
     );
     const totalQuantity = resaleProductSalesHistory.reduce((total, sale) => {
@@ -1633,6 +1886,7 @@ const SalesDashboard = ({
     };
   }, [resaleProductSalesHistory]);
 
+  // Custom tooltip for the chart
   // Filter functions for autocomplete
   const filteredSalespeople = activeSalespeople.filter((person) =>
     person.name.toLowerCase().includes(salespersonSearch.toLowerCase()),
@@ -1678,6 +1932,28 @@ const SalesDashboard = ({
       setProductSearch(product.name);
     }
     setShowProductDropdown(false);
+
+    // Se o modo multi-produto estiver ativo e não for garantia, adicionar automaticamente à lista de produtos selecionados
+    if (isMultiProductMode && productType !== "warranty") {
+      // Criar um item básico para a lista de produtos selecionados
+      const productName = productType === "final" ? product.item_name : product.name;
+      
+      // Verificar se o produto já está na lista
+      const existingProduct = productCart.find(item => item.originalProductId === product.id);
+      if (!existingProduct) {
+        const newSelectedProduct = {
+          id: Date.now().toString(),
+          name: productName,
+          type: productType as 'final' | 'resale',
+          quantity: 0, // Será preenchido quando o usuário digitar
+          unitPrice: 0, // Será preenchido quando o usuário digitar
+          totalPrice: 0,
+          originalProductId: product.id,
+        };
+
+        setProductCart([...productCart, newSelectedProduct]);
+      }
+    }
   };
 
   const CustomTooltip = ({ active, payload, label }: any) => {
@@ -1710,6 +1986,30 @@ const SalesDashboard = ({
     return null;
   };
 
+  // Remove product from cart
+  const removeProductFromCart = (productId: string) => {
+    setProductCart(productCart.filter(item => item.id !== productId));
+  };
+
+  // Update product in cart (quantity or unit price)
+  const updateProductInCart = (productId: string, field: 'quantity' | 'unitPrice', value: number) => {
+    setProductCart(productCart.map(item => {
+      if (item.id === productId) {
+        const updatedItem = { ...item, [field]: value };
+        // Recalculate total price
+        updatedItem.totalPrice = updatedItem.quantity * updatedItem.unitPrice;
+        return updatedItem;
+      }
+      return item;
+    }));
+  };
+
+  const getTotalCartValue = () => {
+    return productCart.reduce((total, product) => total + product.totalPrice, 0);
+  };
+
+
+
   return (
     <div className="w-full space-y-6 max-w-7xl mx-auto px-4">
       <div className="mb-6">
@@ -1725,7 +2025,9 @@ const SalesDashboard = ({
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
+      <div className="max-w-7xl mx-auto">
+        <div className="grid grid-cols-6 gap-2 mb-6">
+
         <Card className="bg-factory-800/50 border-tire-600/30">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -1788,7 +2090,7 @@ const SalesDashboard = ({
             <div className="flex items-center justify-between">
               <div className="flex-1">
                 <p className="text-tire-300 text-sm font-medium text-center mb-2">Qtd. Vendida (Revenda)</p>
-                <p className="text-2xl font-bold text-neon-cyan text-center">
+                <p className="text-2xl font-bold text-white text-center">
                   {resaleProductSalesHistory
                     .reduce((total, sale) => {
                       const productInfo = extractProductInfoFromSale(
@@ -1799,29 +2101,30 @@ const SalesDashboard = ({
                     .toFixed(0)}
                 </p>
               </div>
-              <div className="text-neon-cyan ml-3">
+              <div className="text-white ml-3">
                 <TrendingUp className="h-8 w-8" />
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="bg-factory-800/50 border-tire-600/30">
+        <Card className="bg-factory-800/50 border-tire-600/30" style={{ borderColor: '#00ff88', borderWidth: '1px', borderStyle: 'solid' }}>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div className="flex-1">
-                <p className="text-tire-300 text-sm font-medium text-center mb-2">Valor a Receber</p>
-                <p className="text-2xl font-bold text-neon-green text-center">
+                <p className="text-tire-300 text-sm font-medium text-center mb-2">A Receber</p>
+                <p className="text-2xl font-bold text-center text-neon-green">
                   {formatCurrency(
-                    // Calcular valor total das vendas à prazo (produtos finais)
-                    finalProductSalesHistory
-                      .filter(sale => sale.category === "venda_a_prazo")
-                      .reduce((total, sale) => total + extractRealValueFromSale(sale), 0) +
-                    // Calcular valor total das vendas à prazo (produtos de revenda)
-                    resaleProductSalesHistory
-                      .filter(sale => sale.category === "venda_a_prazo")
-                      .reduce((total, sale) => total + extractRealValueFromSale(sale), 0)
+                    [...finalProductSalesHistory, ...resaleProductSalesHistory]
+                      .filter(sale => sale.category === "venda_prazo" && sale.description && isCreditSale(sale.description))
+                      .reduce((total, sale) => {
+                        const originalValue = extractOriginalValueFromSale(sale.description || "");
+                        return total + (originalValue || 0);
+                      }, 0)
                   )}
+                </p>
+                <p className="text-xs text-tire-400 text-center mt-1">
+                  Vendas a Prazo
                 </p>
               </div>
               <div className="text-neon-green ml-3">
@@ -1831,32 +2134,32 @@ const SalesDashboard = ({
           </CardContent>
         </Card>
 
-        <Card className="bg-factory-800/50 border-tire-600/30">
+        <Card style={{ backgroundColor: '#173329', borderColor: '#00ff88', borderWidth: '1px', borderStyle: 'solid' }}>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div className="flex-1">
                 <p className="text-tire-300 text-sm font-medium text-center mb-2">Receita Total</p>
-                <p className="text-2xl font-bold text-neon-orange text-center">
+                <p className="text-2xl font-bold text-center" style={{ color: '#00fa85' }}>
                   {formatCurrency(
-                    finalProductSalesHistory.reduce((total, sale) => total + extractRealValueFromSale(sale), 0) +
-                    resaleProductSalesHistory.reduce((total, sale) => total + extractRealValueFromSale(sale), 0)
+                    finalProductSalesHistory.reduce((total, sale) => total + sale.amount, 0) +
+                    resaleProductSalesHistory.reduce((total, sale) => total + sale.amount, 0)
                   )}
                 </p>
                 <p className="text-xs text-tire-400 text-center mt-1">
                   Final + Revenda
                 </p>
               </div>
-              <div className="text-neon-orange ml-3">
+              <div className="ml-3" style={{ color: '#00fa85' }}>
                 <DollarSign className="h-8 w-8" />
               </div>
             </div>
           </CardContent>
         </Card>
+        </div>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <div className="flex justify-center">
-        <TabsList className="inline-grid w-auto grid-cols-4 gap-2 bg-factory-800/50 border border-tire-600/30 p-1">
+        <TabsList className="grid w-full grid-cols-4 gap-2 rounded-lg bg-factory-800/50 p-1 text-muted-foreground border border-tire-600/30">
           <TabsTrigger
             value="pos"
             className="text-tire-300 data-[state=active]:text-white data-[state=active]:bg-neon-green/20"
@@ -1886,7 +2189,6 @@ const SalesDashboard = ({
             Histórico de Garantias
           </TabsTrigger>
         </TabsList>
-        </div>
 
         <TabsContent value="pos">
           <Card className="bg-factory-900/80 border-tire-600/30 max-w-7xl mx-auto">
@@ -1902,6 +2204,8 @@ const SalesDashboard = ({
               </p>
             </CardHeader>
             <CardContent className="space-y-6 bg-factory-900/60 rounded-lg">
+
+
               {/* Step 1: Vendedor */}
               <div className="space-y-2 relative">
                 <Label className="text-tire-300 font-medium">
@@ -2210,32 +2514,7 @@ const SalesDashboard = ({
                 )}
               </div>
 
-              {/* Step 4: Preço Unitário (only for regular sales) */}
-              {selectedProduct && productType !== "warranty" && (
-                <div className="space-y-2">
-                  <Label
-                    htmlFor="unitPrice"
-                    className="text-tire-300 font-medium"
-                  >
-                    4. Preço Unitário (R$) *
-                  </Label>
-                  <Input
-                    id="unitPrice"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={unitPrice}
-                    onChange={(e) => setUnitPrice(e.target.value)}
-                    className="bg-factory-700/50 border-tire-600/30 text-white h-12 text-lg"
-                    placeholder="Digite o preço por unidade"
-                  />
-                  <p className="text-tire-400 text-sm">
-                    💰 Digite manualmente o valor unitário do produto
-                  </p>
-                </div>
-              )}
-
-              {/* Step 4 Alternative: Warranty Notice */}
+              {/* Step 4: Warranty Notice (only for warranty) */}
               {selectedProduct && productType === "warranty" && (
                 <div className="space-y-2">
                   <Label className="text-tire-300 font-medium">
@@ -2257,14 +2536,14 @@ const SalesDashboard = ({
                 </div>
               )}
 
-              {/* Step 5: Quantidade */}
-              {selectedProduct && (
+              {/* Step 5: Quantidade (only for warranty) */}
+              {selectedProduct && productType === "warranty" && (
                 <div className="space-y-2">
                   <Label
                     htmlFor="quantity"
                     className="text-tire-300 font-medium"
                   >
-                    {productType === "warranty" ? "4" : "5"}. Quantidade *
+                    5. Quantidade *
                   </Label>
                   <Input
                     id="quantity"
@@ -2273,18 +2552,13 @@ const SalesDashboard = ({
                     min="1"
                     value={quantity}
                     onChange={(e) => setQuantity(e.target.value)}
-                    className="bg-factory-700/50 border-tire-600/30 text-white h-12 text-lg"
-                    placeholder={
-                      productType === "warranty"
-                        ? "Quantidade para garantia"
-                        : "Digite a quantidade"
-                    }
+                    onWheel={(e) => e.currentTarget.blur()}
+                    className="bg-factory-700/50 border-tire-600/30 text-white h-12 text-lg [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
+                    placeholder="Quantidade para garantia"
                   />
-                  {productType === "warranty" && (
-                    <p className="text-purple-400 text-sm">
-                      🛡️ Quantidade que será descontada do estoque por garantia
-                    </p>
-                  )}
+                  <p className="text-purple-400 text-sm">
+                    🛡️ Quantidade que será descontada do estoque por garantia
+                  </p>
                 </div>
               )}
 
@@ -2307,7 +2581,8 @@ const SalesDashboard = ({
                         step="0.01"
                         min="0"
                         value={saleValue}
-                        className="bg-factory-700/50 border-tire-600/30 text-white h-12 text-lg pr-20"
+                        onWheel={(e) => e.currentTarget.blur()}
+                        className="bg-factory-700/50 border-tire-600/30 text-white h-12 text-lg pr-20 [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
                         placeholder="Valor calculado automaticamente"
                         readOnly
                       />
@@ -2365,46 +2640,132 @@ const SalesDashboard = ({
                 </div>
               )}
 
-              {/* Payment Method Selection */}
-              {selectedProduct && productType !== "warranty" && (
-                <div className="space-y-2">
-                  <Label className="text-tire-300 font-medium">
-                    {productType === "warranty" ? "5" : "7"}. Forma de Pagamento *
-                  </Label>
-                  <Select
-                    value={paymentMethod}
-                    onValueChange={setPaymentMethod}
-                  >
-                    <SelectTrigger className="bg-factory-700/50 border-tire-600/30 text-white h-12 text-lg">
-                      <SelectValue placeholder="Selecione a forma de pagamento" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-factory-800 border-tire-600/30">
-                      <SelectItem
-                        value="cash"
-                        className="text-white hover:bg-tire-700/50"
-                      >
-                        Dinheiro
-                      </SelectItem>
-                      <SelectItem
-                        value="card"
-                        className="text-white hover:bg-tire-700/50"
-                      >
-                        Cartão
-                      </SelectItem>
-                      <SelectItem
-                        value="pix"
-                        className="text-white hover:bg-tire-700/50"
-                      >
-                        PIX
-                      </SelectItem>
-                      <SelectItem
-                        value="installment"
-                        className="text-white hover:bg-tire-700/50"
-                      >
-                        À Prazo
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
+              {/* Multi-Product Interface - Table Layout */}
+              {isMultiProductMode && productType !== "warranty" && (
+                <div className="p-4 bg-factory-800/50 rounded-lg border border-tire-600/30">
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="text-white font-medium flex items-center gap-2">
+                      <ShoppingCart className="h-4 w-4 text-neon-green" />
+                      Lista de Produtos Multi-Venda
+                    </h4>
+                    <div className="flex items-center gap-2">
+                      {productCart.length > 0 && (
+                        <Button
+                          onClick={() => setProductCart([])}
+                          variant="outline"
+                          className="border-red-600/30 text-red-400 hover:bg-red-600/20"
+                        >
+                          <Trash2 className="h-4 w-4 mr-1" />
+                          Limpar Lista
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Table Layout for Products */}
+                  {productCart.length > 0 ? (
+                    <div className="space-y-3">
+                      {/* Table Header */}
+                      <div className="grid grid-cols-12 gap-2 p-3 bg-factory-700/50 rounded-lg border border-tire-600/30">
+                        <div className="col-span-5 text-tire-300 text-sm font-medium">PRODUTO</div>
+                        <div className="col-span-2 text-tire-300 text-sm font-medium text-center">QUANTIDADE</div>
+                        <div className="col-span-3 text-tire-300 text-sm font-medium text-center">VALOR UNITÁRIO</div>
+                        <div className="col-span-1 text-tire-300 text-sm font-medium text-center">TOTAL</div>
+                        <div className="col-span-1 text-tire-300 text-sm font-medium text-center">AÇÃO</div>
+                      </div>
+
+                      {/* Table Rows */}
+                      <div className="space-y-2 max-h-60 overflow-y-auto">
+                        {productCart.map((item, index) => (
+                          <div key={item.id} className="grid grid-cols-12 gap-2 p-3 bg-factory-700/30 rounded-lg border border-tire-600/20 items-center">
+                            {/* Product Name */}
+                            <div className="col-span-5">
+                              <p className="text-white font-medium text-sm">{item.name}</p>
+                              <p className="text-tire-400 text-xs">
+                                {productType === "final" 
+                                  ? availableProducts.find(p => p.id === item.originalProductId)?.unit
+                                  : availableResaleProducts.find(p => p.id === item.originalProductId)?.unit}
+                              </p>
+                            </div>
+
+                            {/* Quantity Input */}
+                            <div className="col-span-2">
+                              <Input
+                                type="number"
+                                step="1"
+                                min="1"
+                                value={item.quantity || ""}
+                                onChange={(e) => updateProductInCart(item.id, 'quantity', parseFloat(e.target.value) || 0)}
+                                onWheel={(e) => e.currentTarget.blur()}
+                                className="bg-factory-600/50 border-neon-blue/30 text-white h-10 text-center [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
+                                placeholder="0"
+                              />
+                            </div>
+
+                            {/* Unit Price Input */}
+                            <div className="col-span-3">
+                              <Input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={item.unitPrice || ""}
+                                onChange={(e) => updateProductInCart(item.id, 'unitPrice', parseFloat(e.target.value) || 0)}
+                                onWheel={(e) => e.currentTarget.blur()}
+                                className="bg-factory-600/50 border-neon-green/30 text-white h-10 text-center [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
+                                placeholder="0,00"
+                              />
+                            </div>
+
+                            {/* Total */}
+                            <div className="col-span-1 text-center">
+                              <p className="text-neon-green font-bold text-sm">
+                                {formatCurrency(item.totalPrice)}
+                              </p>
+                            </div>
+
+                            {/* Remove Button */}
+                            <div className="col-span-1 text-center">
+                              <Button
+                                onClick={() => removeProductFromCart(item.id)}
+                                variant="outline"
+                                size="sm"
+                                className="border-red-600/30 text-red-400 hover:bg-red-600/20 h-8 w-8 p-0"
+                              >
+                                <X className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-8 text-center">
+                      <ShoppingCart className="h-12 w-12 text-tire-400 mx-auto mb-3" />
+                      <p className="text-tire-400 text-sm">
+                        Selecione produtos acima para adicionar à lista
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Total da Venda - Fora da Interface Multi-Produto */}
+              {isMultiProductMode && productType !== "warranty" && productCart.length > 0 && (
+                <div className="p-4 bg-neon-green/10 rounded-lg border border-neon-green/30">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-neon-green font-medium">Total da Venda Multi-Produto</h4>
+                      <p className="text-tire-300 text-sm">
+                        {productCart.length} {productCart.length === 1 ? 'produto' : 'produtos'} selecionados
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-neon-green font-bold text-3xl">
+                        {formatCurrency(productCart.reduce((sum, item) => sum + item.totalPrice, 0))}
+                      </p>
+                      <p className="text-tire-300 text-xs">Valor Total</p>
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -2415,8 +2776,7 @@ const SalesDashboard = ({
                 selectedProduct &&
                 unitPrice &&
                 quantity &&
-                saleValue &&
-                paymentMethod && (
+                saleValue && (
                   <div className="p-4 bg-neon-green/10 rounded-lg border border-neon-green/30">
                     <h4 className="text-neon-green font-medium mb-3">
                       Resumo da Venda:
@@ -2471,20 +2831,6 @@ const SalesDashboard = ({
                         <span className="text-tire-300">Preço Unitário:</span>
                         <span className="text-white">
                           {formatCurrency(parseFloat(unitPrice))}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-tire-300">Pagamento:</span>
-                        <span className="text-white">
-                          {(() => {
-                            switch (paymentMethod) {
-                              case "cash": return "Dinheiro";
-                              case "card": return "Cartão";
-                              case "pix": return "PIX";
-                              case "installment": return "À Prazo";
-                              default: return "Não especificado";
-                            }
-                          })()}
                         </span>
                       </div>
                       <div className="flex justify-between border-t border-neon-green/30 pt-2">
@@ -2584,22 +2930,42 @@ const SalesDashboard = ({
                   </div>
                 )}
 
+              {/* Payment Method Selection */}
+              {productType !== "warranty" && (
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-white">
+                    Método de Pagamento *
+                  </label>
+                  <select
+                    value={paymentMethod}
+                    onChange={(e) => setPaymentMethod(e.target.value as "DINHEIRO" | "PIX" | "CARTÃO" | "A PRAZO")}
+                    className="w-full px-3 py-2 bg-factory-700/50 border border-tire-600/30 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-neon-blue"
+                  >
+                    <option value="DINHEIRO">💵 DINHEIRO</option>
+                    <option value="PIX">📱 PIX</option>
+                    <option value="CARTÃO">💳 CARTÃO</option>
+                    <option value="A PRAZO">📅 A PRAZO</option>
+                  </select>
+                </div>
+              )}
+
               {/* Confirm Button */}
               <Button
-                onClick={handleConfirmSale}
+                onClick={isMultiProductMode && productType !== "warranty" ? handleMultiProductSale : handleConfirmSale}
                 disabled={
                   isProcessingSale ||
                   !selectedSalesperson ||
                   !selectedCustomer ||
-                  !selectedProduct ||
-                  !quantity ||
-                  parseFloat(quantity) <= 0 ||
-                  (productType !== "warranty" &&
-                    (!unitPrice ||
-                      !saleValue ||
-                      parseFloat(unitPrice) <= 0 ||
-                      parseFloat(saleValue) <= 0 ||
-                      !paymentMethod)) // Check paymentMethod
+                  (isMultiProductMode && productType !== "warranty" 
+                    ? productCart.length === 0
+                    : (!selectedProduct ||
+                       !quantity ||
+                       parseFloat(quantity) <= 0 ||
+                       (productType !== "warranty" &&
+                         (!unitPrice ||
+                           !saleValue ||
+                           parseFloat(unitPrice) <= 0 ||
+                           parseFloat(saleValue) <= 0))))
                 }
                 className={`w-full h-14 text-lg font-medium text-white ${
                   productType === "warranty"
@@ -2615,6 +2981,11 @@ const SalesDashboard = ({
                       <>
                         <span className="mr-2">🛡️</span>
                         Confirmar Garantia
+                      </>
+                    ) : isMultiProductMode ? (
+                      <>
+                        <ShoppingCart className="h-5 w-5 mr-2" />
+                        Confirmar Venda Multi-Produto ({productCart.length} {productCart.length === 1 ? 'item' : 'itens'})
                       </>
                     ) : (
                       <>
@@ -2695,52 +3066,7 @@ const SalesDashboard = ({
                     </Label>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-                    {/* Filtro de Forma de Pagamento */}
-                    <div className="space-y-2">
-                      <Label className="text-tire-300 text-sm">Forma de Pagamento:</Label>
-                      <Select
-                        value={salesHistoryPaymentFilter}
-                        onValueChange={setSalesHistoryPaymentFilter}
-                      >
-                        <SelectTrigger className="bg-factory-700/50 border-tire-600/30 text-white">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="bg-factory-800 border-tire-600/30">
-                          <SelectItem
-                            value="all"
-                            className="text-white hover:bg-tire-700/50"
-                          >
-                            Todas as formas
-                          </SelectItem>
-                          <SelectItem
-                            value="cash_default"
-                            className="text-white hover:bg-tire-700/50"
-                          >
-                            💰 À Vista/Dinheiro
-                          </SelectItem>
-                          <SelectItem
-                            value="card"
-                            className="text-white hover:bg-tire-700/50"
-                          >
-                            💳 Cartão
-                          </SelectItem>
-                          <SelectItem
-                            value="pix"
-                            className="text-white hover:bg-tire-700/50"
-                          >
-                            📱 PIX
-                          </SelectItem>
-                          <SelectItem
-                            value="installment"
-                            className="text-white hover:bg-tire-700/50"
-                          >
-                            📅 À Prazo
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                     {/* Tipo de Filtro */}
                     <div className="space-y-2">
                       <Label className="text-tire-300 text-sm">Período:</Label>
@@ -2748,8 +3074,7 @@ const SalesDashboard = ({
                         value={salesHistoryDateType}
                         onValueChange={(value) => {
                           setSalesHistoryDateType(value);
-                          // Reset other date filters when changing type
-                          if (value !== "month") setSalesHistoryDateFilter("");
+                          // Reset custom date filters when changing type
                           if (value !== "custom") {
                             setSalesHistoryStartDate("");
                             setSalesHistoryEndDate("");
@@ -2796,12 +3121,7 @@ const SalesDashboard = ({
                           >
                             Mês passado
                           </SelectItem>
-                          <SelectItem
-                            value="month"
-                            className="text-white hover:bg-tire-700/50"
-                          >
-                            Mês específico
-                          </SelectItem>
+
                           <SelectItem
                             value="custom"
                             className="text-white hover:bg-tire-700/50"
@@ -2812,23 +3132,7 @@ const SalesDashboard = ({
                       </Select>
                     </div>
 
-                    {/* Filtro de Mês Específico */}
-                    {salesHistoryDateType === "month" && (
-                      <div className="space-y-2">
-                        <Label className="text-tire-300 text-sm">Mês:</Label>
-                        <div className="relative">
-                          <Calendar className="absolute left-3 top-2.5 h-4 w-4 text-tire-400" />
-                          <Input
-                            type="month"
-                            value={salesHistoryDateFilter}
-                            onChange={(e) =>
-                              setSalesHistoryDateFilter(e.target.value)
-                            }
-                            className="pl-9 bg-factory-700/50 border-tire-600/30 text-white"
-                          />
-                        </div>
-                      </div>
-                    )}
+
 
                     {/* Filtros de Período Personalizado */}
                     {salesHistoryDateType === "custom" && (
@@ -2876,21 +3180,6 @@ const SalesDashboard = ({
                         <div className="flex items-center gap-1 px-2 py-1 bg-neon-blue/20 rounded text-neon-blue text-xs">
                           <Search className="h-3 w-3" />
                           Busca: "{salesHistorySearch}"
-                        </div>
-                      )}
-                      {salesHistoryPaymentFilter !== "all" && (
-                        <div className="flex items-center gap-1 px-2 py-1 bg-neon-blue/20 rounded text-neon-blue text-xs">
-                          <DollarSign className="h-3 w-3" />
-                          Pagamento:{" "}
-                          {(() => {
-                            switch (salesHistoryPaymentFilter) {
-                              case "cash_default": return "À Vista/Dinheiro";
-                              case "card": return "Cartão";
-                              case "pix": return "PIX";
-                              case "installment": return "À Prazo";
-                              default: return "Desconhecido";
-                            }
-                          })()}
                         </div>
                       )}
                       {salesHistoryDateType !== "all" && (
@@ -3013,12 +3302,12 @@ const SalesDashboard = ({
                           >
                             <stop
                               offset="0%"
-                              stopColor="#3B82F6"
+                              stopColor="#bbe5fc"
                               stopOpacity={0.8}
                             />
                             <stop
                               offset="100%"
-                              stopColor="#1D4ED8"
+                              stopColor="#87ceeb"
                               stopOpacity={0.6}
                             />
                           </linearGradient>
@@ -3031,8 +3320,7 @@ const SalesDashboard = ({
                         produtos finais com maior quantidade vendida
                       </p>
                       <p className="text-tire-500 text-xs mt-1">
-                        🔵 Azul: Quantidade Vendida | 💰 Valor Médio por
-                        Unidade
+                        🔵 Azul: Quantidade Vendida | 💰 Valor Médio por Unidade
                       </p>
                     </div>
                   </div>
@@ -3044,8 +3332,8 @@ const SalesDashboard = ({
                   <div className="text-center py-8">
                     <History className="h-12 w-12 text-tire-500 mx-auto mb-3" />
                     <p className="text-tire-400">
-                      {salesHistorySearch || salesHistoryDateFilter || salesHistoryPaymentFilter !== "all"
-                        ? "Nenhuma venda encontrada com os filtros aplicados."
+                      {salesHistorySearch || salesHistoryDateFilter
+                        ? "Nenhuma venda encontrada"
                         : "Nenhuma venda registrada"}
                     </p>
                   </div>
@@ -3071,34 +3359,37 @@ const SalesDashboard = ({
                             </div>
                             <div className="flex items-center gap-1">
                               <DollarSign className="h-3 w-3" />
-                              <span className={`font-bold ${sale.category === "venda_a_prazo" ? "text-neon-orange" : "text-neon-green"}`}>
-                                {formatCurrency(extractRealValueFromSale(sale))}
+                              <span className="text-neon-green font-bold">
+                                {formatCurrency(getDisplayAmount(sale))}
                               </span>
-                              {sale.category === "venda_a_prazo" && (
-                                <span className="text-xs bg-neon-orange/20 text-neon-orange px-1 py-0.5 rounded ml-1">
-                                  À PRAZO
-                                </span>
-                              )}
                             </div>
                             <div className="flex items-center gap-1">
-                              <span className="text-xs bg-neon-blue/20 text-neon-blue px-2 py-1 rounded">
-                                💳 {extractPaymentMethodFromSale(sale.description || "")}
+                              <span className="text-xs">
+                                {getPaymentMethodIcon(extractPaymentMethodFromSale(sale.description || ""))}
+                              </span>
+                              <span className="text-xs bg-factory-600/50 px-2 py-1 rounded text-white font-medium">
+                                {extractPaymentMethodFromSale(sale.description || "")}
                               </span>
                             </div>
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
-                          {sale.category === "venda_a_prazo" && (
+                          {/* Botão Lançar Financeiro para vendas a prazo */}
+                          {sale.category === "venda_prazo" && sale.description && isCreditSale(sale.description) && (
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() =>
-                                handleLaunchToCash(sale.id, sale.reference_name)
-                              }
-                              className="text-neon-green hover:text-neon-green hover:bg-neon-green/20 p-2 h-8 w-8"
-                              title="Lançar no Caixa"
+                              onClick={() => {
+                                const originalValue = extractOriginalValueFromSale(sale.description || "");
+                                if (originalValue) {
+                                  handleConfirmCreditPayment(sale.id, sale.reference_name, originalValue);
+                                }
+                              }}
+                              className="text-neon-green hover:text-neon-green/80 hover:bg-neon-green/10 px-3 py-1 h-8 text-xs font-medium"
+                              title="Lançar no financeiro"
                             >
-                              <Banknote className="h-4 w-4" />
+                              <DollarSign className="h-3 w-3 mr-1" />
+                              Lançar Financeiro
                             </Button>
                           )}
                           <Button
@@ -3131,7 +3422,7 @@ const SalesDashboard = ({
               </div>
               {finalProductSalesHistory.length > 0 && (
                 <div className="mt-4 p-4 bg-factory-800/50 rounded-lg border border-tire-600/30">
-                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto">
                     <div className="text-center">
                       <p className="text-tire-300 text-sm mb-1">
                         Total de Vendas
@@ -3147,6 +3438,10 @@ const SalesDashboard = ({
                       <p className="text-neon-green font-bold text-lg">
                         {finalProductSalesHistory
                           .reduce((total, sale) => {
+                            // Não contar vendas a prazo pendentes na quantidade
+                            if (sale.category === "venda_prazo" && sale.description && isCreditSale(sale.description)) {
+                              return total;
+                            }
                             const productInfo = extractProductInfoFromSale(
                               sale.description || "",
                             );
@@ -3231,52 +3526,7 @@ const SalesDashboard = ({
                     </Label>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-                    {/* Filtro de Forma de Pagamento */}
-                    <div className="space-y-2">
-                      <Label className="text-tire-300 text-sm">Forma de Pagamento:</Label>
-                      <Select
-                        value={resaleSalesHistoryPaymentFilter}
-                        onValueChange={setResaleSalesHistoryPaymentFilter}
-                      >
-                        <SelectTrigger className="bg-factory-700/50 border-tire-600/30 text-white">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="bg-factory-800 border-tire-600/30">
-                          <SelectItem
-                            value="all"
-                            className="text-white hover:bg-tire-700/50"
-                          >
-                            Todas as formas
-                          </SelectItem>
-                          <SelectItem
-                            value="cash_default"
-                            className="text-white hover:bg-tire-700/50"
-                          >
-                            💰 À Vista/Dinheiro
-                          </SelectItem>
-                          <SelectItem
-                            value="card"
-                            className="text-white hover:bg-tire-700/50"
-                          >
-                            💳 Cartão
-                          </SelectItem>
-                          <SelectItem
-                            value="pix"
-                            className="text-white hover:bg-tire-700/50"
-                          >
-                            📱 PIX
-                          </SelectItem>
-                          <SelectItem
-                            value="installment"
-                            className="text-white hover:bg-tire-700/50"
-                          >
-                            📅 À Prazo
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                     {/* Tipo de Filtro */}
                     <div className="space-y-2">
                       <Label className="text-tire-300 text-sm">Período:</Label>
@@ -3284,9 +3534,7 @@ const SalesDashboard = ({
                         value={resaleSalesHistoryDateType}
                         onValueChange={(value) => {
                           setResaleSalesHistoryDateType(value);
-                          // Reset other date filters when changing type
-                          if (value !== "month")
-                            setResaleSalesHistoryDateFilter("");
+                          // Reset custom date filters when changing type
                           if (value !== "custom") {
                             setResaleSalesHistoryStartDate("");
                             setResaleSalesHistoryEndDate("");
@@ -3333,12 +3581,7 @@ const SalesDashboard = ({
                           >
                             Mês passado
                           </SelectItem>
-                          <SelectItem
-                            value="month"
-                            className="text-white hover:bg-tire-700/50"
-                          >
-                            Mês específico
-                          </SelectItem>
+
                           <SelectItem
                             value="custom"
                             className="text-white hover:bg-tire-700/50"
@@ -3349,23 +3592,7 @@ const SalesDashboard = ({
                       </Select>
                     </div>
 
-                    {/* Filtro de Mês Específico */}
-                    {resaleSalesHistoryDateType === "month" && (
-                      <div className="space-y-2">
-                        <Label className="text-tire-300 text-sm">Mês:</Label>
-                        <div className="relative">
-                          <Calendar className="absolute left-3 top-2.5 h-4 w-4 text-tire-400" />
-                          <Input
-                            type="month"
-                            value={resaleSalesHistoryDateFilter}
-                            onChange={(e) =>
-                              setResaleSalesHistoryDateFilter(e.target.value)
-                            }
-                            className="pl-9 bg-factory-700/50 border-tire-600/30 text-white"
-                          />
-                        </div>
-                      </div>
-                    )}
+
 
                     {/* Filtros de Período Personalizado */}
                     {resaleSalesHistoryDateType === "custom" && (
@@ -3413,21 +3640,6 @@ const SalesDashboard = ({
                         <div className="flex items-center gap-1 px-2 py-1 bg-neon-cyan/20 rounded text-neon-cyan text-xs">
                           <Search className="h-3 w-3" />
                           Busca: "{resaleSalesHistorySearch}"
-                        </div>
-                      )}
-                      {resaleSalesHistoryPaymentFilter !== "all" && (
-                        <div className="flex items-center gap-1 px-2 py-1 bg-neon-cyan/20 rounded text-neon-cyan text-xs">
-                          <DollarSign className="h-3 w-3" />
-                          Pagamento:{" "}
-                          {(() => {
-                            switch (resaleSalesHistoryPaymentFilter) {
-                              case "cash_default": return "À Vista/Dinheiro";
-                              case "card": return "Cartão";
-                              case "pix": return "PIX";
-                              case "installment": return "À Prazo";
-                              default: return "Desconhecido";
-                            }
-                          })()}
                         </div>
                       )}
                       {resaleSalesHistoryDateType !== "all" && (
@@ -3489,7 +3701,7 @@ const SalesDashboard = ({
                               </p>
                             </div>
                             <div className="text-right ml-3">
-                              <p className="text-neon-cyan font-bold text-lg">
+                              <p className="font-bold text-lg" style={{ color: "#02f584" }}>
                                 {formatCurrency(averageValuePerUnit)}
                               </p>
                               <p className="text-tire-400 text-xs">
@@ -3552,12 +3764,12 @@ const SalesDashboard = ({
                           >
                             <stop
                               offset="0%"
-                              stopColor="#06B6D4"
+                              stopColor="#bbe5fc"
                               stopOpacity={0.8}
                             />
                             <stop
                               offset="100%"
-                              stopColor="#0891B2"
+                              stopColor="#87ceeb"
                               stopOpacity={0.6}
                             />
                           </linearGradient>
@@ -3583,8 +3795,8 @@ const SalesDashboard = ({
                   <div className="text-center py-8">
                     <History className="h-12 w-12 text-tire-500 mx-auto mb-3" />
                     <p className="text-tire-400">
-                      {resaleSalesHistorySearch || resaleSalesHistoryDateFilter || resaleSalesHistoryPaymentFilter !== "all"
-                        ? "Nenhuma venda encontrada com os filtros aplicados."
+                      {resaleSalesHistorySearch || resaleSalesHistoryDateFilter
+                        ? "Nenhuma venda encontrada"
                         : "Nenhuma venda registrada"}
                     </p>
                   </div>
@@ -3611,34 +3823,37 @@ const SalesDashboard = ({
                             </div>
                             <div className="flex items-center gap-1">
                               <DollarSign className="h-3 w-3" />
-                              <span className={`font-bold ${sale.category === "venda_a_prazo" ? "text-neon-orange" : "text-neon-cyan"}`}>
-                                {formatCurrency(extractRealValueFromSale(sale))}
+                              <span className="text-neon-cyan font-bold">
+                                {formatCurrency(getDisplayAmount(sale))}
                               </span>
-                              {sale.category === "venda_a_prazo" && (
-                                <span className="text-xs bg-neon-orange/20 text-neon-orange px-1 py-0.5 rounded ml-1">
-                                  À PRAZO
-                                </span>
-                              )}
                             </div>
                             <div className="flex items-center gap-1">
-                              <span className="text-xs bg-neon-cyan/20 text-neon-cyan px-2 py-1 rounded">
-                                💳 {extractPaymentMethodFromSale(sale.description || "")}
+                              <span className="text-xs">
+                                {getPaymentMethodIcon(extractPaymentMethodFromSale(sale.description || ""))}
+                              </span>
+                              <span className="text-xs bg-factory-600/50 px-2 py-1 rounded text-white font-medium">
+                                {extractPaymentMethodFromSale(sale.description || "")}
                               </span>
                             </div>
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
-                          {sale.category === "venda_a_prazo" && (
+                          {/* Botão Lançar Financeiro para vendas a prazo */}
+                          {sale.category === "venda_prazo" && sale.description && isCreditSale(sale.description) && (
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() =>
-                                handleLaunchToCash(sale.id, sale.reference_name)
-                              }
-                              className="text-neon-green hover:text-neon-green hover:bg-neon-green/20 p-2 h-8 w-8"
-                              title="Lançar no Caixa"
+                              onClick={() => {
+                                const originalValue = extractOriginalValueFromSale(sale.description || "");
+                                if (originalValue) {
+                                  handleConfirmCreditPayment(sale.id, sale.reference_name, originalValue);
+                                }
+                              }}
+                              className="text-neon-green hover:text-neon-green/80 hover:bg-neon-green/10 px-3 py-1 h-8 text-xs font-medium"
+                              title="Lançar no financeiro"
                             >
-                              <Banknote className="h-4 w-4" />
+                              <DollarSign className="h-3 w-3 mr-1" />
+                              Lançar Financeiro
                             </Button>
                           )}
                           <Button
@@ -3671,12 +3886,12 @@ const SalesDashboard = ({
               </div>
               {resaleProductSalesHistory.length > 0 && (
                 <div className="mt-4 p-4 bg-factory-800/50 rounded-lg border border-tire-600/30">
-                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto">
                     <div className="text-center">
                       <p className="text-tire-300 text-sm mb-1">
                         Total de Vendas
                       </p>
-                      <p className="text-neon-cyan font-bold text-lg">
+                      <p className="text-white font-bold text-lg">
                         {resaleProductSalesHistory.length}
                       </p>
                     </div>
@@ -3687,6 +3902,10 @@ const SalesDashboard = ({
                       <p className="text-neon-green font-bold text-lg">
                         {resaleProductSalesHistory
                           .reduce((total, sale) => {
+                            // Não contar vendas a prazo pendentes na quantidade
+                            if (sale.category === "venda_prazo" && sale.description && isCreditSale(sale.description)) {
+                              return total;
+                            }
                             const productInfo = extractProductInfoFromSale(
                               sale.description || "",
                             );
@@ -3826,12 +4045,7 @@ const SalesDashboard = ({
                           >
                             Mês passado
                           </SelectItem>
-                          <SelectItem
-                            value="month"
-                            className="text-white hover:bg-tire-700/50"
-                          >
-                            Mês específico
-                          </SelectItem>
+
                           <SelectItem
                             value="custom"
                             className="text-white hover:bg-tire-700/50"
@@ -3938,7 +4152,7 @@ const SalesDashboard = ({
                     <AlertTriangle className="h-12 w-12 text-tire-500 mx-auto mb-3" />
                     <p className="text-tire-400">
                       {warrantyHistorySearch || warrantyHistoryDateFilter
-                        ? "Nenhuma garantia encontrada com os filtros aplicados."
+                        ? "Nenhuma garantia encontrada"
                         : "Nenhuma garantia registrada"}
                     </p>
                   </div>
@@ -4051,7 +4265,7 @@ const SalesDashboard = ({
               </div>
               {filteredWarrantyEntries.length > 0 && (
                 <div className="mt-4 p-4 bg-factory-800/50 rounded-lg border border-tire-600/30">
-                  <div className="grid grid-cols-1 md:grid-cols-5 lg:grid-cols-7 gap-4">
+                  <div className="grid grid-cols-2 md:grid-cols-5 lg:grid-cols-7 gap-4">
                     <div className="text-center">
                       <p className="text-tire-300 text-sm mb-1">
                         Total de Garantias
@@ -4213,7 +4427,7 @@ const SalesDashboard = ({
           </Card>
         </TabsContent>
 
-        
+
       </Tabs>
     </div>
   );

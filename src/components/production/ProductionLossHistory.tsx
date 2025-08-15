@@ -59,20 +59,20 @@ const ProductionLossHistory = ({
   isLoading = false,
 }: ProductionLossHistoryProps) => {
   // Estados para filtros
-  const [dateFilterType, setDateFilterType] = useState("last30days");
+  const [dateFilterType, setDateFilterType] = useState("all");
   const [customStartDate, setCustomStartDate] = useState("");
   const [customEndDate, setCustomEndDate] = useState("");
   const [selectedYear, setSelectedYear] = useState("");
   const [selectedMonth, setSelectedMonth] = useState("");
-  const [chartType, setChartType] = useState<"bar" | "line" | "area">("area");
+  const [chartType] = useState<"bar" | "line" | "area">("line");
   const [groupBy, setGroupBy] = useState<"day" | "week" | "month">("day");
 
   // Estados para configuração de cores
   const [showColorSettings, setShowColorSettings] = useState(false);
   const [colorSettings, setColorSettings] = useState({
     productionLossColor: "#EF4444", // Vermelho para perdas de produção
-    materialLossColor: "#F59E0B", // Laranja para perdas de matéria-prima
-    totalLossColor: "#DC2626", // Vermelho escuro para total de perdas
+    materialLossColor: "#8B5CF6", // Roxo para perdas de matéria-prima
+    totalLossColor: "#bbe5fc", // Azul claro para total de perdas
     backgroundGradient: "#FEE2E2", // Fundo suave para área
   });
 
@@ -101,8 +101,8 @@ const ProductionLossHistory = ({
   const resetToDefaultColors = () => {
     const defaultSettings = {
       productionLossColor: "#EF4444",
-      materialLossColor: "#F59E0B",
-      totalLossColor: "#DC2626",
+      materialLossColor: "#8B5CF6",
+      totalLossColor: "#bbe5fc",
       backgroundGradient: "#FEE2E2",
     };
     setColorSettings(defaultSettings);
@@ -133,29 +133,67 @@ const ProductionLossHistory = ({
     // Aplicar filtros de data
     switch (dateFilterType) {
       case "today":
-        const todayStr = today.toISOString().split("T")[0];
+        // Apply +1 day workaround to match saved production dates
+        const todayWithWorkaround = new Date(today);
+        todayWithWorkaround.setDate(today.getDate() + 1);
+        const todayStr = todayWithWorkaround.toISOString().split("T")[0];
         filteredEntries = filteredEntries.filter(
           (entry) => entry.production_date === todayStr,
         );
+        console.log("🔥 [ProductionLossHistory] Filtro 'hoje' aplicado:", {
+          todayOriginal: today.toISOString().split("T")[0],
+          todayWithWorkaround: todayStr,
+          reason: "Workaround +1 dia para alinhar com salvamento"
+        });
         break;
       case "yesterday":
-        const yesterdayStr = yesterday.toISOString().split("T")[0];
+        // Apply +1 day workaround to match saved production dates
+        const yesterdayWithWorkaround = new Date(yesterday);
+        yesterdayWithWorkaround.setDate(yesterday.getDate() + 1);
+        const yesterdayStr = yesterdayWithWorkaround.toISOString().split("T")[0];
         filteredEntries = filteredEntries.filter(
           (entry) => entry.production_date === yesterdayStr,
         );
+        console.log("🔥 [ProductionLossHistory] Filtro 'ontem' aplicado:", {
+          yesterdayOriginal: yesterday.toISOString().split("T")[0],
+          yesterdayWithWorkaround: yesterdayStr,
+          reason: "Workaround +1 dia para alinhar com salvamento"
+        });
         break;
       case "last7days":
-        const last7Days = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+        // Apply +1 day workaround to match saved production dates
+        const last7DaysWithWorkaround = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+        last7DaysWithWorkaround.setDate(last7DaysWithWorkaround.getDate() + 1);
+        const todayEnd7WithWorkaround = new Date(today);
+        todayEnd7WithWorkaround.setDate(today.getDate() + 1);
         filteredEntries = filteredEntries.filter((entry) => {
           const entryDate = new Date(entry.production_date);
-          return entryDate >= last7Days && entryDate <= today;
+          return entryDate >= last7DaysWithWorkaround && entryDate <= todayEnd7WithWorkaround;
+        });
+        console.log("🔥 [ProductionLossHistory] Filtro 'últimos 7 dias' aplicado:", {
+          startOriginal: new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+          startWithWorkaround: last7DaysWithWorkaround.toISOString().split("T")[0],
+          endOriginal: today.toISOString().split("T")[0],
+          endWithWorkaround: todayEnd7WithWorkaround.toISOString().split("T")[0],
+          reason: "Workaround +1 dia para alinhar com salvamento"
         });
         break;
       case "last30days":
-        const last30Days = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+        // Apply +1 day workaround to match saved production dates
+        const last30DaysWithWorkaround = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+        last30DaysWithWorkaround.setDate(last30DaysWithWorkaround.getDate() + 1);
+        const todayEnd30WithWorkaround = new Date(today);
+        todayEnd30WithWorkaround.setDate(today.getDate() + 1);
         filteredEntries = filteredEntries.filter((entry) => {
           const entryDate = new Date(entry.production_date);
-          return entryDate >= last30Days && entryDate <= today;
+          return entryDate >= last30DaysWithWorkaround && entryDate <= todayEnd30WithWorkaround;
+        });
+        console.log("🔥 [ProductionLossHistory] Filtro 'últimos 30 dias' aplicado:", {
+          startOriginal: new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+          startWithWorkaround: last30DaysWithWorkaround.toISOString().split("T")[0],
+          endOriginal: today.toISOString().split("T")[0],
+          endWithWorkaround: todayEnd30WithWorkaround.toISOString().split("T")[0],
+          reason: "Workaround +1 dia para alinhar com salvamento"
         });
         break;
       case "year":
@@ -174,23 +212,47 @@ const ProductionLossHistory = ({
         break;
       case "custom":
         if (customStartDate && customEndDate) {
+          // Apply +1 day workaround to match saved production dates
           const startDate = new Date(customStartDate);
+          startDate.setDate(startDate.getDate() + 1);
           const endDate = new Date(customEndDate);
+          endDate.setDate(endDate.getDate() + 1);
           filteredEntries = filteredEntries.filter((entry) => {
             const entryDate = new Date(entry.production_date);
             return entryDate >= startDate && entryDate <= endDate;
           });
+          console.log("🔥 [ProductionLossHistory] Filtro personalizado aplicado:", {
+            startOriginal: customStartDate,
+            startWithWorkaround: startDate.toISOString().split("T")[0],
+            endOriginal: customEndDate,
+            endWithWorkaround: endDate.toISOString().split("T")[0],
+            reason: "Workaround +1 dia para alinhar com salvamento"
+          });
         } else if (customStartDate) {
+          // Apply +1 day workaround to match saved production dates
           const startDate = new Date(customStartDate);
+          startDate.setDate(startDate.getDate() + 1);
           filteredEntries = filteredEntries.filter((entry) => {
             const entryDate = new Date(entry.production_date);
             return entryDate >= startDate;
           });
+          console.log("🔥 [ProductionLossHistory] Filtro personalizado (só início) aplicado:", {
+            startOriginal: customStartDate,
+            startWithWorkaround: startDate.toISOString().split("T")[0],
+            reason: "Workaround +1 dia para alinhar com salvamento"
+          });
         } else if (customEndDate) {
+          // Apply +1 day workaround to match saved production dates
           const endDate = new Date(customEndDate);
+          endDate.setDate(endDate.getDate() + 1);
           filteredEntries = filteredEntries.filter((entry) => {
             const entryDate = new Date(entry.production_date);
             return entryDate <= endDate;
+          });
+          console.log("🔥 [ProductionLossHistory] Filtro personalizado (só fim) aplicado:", {
+            endOriginal: customEndDate,
+            endWithWorkaround: endDate.toISOString().split("T")[0],
+            reason: "Workaround +1 dia para alinhar com salvamento"
           });
         }
         break;
@@ -392,7 +454,7 @@ const ProductionLossHistory = ({
           <p className="text-orange-400">
             Perdas de Matéria-Prima: {data.materialLosses} unidades
           </p>
-          <p className="text-red-600 font-bold">
+          <p className="font-bold" style={{ color: '#bbe5fc' }}>
             Total de Perdas: {data.totalLosses} unidades
           </p>
           <p className="text-tire-300 text-sm">
@@ -696,52 +758,16 @@ const ProductionLossHistory = ({
               </SelectTrigger>
               <SelectContent className="bg-factory-800 border-tire-600/30">
                 <SelectItem
-                  value="today"
+                  value="all"
                   className="text-white hover:bg-tire-700/50"
                 >
-                  Hoje
-                </SelectItem>
-                <SelectItem
-                  value="yesterday"
-                  className="text-white hover:bg-tire-700/50"
-                >
-                  Ontem
-                </SelectItem>
-                <SelectItem
-                  value="last7days"
-                  className="text-white hover:bg-tire-700/50"
-                >
-                  Últimos 7 dias
-                </SelectItem>
-                <SelectItem
-                  value="last30days"
-                  className="text-white hover:bg-tire-700/50"
-                >
-                  Últimos 30 dias
-                </SelectItem>
-                <SelectItem
-                  value="year"
-                  className="text-white hover:bg-tire-700/50"
-                >
-                  Ano específico
-                </SelectItem>
-                <SelectItem
-                  value="month"
-                  className="text-white hover:bg-tire-700/50"
-                >
-                  Mês específico
+                  Todos os períodos
                 </SelectItem>
                 <SelectItem
                   value="custom"
                   className="text-white hover:bg-tire-700/50"
                 >
                   Período personalizado
-                </SelectItem>
-                <SelectItem
-                  value="all"
-                  className="text-white hover:bg-tire-700/50"
-                >
-                  Todos os períodos
                 </SelectItem>
               </SelectContent>
             </Select>
@@ -782,40 +808,7 @@ const ProductionLossHistory = ({
             </Select>
           </div>
 
-          {/* Tipo de Gráfico */}
-          <div className="space-y-2">
-            <Label className="text-tire-300 text-sm">Tipo de Gráfico:</Label>
-            <Select
-              value={chartType}
-              onValueChange={(value: "bar" | "line" | "area") =>
-                setChartType(value)
-              }
-            >
-              <SelectTrigger className="bg-factory-700/50 border-tire-600/30 text-white">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="bg-factory-800 border-tire-600/30">
-                <SelectItem
-                  value="area"
-                  className="text-white hover:bg-tire-700/50"
-                >
-                  Área
-                </SelectItem>
-                <SelectItem
-                  value="bar"
-                  className="text-white hover:bg-tire-700/50"
-                >
-                  Barras
-                </SelectItem>
-                <SelectItem
-                  value="line"
-                  className="text-white hover:bg-tire-700/50"
-                >
-                  Linha
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+
 
           {/* Filtros condicionais */}
           {dateFilterType === "year" && (
@@ -879,24 +872,22 @@ const ProductionLossHistory = ({
             <div className="space-y-2">
               <Label className="text-tire-300 text-sm">Data Inicial:</Label>
               <div className="relative">
-                <CalendarDays className="absolute left-3 top-2.5 h-4 w-4 text-tire-400" />
                 <Input
                   type="date"
                   value={customStartDate}
                   onChange={(e) => setCustomStartDate(e.target.value)}
-                  className="pl-9 bg-factory-700/50 border-tire-600/30 text-white"
+                  className="bg-factory-700/50 border-tire-600/30 text-white"
                 />
               </div>
             </div>
             <div className="space-y-2">
               <Label className="text-tire-300 text-sm">Data Final:</Label>
               <div className="relative">
-                <CalendarDays className="absolute left-3 top-2.5 h-4 w-4 text-tire-400" />
                 <Input
                   type="date"
                   value={customEndDate}
                   onChange={(e) => setCustomEndDate(e.target.value)}
-                  className="pl-9 bg-factory-700/50 border-tire-600/30 text-white"
+                  className="bg-factory-700/50 border-tire-600/30 text-white"
                 />
               </div>
             </div>
@@ -1097,91 +1088,7 @@ const ProductionLossHistory = ({
         </CardContent>
       </Card>
 
-      {/* Resumo Adicional */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-        <Card className="bg-factory-800/50 border-tire-600/30">
-          <CardHeader>
-            <CardTitle className="text-tire-200 text-lg">
-              Resumo Estatístico
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-tire-300">Total de Entradas:</span>
-                <span className="text-white font-bold">
-                  {metrics.totalEntries}
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-tire-300">Média Perdas/Entrada:</span>
-                <span className="text-red-400 font-bold">
-                  {metrics.averageLossPerEntry.toFixed(2)} unidades
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-tire-300">Dias com Perdas:</span>
-                <span className="text-orange-400 font-bold">
-                  {metrics.daysWithLosses} de {metrics.totalDays}
-                </span>
-              </div>
-              <div className="flex justify-between items-center pt-2 border-t border-tire-600/30">
-                <span className="text-white font-medium">
-                  Frequência de Perdas:
-                </span>
-                <span className="text-neon-orange font-bold text-lg">
-                  {metrics.lossFrequency.toFixed(1)}%
-                </span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
 
-        <Card className="bg-factory-800/50 border-tire-600/30">
-          <CardHeader>
-            <CardTitle className="text-tire-200 text-lg">
-              Distribuição de Perdas
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-tire-300">Perdas de Produção:</span>
-                <span className="text-red-400 font-bold">
-                  {metrics.totalProductionLosses.toLocaleString("pt-BR")}{" "}
-                  unidades
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-tire-300">Perdas de Material:</span>
-                <span className="text-orange-400 font-bold">
-                  {metrics.totalMaterialLosses.toLocaleString("pt-BR")} unidades
-                </span>
-              </div>
-
-              <div className="flex justify-between items-center">
-                <span className="text-tire-300">% Perdas Produção:</span>
-                <span className="text-red-400 font-bold">
-                  {metrics.totalLosses > 0
-                    ? (
-                        (metrics.totalProductionLosses / metrics.totalLosses) *
-                        100
-                      ).toFixed(1)
-                    : 0}
-                  %
-                </span>
-              </div>
-
-              <div className="flex justify-between items-center pt-2 border-t border-tire-600/30">
-                <span className="text-white font-medium">Total Geral:</span>
-                <span className="text-red-600 font-bold text-lg">
-                  {metrics.totalLosses.toLocaleString("pt-BR")} unidades
-                </span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
     </div>
   );
 };

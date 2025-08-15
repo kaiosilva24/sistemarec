@@ -17,6 +17,7 @@ import type {
   CostSimulation,
   WarrantyEntry,
   ResaleProduct,
+  Debt,
 } from "@/types/financial";
 
 interface UseDataPersistenceOptions<T> {
@@ -759,12 +760,21 @@ export const useStockItems = () => {
     return newStockItem;
   };
 
+  const loadStockItems = async () => {
+    setIsLoading(true);
+    const data = await dataManager.loadStockItems();
+    setStockItems(data);
+    setIsLoading(false);
+    console.log(`✅ [useStockItems] Dados recarregados: ${data.length} itens`);
+  };
+
   return {
     stockItems,
     addStockItem,
     createStockItem,
     updateStockItem,
     removeStockItemByItemId,
+    loadStockItems,
     isLoading,
     isSaving,
   };
@@ -2129,5 +2139,148 @@ export const useCostCalculationOptions = () => {
     isIncludingDefectiveTireSales: costOptions.includeDefectiveTireSales,
     isIncludingWarrantyValues: costOptions.includeWarrantyValues,
     isDividingByProduction: costOptions.divideByProduction,
+  };
+};
+
+// Hook for managing debts with Supabase integration
+export const useDebts = () => {
+  const [debts, setDebts] = useState<Debt[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    const loadDebts = async () => {
+      setIsLoading(true);
+      try {
+        const data = await dataManager.loadDebts();
+        console.log("🔍 [useDebts] Dívidas carregadas - dados brutos:", data);
+        console.log("🔍 [useDebts] Primeira dívida detalhada:", data[0]);
+        if (data[0]) {
+          console.log("🔍 [useDebts] Tipos dos campos da primeira dívida:", {
+            remaining_amount: typeof data[0].remaining_amount,
+            total_amount: typeof data[0].total_amount,
+            paid_amount: typeof data[0].paid_amount,
+            remaining_amount_value: data[0].remaining_amount,
+            total_amount_value: data[0].total_amount,
+            paid_amount_value: data[0].paid_amount
+          });
+        }
+        
+        // Log all debts with their paid_amount values
+        data.forEach((debt, index) => {
+          console.log(`💰 [useDebts] Debt ${index + 1} (${debt.id}):`, {
+            description: debt.description,
+            total_amount: debt.total_amount,
+            paid_amount: debt.paid_amount,
+            remaining_amount: debt.remaining_amount,
+            paid_amount_type: typeof debt.paid_amount,
+            paid_amount_raw: debt.paid_amount
+          });
+        });
+        setDebts(data);
+        console.log("✅ [useDebts] Dívidas carregadas:", data.length);
+      } catch (error) {
+        console.error("❌ [useDebts] Erro ao carregar dívidas:", error);
+        setDebts([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadDebts();
+  }, []);
+
+  const addDebt = async (
+    debtData: Omit<Debt, "id" | "created_at" | "updated_at">
+  ) => {
+    console.log("🚀 [useDebts] Iniciando addDebt...");
+    console.log("📝 [useDebts] Dados recebidos:", debtData);
+    
+    setIsSaving(true);
+    try {
+      console.log("📤 [useDebts] Chamando dataManager.saveDebt...");
+      const newDebt = await dataManager.saveDebt(debtData);
+      console.log("📥 [useDebts] Resposta do dataManager.saveDebt:", newDebt);
+      
+      if (newDebt) {
+        setDebts(prev => {
+          const updated = [...prev, newDebt];
+          console.log("🔄 [useDebts] Estado de dívidas atualizado. Total:", updated.length);
+          return updated;
+        });
+        console.log("✅ [useDebts] Dívida adicionada com sucesso:", newDebt.id);
+        return newDebt;
+      } else {
+        console.log("⚠️ [useDebts] dataManager.saveDebt retornou null");
+        throw new Error("Falha ao salvar dívida - resultado null");
+      }
+    } catch (error) {
+      console.error("❌ [useDebts] Erro ao adicionar dívida:", error);
+      console.error("❌ [useDebts] Stack trace:", error.stack);
+      throw error;
+    } finally {
+      setIsSaving(false);
+      console.log("🏁 [useDebts] addDebt finalizado");
+    }
+  };
+
+  const updateDebt = async (id: string, updates: Partial<Debt>) => {
+    setIsSaving(true);
+    try {
+      const success = await dataManager.updateDebt(id, updates);
+      if (success) {
+        setDebts(prev => prev.map(debt => 
+          debt.id === id ? { ...debt, ...updates, updated_at: new Date().toISOString() } : debt
+        ));
+        console.log(" [useDebts] Dívida atualizada:", id);
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error(" [useDebts] Erro ao atualizar dívida:", error);
+      throw error;
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const deleteDebt = async (id: string) => {
+    setIsSaving(true);
+    try {
+      const success = await dataManager.deleteDebt(id);
+      if (success) {
+        setDebts(prev => prev.filter(debt => debt.id !== id));
+        console.log(" [useDebts] Dívida excluída:", id);
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error(" [useDebts] Erro ao excluir dívida:", error);
+      throw error;
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const refreshDebts = async () => {
+    setIsLoading(true);
+    try {
+      const data = await dataManager.loadDebts();
+      setDebts(data);
+      console.log(" [useDebts] Dívidas recarregadas:", data.length);
+    } catch (error) {
+      console.error(" [useDebts] Erro ao recarregar dívidas:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return {
+    debts,
+    addDebt,
+    updateDebt,
+    deleteDebt,
+    refreshDebts,
+    isLoading,
+    isSaving,
   };
 };

@@ -863,34 +863,13 @@ const FinalProductsStock: React.FC<FinalProductsStockProps> = ({ isLoading = fal
           </div>
         </div>
 
-        <Select value={filterType} onValueChange={(value: "all" | "in-stock" | "out-of-stock" | "low-stock") => setFilterType(value)}>
-          <SelectTrigger className="w-48 bg-factory-700/50 border-tire-600/30 text-white">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent className="bg-factory-800 border-tire-600/30">
-            <SelectItem value="all" className="text-white hover:bg-tire-700/50">
-              Todos os Produtos
-            </SelectItem>
-            <SelectItem value="in-stock" className="text-white hover:bg-tire-700/50">
-              Com Estoque
-            </SelectItem>
-            <SelectItem value="out-of-stock" className="text-white hover:bg-tire-700/50">
-              Sem Estoque
-            </SelectItem>
-            <SelectItem value="low-stock" className="text-white hover:bg-tire-700/50">
-              Estoque Baixo
-            </SelectItem>
-          </SelectContent>
-        </Select>
+
 
         <Select value={productTypeFilter} onValueChange={(value: "all" | "final" | "resale") => setProductTypeFilter(value)}>
           <SelectTrigger className="w-48 bg-factory-700/50 border-tire-600/30 text-white">
             <SelectValue placeholder="Tipo de Produto" />
           </SelectTrigger>
           <SelectContent className="bg-factory-800 border-tire-600/30">
-            <SelectItem value="all" className="text-white hover:bg-tire-700/50">
-              🔄 Todos os Tipos
-            </SelectItem>
             <SelectItem value="final" className="text-white hover:bg-tire-700/50">
               🏭 Produtos Finais
             </SelectItem>
@@ -915,8 +894,8 @@ const FinalProductsStock: React.FC<FinalProductsStockProps> = ({ isLoading = fal
           
           <div className="bg-factory-800/50 border border-tire-600/30 rounded-lg p-4">
             <p className="text-tire-400 text-sm">Quantidade Total</p>
-            <p className="text-2xl font-bold text-neon-cyan">
-              {filteredProductAnalysis.reduce((total, product) => total + product.quantity, 0)} unidades
+            <p className="text-2xl font-bold" style={{ color: '#00d4ff' }}>
+              {filteredProductAnalysis.reduce((total, product) => total + product.quantity, 0)}
             </p>
           </div>
           
@@ -930,7 +909,7 @@ const FinalProductsStock: React.FC<FinalProductsStockProps> = ({ isLoading = fal
             </p>
           </div>
           
-          <div className="bg-neon-green/10 border border-neon-green/30 rounded-lg p-4">
+          <div className="border border-neon-green rounded-lg p-4" style={{ backgroundColor: '#173329' }}>
             <p className="text-tire-400 text-sm">Valor Total do Estoque</p>
             <p className="text-2xl font-bold text-neon-green">
               {formatCurrency(calculateGrandTotal())}

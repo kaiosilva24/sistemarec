@@ -18,6 +18,7 @@ import {
   TrendingUp,
   DollarSign,
   Package,
+  Save,
   Users,
   Settings,
   BarChart3,
@@ -37,12 +38,20 @@ import {
   Plus,
   X,
   Layers,
-  Save,
   FolderOpen,
   Trash2,
   Download,
   Upload,
 } from "lucide-react";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
 import {
   RawMaterial,
   Employee,
@@ -230,11 +239,11 @@ const TireCostManager = ({
       }
     }
     return {
-      includeLaborCosts: false,
-      includeCashFlowExpenses: false,
-      includeProductionLosses: false,
-      includeDefectiveTireSales: false,
-      includeWarrantyValues: false,
+      includeLaborCosts: true,
+      includeCashFlowExpenses: true,
+      includeProductionLosses: true,
+      includeDefectiveTireSales: true,
+      includeWarrantyValues: true,
       divideByProduction: true,
     };
   });
@@ -253,11 +262,11 @@ const TireCostManager = ({
         }
       }
       return {
-        includeLaborCosts: false,
-        includeCashFlowExpenses: false,
-        includeProductionLosses: false,
-        includeDefectiveTireSales: false,
-        includeWarrantyValues: false,
+        includeLaborCosts: true,
+        includeCashFlowExpenses: true,
+        includeProductionLosses: true,
+        includeDefectiveTireSales: true,
+        includeWarrantyValues: true,
         divideByProduction: true,
       };
     });
@@ -288,6 +297,63 @@ const TireCostManager = ({
       JSON.stringify(simulationCostOptions),
     );
   }, [simulationCostOptions]);
+
+  // ===== SINCRONIZAÇÃO EM TEMPO REAL DAS RECEITAS =====
+  // Estado para forçar re-renderização da simulação quando receitas mudam
+  const [simulationUpdateTrigger, setSimulationUpdateTrigger] = useState(0);
+
+  // Effect para sincronização em tempo real da leitura das receitas na simulação
+  useEffect(() => {
+    console.log("🔄 [TireCostManager] Receitas atualizadas, sincronizando simulação em tempo real...", {
+      recipesCount: recipes.length,
+      materialsCount: materials.length,
+      stockItemsCount: stockItems.length,
+      currentSimulationRecipe: simulationRecipe,
+      selectedRecipesCount: selectedRecipes.length,
+      simulationMode
+    });
+
+    // Força atualização da simulação quando receitas, materiais ou estoque mudam
+    setSimulationUpdateTrigger(prev => prev + 1);
+
+    // Log detalhado das receitas disponíveis
+    if (recipes.length > 0) {
+      console.log("📋 [TireCostManager] Receitas disponíveis para simulação:", 
+        recipes.map(recipe => ({
+          id: recipe.id,
+          product_name: recipe.product_name,
+          materials_count: recipe.materials?.length || 0,
+          archived: recipe.archived
+        }))
+      );
+    }
+
+    // Validar se a receita selecionada ainda existe
+    if (simulationRecipe && !recipes.find(r => r.id === simulationRecipe)) {
+      console.warn("⚠️ [TireCostManager] Receita selecionada não encontrada, limpando seleção:", simulationRecipe);
+      setSimulationRecipe("");
+    }
+
+    // Validar receitas múltiplas selecionadas
+    if (selectedRecipes.length > 0) {
+      const validRecipes = selectedRecipes.filter(selected => 
+        recipes.find(r => r.id === selected.id)
+      );
+      
+      if (validRecipes.length !== selectedRecipes.length) {
+        console.warn("⚠️ [TireCostManager] Algumas receitas múltiplas não foram encontradas, atualizando seleção");
+        setSelectedRecipes(validRecipes);
+      }
+    }
+
+  }, [recipes, materials, stockItems, simulationRecipe, selectedRecipes, simulationMode]);
+
+  // Effect para logs de sincronização quando simulação é atualizada
+  useEffect(() => {
+    if (simulationUpdateTrigger > 0) {
+      console.log("✅ [TireCostManager] Simulação sincronizada em tempo real - trigger:", simulationUpdateTrigger);
+    }
+  }, [simulationUpdateTrigger]);
 
   // Extract product info from sale description
   const extractProductInfoFromSale = (description: string) => {
@@ -833,44 +899,22 @@ const TireCostManager = ({
       },
     );
 
-    // Add fixed costs (use manual input if provided, otherwise use system data)
-    const fixedCostsToUse =
-      manualFixedCosts > 0 ? manualFixedCosts : totalFixedCosts;
-    if (fixedCostsToUse > 0) {
-      if (options.divideByProduction) {
-        fixedCostComponent = fixedCostsToUse / productionQuantity;
-      } else {
-        fixedCostComponent = fixedCostsToUse;
-      }
+    // Add fixed costs (only use manual input, don't auto-include system data)
+    if (manualFixedCosts > 0) {
+      // CORREÇÃO: Sempre dividir por quantidade para obter custo por pneu
+      fixedCostComponent = manualFixedCosts / productionQuantity;
       totalCost += fixedCostComponent;
       console.log(
-        `🏭 [TireCostManager] Custos fixos adicionados: ${fixedCostComponent} (${manualFixedCosts > 0 ? "manual" : "sistema"})`,
+        `🏭 [TireCostManager] Custos fixos manuais adicionados: ${fixedCostComponent}`,
       );
     }
 
     // Add optional components based on user selection
-    if (options.includeLaborCosts) {
-      const laborCostsToUse =
-        manualLaborCosts > 0 ? manualLaborCosts : totalLaborCosts;
-      if (laborCostsToUse > 0) {
-        if (options.divideByProduction) {
-          laborCostComponent = laborCostsToUse / productionQuantity;
-        } else {
-          laborCostComponent = laborCostsToUse;
-        }
-        totalCost += laborCostComponent;
-        console.log(
-          `👥 [TireCostManager] Custos de mão de obra adicionados: ${laborCostComponent} (${manualLaborCosts > 0 ? "manual" : "sistema"})`,
-        );
-      }
-    }
+    // Labor costs removed from calculation as per user requirement
 
     if (options.includeCashFlowExpenses && manualCashFlowExpenses > 0) {
-      if (options.divideByProduction) {
-        cashFlowCostComponent = manualCashFlowExpenses / productionQuantity;
-      } else {
-        cashFlowCostComponent = manualCashFlowExpenses;
-      }
+      // CORREÇÃO: Sempre dividir por quantidade para obter custo por pneu
+      cashFlowCostComponent = manualCashFlowExpenses / productionQuantity;
       totalCost += cashFlowCostComponent;
       console.log(
         `💸 [TireCostManager] Saídas de caixa manuais adicionadas: ${cashFlowCostComponent}`,
@@ -878,12 +922,8 @@ const TireCostManager = ({
     }
 
     if (options.includeProductionLosses && manualProductionLosses > 0) {
-      if (options.divideByProduction) {
-        productionLossCostComponent =
-          manualProductionLosses / productionQuantity;
-      } else {
-        productionLossCostComponent = manualProductionLosses;
-      }
+      // CORREÇÃO: Sempre dividir por quantidade para obter custo por pneu
+      productionLossCostComponent = manualProductionLosses / productionQuantity;
       totalCost += productionLossCostComponent;
       console.log(
         `📉 [TireCostManager] Perdas de produção manuais adicionadas: ${productionLossCostComponent}`,
@@ -985,17 +1025,7 @@ const TireCostManager = ({
     });
 
     // Add optional components based on user selection
-    if (options.includeLaborCosts && totalLaborCosts > 0) {
-      if (options.divideByProduction) {
-        laborCostComponent = totalLaborCosts / productionQuantity;
-      } else {
-        laborCostComponent = totalLaborCosts;
-      }
-      totalCost += laborCostComponent;
-      console.log(
-        `👥 [TireCostManager] Custos de mão de obra adicionados: ${laborCostComponent}`,
-      );
-    }
+    // Labor costs removed from calculation as per user requirement
 
     if (options.includeCashFlowExpenses && totalCashFlowExpenses > 0) {
       if (options.divideByProduction) {
@@ -1134,6 +1164,7 @@ const TireCostManager = ({
         lossDetails: lossData,
         warrantyDetails: warrantyData,
         warrantyCostPerTire: 0,
+        defectiveTireSalesCostPerTire: 0,
         costBreakdown: {
           materialCost: recipeData.recipeCost,
           laborCost: 0,
@@ -1544,9 +1575,10 @@ const TireCostManager = ({
       totalLossValue: totals.totalLossValue,
       averagePrice:
         totals.totalSold > 0 ? totals.totalRevenue / totals.totalSold : 0,
-      averageCostPerTire:
-        tireAnalysis.reduce((sum, tire) => sum + tire.costPerTire, 0) /
-        tireAnalysis.length,
+      averageCostPerTire: Math.round(
+        (tireAnalysis.reduce((sum, tire) => sum + tire.costPerTire, 0) /
+        tireAnalysis.length) * 100
+      ) / 100,
       totalProfit: totals.totalProfit,
       averageProfitMargin:
         totals.totalRevenue > 0
@@ -1739,6 +1771,7 @@ const TireCostManager = ({
       productionLossCostPerTire: simulationCost.productionLossCostPerTire,
       costBreakdown: simulationCost.costBreakdown,
       recipeDetails: recipeData.recipeDetails,
+      // CORREÇÃO: Custo total = custo por pneu × quantidade
       totalCost: simulationCost.totalCost * quantity,
       manualInputs: {
         cashFlowExpenses: manualCashFlow,
@@ -1768,6 +1801,12 @@ const TireCostManager = ({
     const manualLosses = parseFloat(simulationProductionLosses) || 0;
     const manualFixed = parseFloat(simulationFixedCosts) || 0;
     const manualLabor = parseFloat(simulationLaborCosts) || 0;
+
+    // Calculate total quantity first for proper cost division
+    const totalQuantityForCosts = selectedRecipes.reduce(
+      (sum, recipe) => sum + recipe.quantity,
+      0,
+    );
 
     const recipeAnalyses = selectedRecipes.map((selectedRecipe) => {
       const recipe = recipes.find(
@@ -1800,10 +1839,11 @@ const TireCostManager = ({
         };
       }
 
+      // CORREÇÃO: Usar quantidade total para divisão correta dos custos
       const simulationCost = calculateSimulationCostPerTire(
         recipe.product_name,
         recipeData.recipeCost,
-        selectedRecipe.quantity,
+        totalQuantityForCosts, // Usar quantidade total em vez de individual
         manualCashFlow,
         manualLosses,
         manualFixed,
@@ -2004,7 +2044,10 @@ const TireCostManager = ({
     setSimulationMode(simulation.simulation_type);
 
     // Set cost options
-    setSimulationCostOptions(simulation.cost_options);
+    setSimulationCostOptions({
+      ...simulation.cost_options,
+      includeWarrantyValues: false // Add missing property with default value
+    });
 
     // Set simulation data
     const data = simulation.simulation_data;
@@ -2047,6 +2090,312 @@ const TireCostManager = ({
       }
     }
   };
+
+  // Load real tire cost chart data from Supabase
+  const [chartData, setChartData] = useState<Array<{date: string, cost: number}>>([]);
+  const [allChartData, setAllChartData] = useState<Array<{date: string, cost: number}>>([]);
+  const [isLoadingChart, setIsLoadingChart] = useState(true);
+  const [selectedMonth, setSelectedMonth] = useState<string>('all');
+
+  const loadTireCostChartData = async () => {
+    try {
+      setIsLoadingChart(true);
+      console.log("📊 [TireCostManager] Carregando dados reais do gráfico de custos...");
+      
+      const historicalData = await dataManager.loadTireCostHistory(30);
+      
+      if (historicalData.length === 0) {
+        console.log("⚠️ [TireCostManager] Nenhum dado histórico encontrado, gerando dados simulados...");
+        // Generate simulated data if no historical data exists
+        const simulatedData = [];
+        const today = new Date();
+        
+        for (let i = 29; i >= 0; i--) {
+          const date = new Date(today);
+          date.setDate(today.getDate() - i);
+          
+          // Simulate cost variation (±10% around current average cost)
+          const baselineCost = averageAnalysis.averageCostPerTire;
+          const variation = (Math.random() - 0.5) * 0.2; // ±10%
+          const cost = baselineCost * (1 + variation);
+          
+          simulatedData.push({
+            date: date.toLocaleDateString('pt-BR', {
+              day: '2-digit',
+              month: '2-digit'
+            }),
+            cost: parseFloat(cost.toFixed(2))
+          });
+        }
+        
+        setAllChartData(simulatedData);
+        setChartData(simulatedData);
+      } else {
+        console.log("✅ [TireCostManager] Dados históricos carregados:", historicalData.length, "registros");
+        setAllChartData(historicalData);
+        setChartData(historicalData);
+      }
+    } catch (error) {
+      console.error("❌ [TireCostManager] Erro ao carregar dados do gráfico:", error);
+      // Fallback to simulated data on error
+      setChartData([]);
+    } finally {
+      setIsLoadingChart(false);
+    }
+  };
+
+  // Filter chart data by selected month and add real-time today data
+  const filterDataByMonth = (month: string) => {
+    let baseData = [...allChartData];
+    
+    // Add real-time today data if not already in database
+    const today = new Date();
+    const todayStr = today.toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit'
+    });
+    
+    console.log("🔍 [TireCostManager] Debug - Data de hoje:", todayStr);
+    console.log("🔍 [TireCostManager] Debug - Custo atual:", averageAnalysis.averageCostPerTire);
+    console.log("🔍 [TireCostManager] Debug - Dados base:", baseData.map(item => `${item.date}: R$ ${item.cost}`));
+    
+    // Check if today's data already exists in the database (from allChartData, not including real-time)
+    const todayExistsInDB = allChartData.some(item => item.date === todayStr);
+    
+    // Remove any existing real-time today point first (to avoid duplicates)
+    baseData = baseData.filter(item => !(item.date === todayStr && !todayExistsInDB));
+    
+    // Always add real-time today point if we have a valid cost
+    if (averageAnalysis.averageCostPerTire > 0) {
+      const realTimeCost = parseFloat(averageAnalysis.averageCostPerTire.toFixed(2));
+      
+      if (todayExistsInDB) {
+        // Update existing today point with real-time value
+        const todayIndex = baseData.findIndex(item => item.date === todayStr);
+        if (todayIndex !== -1) {
+          baseData[todayIndex] = {
+            date: todayStr,
+            cost: realTimeCost
+          };
+          console.log("🔄 [TireCostManager] Atualizando ponto existente para hoje:", todayStr, "->", realTimeCost);
+        }
+      } else {
+        // Add new real-time today point
+        baseData.push({
+          date: todayStr,
+          cost: realTimeCost
+        });
+        console.log("📊 [TireCostManager] Adicionando ponto em tempo real para hoje:", todayStr, "->", realTimeCost);
+      }
+    }
+
+    if (month === 'all') {
+      setChartData(baseData);
+      return;
+    }
+
+    const [year, monthNum] = month.split('-');
+    const filteredData = baseData.filter(item => {
+      // Parse the date string (format: "dd/mm")
+      const [day, monthStr] = item.date.split('/');
+      const itemMonth = monthStr.padStart(2, '0');
+      const currentYear = new Date().getFullYear().toString();
+      
+      return itemMonth === monthNum && year === currentYear;
+    });
+
+    console.log(`📅 [TireCostManager] Filtrando dados para ${month}:`, filteredData.length, "registros");
+    setChartData(filteredData);
+  };
+
+  // Get available months from chart data
+  const getAvailableMonths = () => {
+    const months = new Set<string>();
+    const currentYear = new Date().getFullYear();
+    
+    allChartData.forEach(item => {
+      // Parse the date string (format: "dd/mm")
+      const [day, monthStr] = item.date.split('/');
+      const monthNum = monthStr.padStart(2, '0');
+      months.add(`${currentYear}-${monthNum}`);
+    });
+
+    return Array.from(months).sort().map(month => {
+      const [year, monthNum] = month.split('-');
+      const monthName = new Date(parseInt(year), parseInt(monthNum) - 1).toLocaleDateString('pt-BR', { month: 'long' });
+      return {
+        value: month,
+        label: `${monthName.charAt(0).toUpperCase() + monthName.slice(1)} ${year}`
+      };
+    });
+  };
+
+  // Handle month selection change
+  const handleMonthChange = (month: string) => {
+    setSelectedMonth(month);
+    filterDataByMonth(month);
+  };
+
+  // Function to record today's tire cost
+  const recordTodayTireCost = async () => {
+    try {
+      console.log("💾 [TireCostManager] Registrando custo de hoje:", averageAnalysis.averageCostPerTire);
+      
+      // WORKAROUND: Add +1 day to compensate Supabase UTC conversion
+      const today = new Date();
+      const tomorrow = new Date(today);
+      tomorrow.setDate(today.getDate() + 1);
+      const todayLocal = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, "0")}-${String(tomorrow.getDate()).padStart(2, "0")}`;
+      
+      console.log("📅 [TireCostManager] WORKAROUND +1: Data original vs enviada:", {
+        dataOriginal: today.toISOString().split('T')[0],
+        dataEnviada: todayLocal
+      });
+      
+      const success = await dataManager.saveTireCostHistory(todayLocal, averageAnalysis.averageCostPerTire);
+      
+      if (success) {
+        console.log("✅ [TireCostManager] Custo registrado com sucesso!");
+        // Reload chart data to include today's record
+        await loadTireCostChartData();
+        alert("✅ Custo por pneu registrado com sucesso!");
+      } else {
+        console.error("❌ [TireCostManager] Erro ao registrar custo");
+        alert("❌ Erro ao registrar custo por pneu");
+      }
+    } catch (error) {
+      console.error("❌ [TireCostManager] Erro ao registrar custo:", error);
+      alert("❌ Erro ao registrar custo por pneu");
+    }
+  };
+
+  // Save previous day cost when day changes
+  const savePreviousDayOnDayChange = async () => {
+    try {
+      // Get yesterday's date with workaround +1
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayWithWorkaround = new Date(yesterday);
+      yesterdayWithWorkaround.setDate(yesterday.getDate() + 1);
+      const yesterdayLocal = `${yesterdayWithWorkaround.getFullYear()}-${String(yesterdayWithWorkaround.getMonth() + 1).padStart(2, "0")}-${String(yesterdayWithWorkaround.getDate()).padStart(2, "0")}`;
+      
+      console.log("📅 [TireCostManager] Verificando se precisa salvar custo do dia anterior:", yesterdayLocal);
+      
+      // Check if yesterday's record exists
+      const { data, error } = await (dataManager as any).supabase
+        .from("tire_cost_history")
+        .select("*")
+        .eq("date", yesterdayLocal)
+        .single();
+
+      if (error && error.code === 'PGRST116') {
+        // Yesterday's record doesn't exist, save it with current average cost
+        console.log("💾 [TireCostManager] Salvando custo do dia anterior na virada do dia:", yesterdayLocal);
+        
+        const success = await dataManager.saveTireCostHistory(yesterdayLocal, averageAnalysis.averageCostPerTire);
+        
+        if (success) {
+          console.log("✅ [TireCostManager] Custo do dia anterior salvo com sucesso!");
+          // Reload chart data to include the new record
+          await loadTireCostChartData();
+        } else {
+          console.error("❌ [TireCostManager] Erro ao salvar custo do dia anterior");
+        }
+      } else if (!error) {
+        console.log("📅 [TireCostManager] Custo do dia anterior já existe no banco:", data);
+      }
+    } catch (error) {
+      console.error("❌ [TireCostManager] Erro ao verificar/salvar custo do dia anterior:", error);
+    }
+  };
+
+  // Auto-record tire cost daily (check if today's record exists)
+  const checkAndRecordDailyCost = async () => {
+    try {
+      // WORKAROUND: Add +1 day to compensate Supabase UTC conversion
+      const today = new Date();
+      const tomorrow = new Date(today);
+      tomorrow.setDate(today.getDate() + 1);
+      const todayLocal = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, "0")}-${String(tomorrow.getDate()).padStart(2, "0")}`;
+      
+      console.log("📅 [TireCostManager] WORKAROUND +1: Verificando registro para data:", todayLocal);
+      
+      const todayRecord = await dataManager.getTodayTireCostRecord();
+      
+      if (!todayRecord) {
+        console.log("📅 [TireCostManager] Nenhum registro de hoje encontrado no banco de dados");
+        console.log("🔄 [TireCostManager] Exibindo valor em tempo real no gráfico (não salvo ainda)");
+        
+        // Note: We don't save to database here anymore
+        // The real-time value is shown in the chart via filterDataByMonth()
+        // Database save will happen only when the day changes (via a scheduled process or manual trigger)
+        
+        // Just reload chart data to ensure we have the latest from database
+        await loadTireCostChartData();
+      } else {
+        console.log("📅 [TireCostManager] Registro de hoje já existe no banco:", todayRecord);
+      }
+    } catch (error) {
+      console.error("❌ [TireCostManager] Erro ao verificar registro diário:", error);
+    }
+  };
+
+  // Load chart data on component mount only
+  useEffect(() => {
+    loadTireCostChartData();
+  }, []); // Remove averageAnalysis.averageCostPerTire dependency to avoid conflicts
+
+  // Check and record daily cost on component mount
+  useEffect(() => {
+    if (!isLoading && averageAnalysis.averageCostPerTire > 0) {
+      checkAndRecordDailyCost();
+    }
+  }, [isLoading, averageAnalysis.averageCostPerTire]);
+
+  // Apply month filter when allChartData changes
+  useEffect(() => {
+    if (allChartData.length > 0) {
+      filterDataByMonth(selectedMonth);
+    }
+  }, [allChartData, selectedMonth]);
+
+  // Update chart in real-time when average cost changes (for today's point)
+  useEffect(() => {
+    console.log("🔄 [TireCostManager] useEffect disparado - custo mudou para:", averageAnalysis.averageCostPerTire);
+    console.log("🔄 [TireCostManager] allChartData.length:", allChartData.length);
+    console.log("🔄 [TireCostManager] selectedMonth:", selectedMonth);
+    
+    if (allChartData.length >= 0 && averageAnalysis.averageCostPerTire > 0) {
+      console.log("🔄 [TireCostManager] ✅ Condições atendidas - atualizando gráfico em tempo real");
+      console.log("🔄 [TireCostManager] Novo custo a ser exibido:", averageAnalysis.averageCostPerTire);
+      filterDataByMonth(selectedMonth);
+    } else {
+      console.log("🔄 [TireCostManager] ❌ Condições não atendidas para atualização em tempo real");
+    }
+  }, [averageAnalysis.averageCostPerTire, selectedMonth]);
+
+  // Day change detection and periodic check
+  useEffect(() => {
+    let lastCheckedDay = new Date().getDate();
+    
+    const checkDayChange = async () => {
+      const currentDay = new Date().getDate();
+      
+      if (currentDay !== lastCheckedDay) {
+        console.log("🌅 [TireCostManager] Detectada virada do dia! Salvando custo do dia anterior...");
+        await savePreviousDayOnDayChange();
+        lastCheckedDay = currentDay;
+      }
+    };
+
+    // Check for day change every minute
+    const interval = setInterval(checkDayChange, 60000);
+    
+    // Also check immediately on component mount
+    checkDayChange();
+
+    return () => clearInterval(interval);
+  }, [averageAnalysis.averageCostPerTire]);
 
   if (isLoading) {
     return (
@@ -2131,6 +2480,94 @@ const TireCostManager = ({
             </div>
           </CardContent>
         </Card>
+
+
+      </div>
+
+      {/* Tire Cost Chart */}
+      <div className="mb-6">
+        <Card className="bg-factory-800/50 border-tire-600/30">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-tire-200 text-lg flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5 text-neon-orange" />
+                  Oscilação do Custo por Pneu
+                </CardTitle>
+                <p className="text-tire-300 text-sm">
+                  {selectedMonth === 'all' 
+                    ? 'Evolução do custo médio por pneu ao longo dos últimos 30 dias'
+                    : `Evolução do custo médio por pneu no mês selecionado`
+                  }
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="month-filter" className="text-tire-300 text-sm">
+                  Filtrar por mês:
+                </Label>
+                <Select value={selectedMonth} onValueChange={handleMonthChange}>
+                  <SelectTrigger className="w-48 bg-factory-700 border-tire-600 text-tire-200">
+                    <SelectValue placeholder="Selecione o mês" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-factory-800 border-tire-600">
+                    <SelectItem value="all" className="text-tire-200 hover:bg-factory-700">
+                      Todos os meses
+                    </SelectItem>
+                    {getAvailableMonths().map((month) => (
+                      <SelectItem 
+                        key={month.value} 
+                        value={month.value}
+                        className="text-tire-200 hover:bg-factory-700"
+                      >
+                        {month.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="h-80">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                  <XAxis 
+                    dataKey="date" 
+                    stroke="#9CA3AF"
+                    fontSize={12}
+                  />
+                  <YAxis 
+                    stroke="#9CA3AF"
+                    fontSize={12}
+                    tickFormatter={(value) => `R$ ${value.toFixed(0)}`}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#1F2937',
+                      border: '1px solid #374151',
+                      borderRadius: '8px',
+                      color: '#F3F4F6'
+                    }}
+                    formatter={(value: number) => [
+                      `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+                      'Custo por Pneu'
+                    ]}
+                    labelFormatter={(label) => `Data: ${label}`}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="cost"
+                    stroke="#FB923C"
+                    strokeWidth={3}
+                    dot={{ fill: '#FB923C', strokeWidth: 2, r: 4 }}
+                    activeDot={{ r: 6, stroke: '#FB923C', strokeWidth: 2, fill: '#FED7AA' }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Análise por Pneu - Content with tabs */}
@@ -2187,25 +2624,7 @@ const TireCostManager = ({
                           </div>
                         </div>
 
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <Label className="text-tire-300 font-medium">
-                              Mão de Obra (Funcionários)
-                            </Label>
-                            <p className="text-tire-400 text-xs">
-                              Incluir salários dos funcionários
-                            </p>
-                          </div>
-                          <Switch
-                            checked={costOptions.includeLaborCosts}
-                            onCheckedChange={(checked) =>
-                              setCostOptions((prev) => ({
-                                ...prev,
-                                includeLaborCosts: checked,
-                              }))
-                            }
-                          />
-                        </div>
+
 
                         <div className="flex items-center justify-between">
                           <div>
@@ -2325,9 +2744,9 @@ const TireCostManager = ({
                       Seleção de Análise
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="space-y-3">
-                      <Label className="text-tire-300">Modo de Análise:</Label>
+                  <CardContent className="space-y-4 pb-12">
+                    <div className="space-y-3 flex flex-col items-end">
+                      <Label className="text-tire-300 self-start">Modo de Análise:</Label>
                       <div className="flex gap-2">
                         <Button
                           variant={
@@ -2357,8 +2776,8 @@ const TireCostManager = ({
                     </div>
 
                     {analysisMode === "individual" && (
-                      <div className="space-y-2">
-                        <Label className="text-tire-300">
+                      <div className="space-y-2 flex flex-col items-end">
+                        <Label className="text-tire-300 self-start">
                           Selecionar Pneu:
                         </Label>
                         <Select
@@ -2431,51 +2850,15 @@ const TireCostManager = ({
                       : "Análise Média"}
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="pb-12">
                   {analysisMode === "individual" && selectedProductAnalysis ? (
                     <div className="space-y-4">
                       <div className="p-4 bg-factory-700/30 rounded-lg border border-tire-600/20">
                         <h4 className="text-white font-medium mb-3">
                           {selectedProductAnalysis.productName}
                         </h4>
-                        <div className="grid grid-cols-2 gap-4 text-sm">
-                          <div className="space-y-2">
-                            <div className="flex justify-between">
-                              <span className="text-tire-300">
-                                Receita Total:
-                              </span>
-                              <span className="text-neon-green font-bold">
-                                {formatCurrency(
-                                  selectedProductAnalysis.totalRevenue,
-                                )}
-                              </span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-tire-300">Vendas:</span>
-                              <span className="text-white">
-                                {selectedProductAnalysis.salesCount}
-                              </span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-tire-300">
-                                Qtd Vendida:
-                              </span>
-                              <span className="text-white">
-                                {selectedProductAnalysis.totalSold.toFixed(0)}
-                              </span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-tire-300">
-                                Preço Médio:
-                              </span>
-                              <span className="text-neon-blue font-medium">
-                                {formatCurrency(
-                                  selectedProductAnalysis.averagePrice,
-                                )}
-                              </span>
-                            </div>
-                          </div>
-                          <div className="space-y-2">
+                        <div className="flex justify-center text-xl">
+                          <div className="space-y-2 w-full max-w-md">
                             <div className="flex justify-between">
                               <span className="text-tire-300">
                                 {selectedProductAnalysis.hasRecipe
@@ -2491,34 +2874,23 @@ const TireCostManager = ({
                             {selectedProductAnalysis.hasRecipe && (
                               <>
                                 <div className="flex justify-between">
-                                  <span className="text-tire-300 text-xs">
+                                  <span className="text-tire-300 text-lg">
                                     Materiais:
                                   </span>
-                                  <span className="text-neon-yellow font-medium text-xs">
+                                  <span className="text-white font-medium text-lg">
                                     {formatCurrency(
                                       selectedProductAnalysis.recipeCostPerTire,
                                     )}
                                   </span>
                                 </div>
 
-                                {costOptions.includeLaborCosts && (
-                                  <div className="flex justify-between">
-                                    <span className="text-tire-300 text-xs">
-                                      Mão de Obra:
-                                    </span>
-                                    <span className="text-neon-green font-medium text-xs">
-                                      {formatCurrency(
-                                        selectedProductAnalysis.laborCostPerTire,
-                                      )}
-                                    </span>
-                                  </div>
-                                )}
+
                                 {costOptions.includeCashFlowExpenses && (
                                   <div className="flex justify-between">
-                                    <span className="text-tire-300 text-xs">
+                                    <span className="text-tire-300 text-lg">
                                       Saídas de Caixa:
                                     </span>
-                                    <span className="text-neon-purple font-medium text-xs">
+                                    <span className="text-neon-purple font-medium text-lg">
                                       {formatCurrency(
                                         selectedProductAnalysis.cashFlowCostPerTire,
                                       )}
@@ -2527,10 +2899,10 @@ const TireCostManager = ({
                                 )}
                                 {costOptions.includeProductionLosses && (
                                   <div className="flex justify-between">
-                                    <span className="text-tire-300 text-xs">
+                                    <span className="text-tire-300 text-lg">
                                       Perdas (Produção + Material):
                                     </span>
-                                    <span className="text-red-400 font-medium text-xs">
+                                    <span className="text-red-400 font-medium text-lg">
                                       {formatCurrency(
                                         selectedProductAnalysis.productionLossCostPerTire,
                                       )}
@@ -2539,10 +2911,10 @@ const TireCostManager = ({
                                 )}
                                 {costOptions.includeDefectiveTireSales && (
                                   <div className="flex justify-between">
-                                    <span className="text-tire-300 text-xs">
+                                    <span className="text-tire-300 text-lg">
                                       Pneus Defeituosos (Desconto):
                                     </span>
-                                    <span className="text-green-400 font-medium text-xs">
+                                    <span className="text-green-400 font-medium text-lg">
                                       {formatCurrency(
                                         selectedProductAnalysis.defectiveTireSalesCostPerTire,
                                       )}
@@ -2551,10 +2923,10 @@ const TireCostManager = ({
                                 )}
                                 {costOptions.includeWarrantyValues && (
                                   <div className="flex justify-between">
-                                    <span className="text-tire-300 text-xs">
+                                    <span className="text-tire-300 text-lg">
                                       Valor de Garantia:
                                     </span>
-                                    <span className="text-orange-400 font-medium text-xs">
+                                    <span className="text-orange-400 font-medium text-lg">
                                       {formatCurrency(
                                         selectedProductAnalysis.warrantyCostPerTire,
                                       )}
@@ -2573,26 +2945,7 @@ const TireCostManager = ({
                                 )}
                               </span>
                             </div>
-                            <div className="flex justify-between">
-                              <span className="text-tire-300">
-                                Lucro Total:
-                              </span>
-                              <span
-                                className={`font-bold ${selectedProductAnalysis.profit >= 0 ? "text-neon-blue" : "text-red-400"}`}
-                              >
-                                {formatCurrency(selectedProductAnalysis.profit)}
-                              </span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-tire-300">Margem:</span>
-                              <span
-                                className={`font-bold ${selectedProductAnalysis.profitMargin >= 0 ? "text-neon-purple" : "text-red-400"}`}
-                              >
-                                {formatPercentage(
-                                  selectedProductAnalysis.profitMargin,
-                                )}
-                              </span>
-                            </div>
+
                           </div>
                         </div>
                       </div>
@@ -2601,7 +2954,7 @@ const TireCostManager = ({
                       {selectedProductAnalysis.hasRecipe &&
                         selectedProductAnalysis.recipeDetails && (
                           <div className="mt-4 p-3 bg-neon-yellow/10 rounded-lg border border-neon-yellow/30">
-                            <h5 className="text-neon-yellow font-medium mb-2 text-sm">
+                            <h5 className="text-white font-medium mb-2 text-sm">
                               📋 Detalhes da Receita:
                             </h5>
                             <div className="space-y-1 text-xs">
@@ -2621,11 +2974,11 @@ const TireCostManager = ({
                                   </div>
                                 ),
                               )}
-                              <div className="flex justify-between items-center pt-1 border-t border-neon-yellow/20">
-                                <span className="text-neon-yellow font-medium">
+                              <div className="flex justify-between items-center pt-1 border-t border-green-500/20">
+                                <span className="text-green-400 font-medium">
                                   Total Materiais:
                                 </span>
-                                <span className="text-neon-yellow font-bold">
+                                <span className="text-green-400 font-bold">
                                   {formatCurrency(
                                     selectedProductAnalysis.recipeDetails
                                       .totalMaterialCost,
@@ -2781,44 +3134,98 @@ const TireCostManager = ({
                     <div className="space-y-4">
                       <div className="p-4 bg-factory-700/30 rounded-lg border border-tire-600/20">
                         <h4 className="text-white font-medium mb-3">
-                          Análise Consolidada
+                          Análise Consolidada - Custo Médio
                         </h4>
-                        <div className="grid grid-cols-2 gap-4 text-sm">
-                          <div className="space-y-2">
+                        <div className="flex justify-center text-xl">
+                          <div className="space-y-2 w-full max-w-md">
                             <div className="flex justify-between">
                               <span className="text-tire-300">
-                                Qtd Vendida:
-                              </span>
-                              <span className="text-white">
-                                {averageAnalysis.totalSold.toFixed(0)}
-                              </span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-tire-300">
-                                Preço Médio:
-                              </span>
-                              <span className="text-neon-blue font-medium">
-                                {formatCurrency(averageAnalysis.averagePrice)}
-                              </span>
-                            </div>
-                          </div>
-                          <div className="space-y-2">
-                            <div className="flex justify-between">
-                              <span className="text-tire-300">
-                                Qtd Produzida:
-                              </span>
-                              <span className="text-white">
-                                {averageAnalysis.totalProduced.toFixed(0)}
-                              </span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-tire-300">
-                                Custo Médio/Pneu:
+                                Custo/Pneu (Receita):
                               </span>
                               <span className="text-neon-orange font-bold">
+                                {formatCurrency(averageAnalysis.averageCostPerTire)}
+                              </span>
+                            </div>
+                            
+                            <div className="flex justify-between">
+                              <span className="text-tire-300 text-lg">
+                                Materiais:
+                              </span>
+                              <span className="text-white font-medium text-lg">
                                 {formatCurrency(
-                                  averageAnalysis.averageCostPerTire,
+                                  tireAnalysis.length > 0 
+                                    ? tireAnalysis.reduce((sum, tire) => sum + (tire.recipeCostPerTire * tire.totalProduced), 0) / averageAnalysis.totalProduced
+                                    : 0
                                 )}
+                              </span>
+                            </div>
+
+                            {costOptions.includeCashFlowExpenses && (
+                              <div className="flex justify-between">
+                                <span className="text-tire-300 text-lg">
+                                  Saídas de Caixa:
+                                </span>
+                                <span className="text-neon-purple font-medium text-lg">
+                                  {formatCurrency(
+                                    tireAnalysis.length > 0 
+                                      ? tireAnalysis.reduce((sum, tire) => sum + (tire.cashFlowCostPerTire * tire.totalProduced), 0) / averageAnalysis.totalProduced
+                                      : 0
+                                  )}
+                                </span>
+                              </div>
+                            )}
+
+                            {costOptions.includeProductionLosses && (
+                              <div className="flex justify-between">
+                                <span className="text-tire-300 text-lg">
+                                  Perdas (Produção + Material):
+                                </span>
+                                <span className="text-red-400 font-medium text-lg">
+                                  {formatCurrency(
+                                    tireAnalysis.length > 0 
+                                      ? tireAnalysis.reduce((sum, tire) => sum + (tire.productionLossCostPerTire * tire.totalProduced), 0) / averageAnalysis.totalProduced
+                                      : 0
+                                  )}
+                                </span>
+                              </div>
+                            )}
+
+                            {costOptions.includeDefectiveTireSales && (
+                              <div className="flex justify-between">
+                                <span className="text-tire-300 text-lg">
+                                  Pneus Defeituosos (Desconto):
+                                </span>
+                                <span className="text-neon-green font-medium text-lg">
+                                  -{formatCurrency(
+                                    Math.abs(tireAnalysis.length > 0 
+                                      ? tireAnalysis.reduce((sum, tire) => sum + (tire.defectiveTireSalesCostPerTire * tire.totalProduced), 0) / averageAnalysis.totalProduced
+                                      : 0)
+                                  )}
+                                </span>
+                              </div>
+                            )}
+
+                            {costOptions.includeWarrantyValues && (
+                              <div className="flex justify-between">
+                                <span className="text-tire-300 text-lg">
+                                  Valor de Garantia:
+                                </span>
+                                <span className="text-yellow-400 font-medium text-lg">
+                                  {formatCurrency(
+                                    tireAnalysis.length > 0 
+                                      ? tireAnalysis.reduce((sum, tire) => sum + (tire.warrantyCostPerTire * tire.totalProduced), 0) / averageAnalysis.totalProduced
+                                      : 0
+                                  )}
+                                </span>
+                              </div>
+                            )}
+
+                            <div className="flex justify-between border-t border-tire-600/30 pt-2">
+                              <span className="text-tire-300 text-lg font-medium">
+                                Qtd Produzida:
+                              </span>
+                              <span className="text-neon-blue font-bold text-lg">
+                                {averageAnalysis.totalProduced.toFixed(0)}
                               </span>
                             </div>
                           </div>
@@ -2870,57 +3277,23 @@ const TireCostManager = ({
                           setAnalysisMode("individual");
                         }}
                       >
-                        <div className="flex items-center justify-between mb-2">
-                          <h4 className="text-white font-medium flex items-center gap-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
                             {selectedProduct === tire.productId && (
                               <CheckCircle className="h-4 w-4 text-neon-blue" />
                             )}
-                            {tire.productName}
-                          </h4>
-                          <div className="text-right">
-                            <span className="text-neon-green font-bold text-lg">
-                              {formatCurrency(tire.totalRevenue)}
+                            <h4 className="text-white font-medium">{tire.productName}</h4>
+                          </div>
+                          <div className="text-center">
+                            <span className="text-tire-400 text-sm mr-2">
+                              {tire.hasRecipe ? "Custo/Pneu (Receita)" : "Custo/Pneu"}
                             </span>
-                            <p className="text-tire-400 text-xs">Receita</p>
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                          <div>
-                            <p className="text-tire-400">Vendidos</p>
-                            <p className="text-white font-medium">
-                              {tire.totalSold.toFixed(0)}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-tire-400">
-                              {tire.hasRecipe
-                                ? "Custo/Pneu (Receita)"
-                                : "Custo/Pneu"}
-                            </p>
-                            <p className="text-neon-orange font-medium flex items-center gap-1">
+                            <span className="text-neon-orange font-bold text-lg flex items-center gap-1">
                               {tire.hasRecipe && (
-                                <span className="text-neon-yellow text-xs">
-                                  📋
-                                </span>
+                                <span className="text-neon-yellow text-xs">📋</span>
                               )}
                               {formatCurrency(tire.costPerTire)}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-tire-400">Lucro</p>
-                            <p
-                              className={`font-medium ${tire.profit >= 0 ? "text-neon-blue" : "text-red-400"}`}
-                            >
-                              {formatCurrency(tire.profit)}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-tire-400">Margem</p>
-                            <p
-                              className={`font-medium ${tire.profitMargin >= 0 ? "text-neon-purple" : "text-red-400"}`}
-                            >
-                              {formatPercentage(tire.profitMargin)}
-                            </p>
+                            </span>
                           </div>
                         </div>
                       </div>
@@ -2979,25 +3352,7 @@ const TireCostManager = ({
                           </div>
                         </div>
 
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <Label className="text-tire-300 font-medium">
-                              Mão de Obra (Manual)
-                            </Label>
-                            <p className="text-tire-400 text-xs">
-                              Valor manual ou usar dados do sistema
-                            </p>
-                          </div>
-                          <Switch
-                            checked={simulationCostOptions.includeLaborCosts}
-                            onCheckedChange={(checked) =>
-                              setSimulationCostOptions((prev) => ({
-                                ...prev,
-                                includeLaborCosts: checked,
-                              }))
-                            }
-                          />
-                        </div>
+
 
                         <div className="flex items-center justify-between">
                           <div>
@@ -3604,24 +3959,7 @@ const TireCostManager = ({
                         />
                       </div>
 
-                      {simulationCostOptions.includeLaborCosts && (
-                        <div className="space-y-2">
-                          <Label className="text-tire-300">
-                            Mão de Obra (R$):
-                          </Label>
-                          <Input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={simulationLaborCosts}
-                            onChange={(e) =>
-                              setSimulationLaborCosts(e.target.value)
-                            }
-                            className="bg-factory-700/50 border-tire-600/30 text-white placeholder:text-tire-400"
-                            placeholder="Ex: 8000.00 (deixe vazio para usar dados do sistema)"
-                          />
-                        </div>
-                      )}
+
 
                       {simulationCostOptions.includeCashFlowExpenses && (
                         <div className="space-y-2">
@@ -3685,76 +4023,65 @@ const TireCostManager = ({
                                 (Simulação de Custo por Pneu)
                               </span>
                             </h4>
-                            <div className="grid grid-cols-2 gap-4 text-sm">
-                              <div className="space-y-2">
+                            <div className="grid grid-cols-2 gap-6 text-lg">
+                              <div className="space-y-4">
                                 <div className="flex justify-between">
-                                  <span className="text-tire-300">
+                                  <span className="text-tire-300 text-lg">
                                     Quantidade de Pneus:
                                   </span>
-                                  <span className="text-white font-bold">
-                                    {simulationRecipeAnalysis.quantity} pneus
+                                  <span className="text-white font-bold text-xl">
+                                    {simulationRecipeAnalysis.quantity}
                                   </span>
                                 </div>
                                 <div className="flex justify-between">
-                                  <span className="text-tire-300">
+                                  <span className="text-tire-300 text-lg">
                                     Custo Total:
                                   </span>
-                                  <span className="text-neon-green font-bold">
+                                  <span className="text-neon-green font-bold text-xl">
                                     {formatCurrency(
                                       simulationRecipeAnalysis.totalCost,
                                     )}
                                   </span>
                                 </div>
                                 <div className="flex justify-between">
-                                  <span className="text-tire-300">
+                                  <span className="text-tire-300 text-lg">
                                     Custo por Pneu:
                                   </span>
-                                  <span className="text-neon-orange font-bold">
+                                  <span className="text-neon-orange font-bold text-xl">
                                     {formatCurrency(
                                       simulationRecipeAnalysis.costPerTire,
                                     )}
                                   </span>
                                 </div>
                               </div>
-                              <div className="space-y-2">
+                              <div className="space-y-4">
                                 <div className="flex justify-between">
-                                  <span className="text-tire-300 text-xs">
+                                  <span className="text-tire-300 text-base">
                                     Materiais (Receita):
                                   </span>
-                                  <span className="text-neon-yellow font-medium text-xs">
+                                  <span className="text-white font-medium text-lg">
                                     {formatCurrency(
                                       simulationRecipeAnalysis.recipeCostPerTire,
                                     )}
                                   </span>
                                 </div>
                                 <div className="flex justify-between">
-                                  <span className="text-tire-300 text-xs">
+                                  <span className="text-tire-300 text-base">
                                     Custos Fixos:
                                   </span>
-                                  <span className="text-neon-blue font-medium text-xs">
+                                  <span className="text-neon-blue font-medium text-lg">
                                     {formatCurrency(
                                       simulationRecipeAnalysis.fixedCostPerTire,
                                     )}
                                   </span>
                                 </div>
-                                {simulationCostOptions.includeLaborCosts && (
-                                  <div className="flex justify-between">
-                                    <span className="text-tire-300 text-xs">
-                                      Mão de Obra:
-                                    </span>
-                                    <span className="text-neon-green font-medium text-xs">
-                                      {formatCurrency(
-                                        simulationRecipeAnalysis.laborCostPerTire,
-                                      )}
-                                    </span>
-                                  </div>
-                                )}
+
                                 {simulationCostOptions.includeCashFlowExpenses && (
                                   <div className="flex justify-between">
-                                    <span className="text-tire-300 text-xs">
+                                    <span className="text-tire-300 text-base">
                                       Saídas de Caixa:
                                     </span>
-                                    <span className="text-neon-purple font-medium text-xs">
+                                    <span className="text-neon-purple font-medium text-lg">
                                       {formatCurrency(
                                         simulationRecipeAnalysis.cashFlowCostPerTire,
                                       )}
@@ -3763,10 +4090,10 @@ const TireCostManager = ({
                                 )}
                                 {simulationCostOptions.includeProductionLosses && (
                                   <div className="flex justify-between">
-                                    <span className="text-tire-300 text-xs">
+                                    <span className="text-tire-300 text-base">
                                       Perdas de Produção:
                                     </span>
-                                    <span className="text-red-400 font-medium text-xs">
+                                    <span className="text-red-400 font-medium text-lg">
                                       {formatCurrency(
                                         simulationRecipeAnalysis.productionLossCostPerTire,
                                       )}
@@ -3780,7 +4107,7 @@ const TireCostManager = ({
                           {/* Recipe Details */}
                           {simulationRecipeAnalysis.recipeDetails && (
                             <div className="mt-4 p-3 bg-neon-yellow/10 rounded-lg border border-neon-yellow/30">
-                              <h5 className="text-neon-yellow font-medium mb-2 text-sm">
+                              <h5 className="text-white font-medium mb-2 text-sm">
                                 📋 Composição da Receita:
                               </h5>
                               <div className="space-y-1 text-xs">
@@ -3800,11 +4127,11 @@ const TireCostManager = ({
                                     </div>
                                   ),
                                 )}
-                                <div className="flex justify-between items-center pt-1 border-t border-neon-yellow/20">
-                                  <span className="text-neon-yellow font-medium">
+                                <div className="flex justify-between items-center pt-1 border-t border-neon-green/20">
+                                  <span className="text-neon-green font-medium">
                                     Custo de Materiais por Pneu:
                                   </span>
-                                  <span className="text-neon-yellow font-bold">
+                                  <span className="text-neon-green font-bold">
                                     {formatCurrency(
                                       simulationRecipeAnalysis.recipeDetails
                                         .totalMaterialCost,
@@ -3843,20 +4170,7 @@ const TireCostManager = ({
                                     </span>
                                   </div>
                                 )}
-                                {simulationRecipeAnalysis.manualInputs
-                                  .laborCosts > 0 && (
-                                  <div className="flex justify-between items-center">
-                                    <span className="text-tire-300">
-                                      Mão de Obra:
-                                    </span>
-                                    <span className="text-neon-green font-bold">
-                                      {formatCurrency(
-                                        simulationRecipeAnalysis.manualInputs
-                                          .laborCosts,
-                                      )}
-                                    </span>
-                                  </div>
-                                )}
+
                                 {simulationRecipeAnalysis.manualInputs
                                   .cashFlowExpenses > 0 && (
                                   <div className="flex justify-between items-center">
@@ -4093,20 +4407,7 @@ const TireCostManager = ({
                                 </span>
                               </div>
                             )}
-                            {multipleRecipesAnalysis.manualInputs.laborCosts >
-                              0 && (
-                              <div className="flex justify-between items-center">
-                                <span className="text-tire-300">
-                                  Mão de Obra:
-                                </span>
-                                <span className="text-neon-green font-bold">
-                                  {formatCurrency(
-                                    multipleRecipesAnalysis.manualInputs
-                                      .laborCosts,
-                                  )}
-                                </span>
-                              </div>
-                            )}
+
                             {multipleRecipesAnalysis.manualInputs
                               .cashFlowExpenses > 0 && (
                               <div className="flex justify-between items-center">

@@ -17,6 +17,8 @@ import type {
   CostSimulation,
   WarrantyEntry,
   ResaleProduct,
+  PendingSale,
+  Debt,
 } from "@/types/financial";
 
 export class DataManager {
@@ -53,8 +55,9 @@ export class DataManager {
         removedFields: { id, created_at, updated_at, last_updated },
       });
 
-      if (id && id.startsWith("temp_")) {
-        // Insert new record
+      if (!id || id.startsWith("temp_")) {
+        // Insert new record (no id or temp id)
+        console.log(`🆕 [DataManager] Inserindo novo registro em ${tableName}...`);
         const { data: insertedData, error } = await this.supabase
           .from(tableName)
           .insert([dataToSave])
@@ -77,6 +80,22 @@ export class DataManager {
           `✅ [DataManager] Dados inseridos em ${tableName}:`,
           insertedData,
         );
+        
+        // Log específico para production_entries para debug da data
+        if (tableName === 'production_entries' && insertedData) {
+          console.log('🔍 [DataManager] DEBUG DATA SALVA:', {
+            production_date_raw: (insertedData as any).production_date,
+            production_date_type: typeof (insertedData as any).production_date,
+            production_date_parsed: new Date((insertedData as any).production_date),
+            production_date_formatted_ptbr: new Date((insertedData as any).production_date).toLocaleDateString('pt-BR'),
+            production_date_formatted_iso: new Date((insertedData as any).production_date).toISOString(),
+            timezone_offset: new Date().getTimezoneOffset(),
+            current_date: new Date().toISOString(),
+            data_enviada_para_supabase: dataToSave,
+            data_retornada_do_supabase: insertedData,
+          });
+        }
+        
         return insertedData;
       } else if (id) {
         // Update existing record
@@ -714,16 +733,37 @@ export class DataManager {
   async saveProductionEntry(
     entry: Omit<ProductionEntry, "id" | "created_at">,
   ): Promise<ProductionEntry | null> {
-    console.log("💾 [DataManager] Salvando entrada de produção:", {
+    console.log("🚀 [DataManager] INÍCIO - saveProductionEntry chamado:", {
+      entry_recebida: entry,
+      production_date_original: entry.production_date,
+      timestamp: new Date().toISOString()
+    });
+
+    // WORKAROUND: Add +2 days to compensate Supabase UTC conversion
+    // Based on logs: sending +1 day still results in -1 day, so we need +2 days
+    const originalDate = new Date(entry.production_date);
+    const adjustedDate = new Date(originalDate);
+    adjustedDate.setDate(originalDate.getDate() + 2);
+    const adjustedDateString = `${adjustedDate.getFullYear()}-${String(adjustedDate.getMonth() + 1).padStart(2, "0")}-${String(adjustedDate.getDate()).padStart(2, "0")}`;
+    
+    const adjustedEntry = {
       ...entry,
-      production_date_formatted: new Date(
-        entry.production_date,
-      ).toLocaleDateString("pt-BR"),
+      production_date: adjustedDateString
+    };
+    
+    console.log("💾 [DataManager] WORKAROUND APLICADO - Salvando entrada de produção:", {
+      production_date_original: entry.production_date,
+      production_date_ajustada: adjustedDateString,
+      originalDate_obj: originalDate,
+      adjustedDate_obj: adjustedDate,
+      reason: "Workaround +2 dias para compensar conversão UTC do Supabase (ajustado baseado nos logs)",
+      production_date_tipo: typeof adjustedDateString,
+      entry_final: adjustedEntry
     });
 
     try {
       const result = await this.saveToDatabase("production_entries", {
-        ...entry,
+        ...adjustedEntry,
         id: `temp_${Date.now()}`,
       });
 
@@ -3331,23 +3371,127 @@ export class DataManager {
   // Função para salvar valor empresarial
   async saveBusinessValue(value: number): Promise<boolean> {
     try {
-      const { error } = await supabase
+      console.log('💾 [DataManager] Tentando salvar valor empresarial:', value);
+      
+      // Primeiro, tentar atualizar o registro existente
+      const { data: updateData, error: updateError } = await supabase
         .from('system_settings')
-        .upsert({
-          key: 'business_value',
+        .update({
           value: value.toString(),
           updated_at: new Date().toISOString()
-        });
+        })
+        .eq('key', 'business_value')
+        .select();
 
-      if (error) {
-        console.error('❌ [DataManager] Erro ao salvar valor empresarial:', error);
-        return false;
+      if (updateError) {
+        console.warn('⚠️ [DataManager] Erro ao atualizar valor empresarial, tentando inserir:', updateError);
+        
+        // Se a atualização falhou, tentar inserir um novo registro
+        const { data: insertData, error: insertError } = await supabase
+          .from('system_settings')
+          .insert({
+            key: 'business_value',
+            value: value.toString(),
+            updated_at: new Date().toISOString()
+          })
+          .select();
+
+        if (insertError) {
+          console.error('❌ [DataManager] Erro ao inserir valor empresarial:', insertError);
+          return false;
+        }
+
+        console.log('✅ [DataManager] Valor empresarial inserido com sucesso:', value);
+      } else {
+        console.log('✅ [DataManager] Valor empresarial atualizado com sucesso:', value);
       }
 
-      console.log('✅ [DataManager] Valor empresarial salvo com sucesso:', value);
+      // IMPORTANTE: Recalcular lucro automaticamente se houver baseline
+      try {
+        const baseline = await this.loadBusinessValueBaseline();
+        if (baseline !== null) {
+          console.log('🔄 [DataManager] Recalculando lucro empresarial após mudança no valor...');
+          await this.calculateBusinessProfit();
+        }
+      } catch (error) {
+        console.warn('⚠️ [DataManager] Erro ao recalcular lucro após salvar valor:', error);
+      }
+
       return true;
     } catch (error) {
-      console.error('❌ [DataManager] Erro ao salvar valor empresarial:', error);
+      console.error('❌ [DataManager] Erro crítico ao salvar valor empresarial:', error);
+      return false;
+    }
+  }
+
+  // Função para carregar lucro empresarial
+  async loadBusinessProfit(): Promise<number> {
+    try {
+      console.log('📊 [DataManager] Carregando lucro empresarial...');
+      
+      const { data, error } = await supabase
+        .from('system_settings')
+        .select('value')
+        .eq('key', 'business_profit')
+        .single();
+
+      if (error) {
+        console.warn('⚠️ [DataManager] Erro ao carregar lucro empresarial, usando valor padrão:', error);
+        // Por enquanto, usar o mesmo valor do business_value como fallback
+        return await this.loadBusinessValue();
+      }
+
+      const profit = parseFloat(data.value) || 0;
+      console.log('✅ [DataManager] Lucro empresarial carregado:', profit);
+      return profit;
+    } catch (error) {
+      console.error('❌ [DataManager] Erro crítico ao carregar lucro empresarial:', error);
+      // Fallback para o valor empresarial
+      return await this.loadBusinessValue();
+    }
+  }
+
+  // Função para salvar lucro empresarial
+  async saveBusinessProfit(profit: number): Promise<boolean> {
+    try {
+      console.log('💾 [DataManager] Tentando salvar lucro empresarial:', profit);
+      
+      // Primeiro, tentar atualizar o registro existente
+      const { data: updateData, error: updateError } = await supabase
+        .from('system_settings')
+        .update({
+          value: profit.toString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('key', 'business_profit')
+        .select();
+
+      if (updateError) {
+        console.warn('⚠️ [DataManager] Erro ao atualizar lucro empresarial, tentando inserir:', updateError);
+        
+        // Se a atualização falhou, tentar inserir um novo registro
+        const { data: insertData, error: insertError } = await supabase
+          .from('system_settings')
+          .insert({
+            key: 'business_profit',
+            value: profit.toString(),
+            updated_at: new Date().toISOString()
+          })
+          .select();
+
+        if (insertError) {
+          console.error('❌ [DataManager] Erro ao inserir lucro empresarial:', insertError);
+          return false;
+        }
+
+        console.log('✅ [DataManager] Lucro empresarial inserido com sucesso:', profit);
+        return true;
+      }
+
+      console.log('✅ [DataManager] Lucro empresarial atualizado com sucesso:', profit);
+      return true;
+    } catch (error) {
+      console.error('❌ [DataManager] Erro crítico ao salvar lucro empresarial:', error);
       return false;
     }
   }
@@ -3379,6 +3523,38 @@ export class DataManager {
 
     return () => {
       console.log('🔕 [DataManager] Removendo subscription do valor empresarial');
+      subscription.unsubscribe();
+    };
+  }
+
+  // Função para subscrever mudanças no lucro empresarial em tempo real
+  subscribeToBusinessProfitChanges(callback: (profit: number) => void): () => void {
+    console.log('🔔 [DataManager] Configurando subscription para lucro empresarial');
+
+    const subscription = supabase
+      .channel('business_profit_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'system_settings',
+          filter: 'key=eq.business_profit'
+        },
+        (payload) => {
+          console.log('🔄 [DataManager] Mudança detectada no lucro empresarial:', payload);
+
+          if (payload.new && typeof payload.new === 'object' && 'value' in payload.new) {
+            const newProfit = parseFloat(payload.new.value) || 0;
+            console.log(`📡 [DataManager] Novo lucro empresarial recebido: R$ ${newProfit.toFixed(2)}`);
+            callback(newProfit);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      console.log('🔕 [DataManager] Cancelando subscription do lucro empresarial');
       subscription.unsubscribe();
     };
   }
@@ -3417,6 +3593,797 @@ export class DataManager {
       subscription.unsubscribe();
     };
   }
+
+  // Função para salvar baseline do valor empresarial (para cálculo de lucro)
+  async saveBusinessValueBaseline(baselineValue: number): Promise<boolean> {
+    try {
+      console.log('💾 [DataManager] Salvando baseline do valor empresarial:', baselineValue);
+      
+      // Usar upsert para inserir ou atualizar automaticamente
+      const { data, error } = await this.supabase
+        .from('system_settings')
+        .upsert({
+          key: 'business_value_baseline',
+          value: baselineValue.toString(),
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'key'
+        })
+        .select();
+
+      if (error) {
+        console.error('❌ [DataManager] Erro ao salvar baseline do valor empresarial:', error);
+        return false;
+      }
+
+      console.log('✅ [DataManager] Baseline do valor empresarial salvo com sucesso:', baselineValue);
+      console.log('📊 [DataManager] Dados salvos:', data);
+      return true;
+    } catch (error) {
+      console.error('❌ [DataManager] Erro crítico ao salvar baseline do valor empresarial:', error);
+      return false;
+    }
+  }
+
+  // Função para carregar baseline do valor empresarial
+  async loadBusinessValueBaseline(): Promise<number | null> {
+    try {
+      console.log('📊 [DataManager] Carregando baseline do valor empresarial...');
+      
+      const { data, error } = await this.supabase
+        .from('system_settings')
+        .select('value')
+        .eq('key', 'business_value_baseline')
+        .maybeSingle();
+
+      if (error) {
+        console.error('❌ [DataManager] Erro ao carregar baseline:', error);
+        return null;
+      }
+
+      if (!data || !data.value || data.value.trim() === '') {
+        console.log('📊 [DataManager] Baseline não encontrado ou desativado');
+        return null;
+      }
+
+      const baseline = parseFloat(data.value) || 0;
+      console.log('✅ [DataManager] Baseline do valor empresarial carregado:', baseline);
+      return baseline;
+    } catch (error) {
+      console.error('❌ [DataManager] Erro crítico ao carregar baseline do valor empresarial:', error);
+      return null;
+    }
+  }
+
+  // Função para calcular lucro empresarial baseado na diferença do baseline
+  async calculateBusinessProfit(): Promise<number> {
+    try {
+      console.log('🧮 [DataManager] Calculando lucro empresarial baseado no baseline...');
+      
+      const currentValue = await this.loadBusinessValue();
+      const baseline = await this.loadBusinessValueBaseline();
+      
+      if (baseline === null) {
+        console.log('📊 [DataManager] Sem baseline definido, lucro empresarial = 0');
+        return 0;
+      }
+      
+      const profit = currentValue - baseline;
+      console.log(`💰 [DataManager] Lucro calculado: R$ ${currentValue.toFixed(2)} - R$ ${baseline.toFixed(2)} = R$ ${profit.toFixed(2)}`);
+      
+      // Salvar o lucro calculado
+      await this.saveBusinessProfit(profit);
+      
+      return profit;
+    } catch (error) {
+      console.error('❌ [DataManager] Erro ao calcular lucro empresarial:', error);
+      return 0;
+    }
+  }
+
+  // Função para confirmar balanço empresarial (criar baseline)
+  async confirmBusinessBalance(): Promise<boolean> {
+    try {
+      console.log('✅ [DataManager] Confirmando balanço empresarial...');
+      
+      const currentValue = await this.loadBusinessValue();
+      const success = await this.saveBusinessValueBaseline(currentValue);
+      
+      if (success) {
+        console.log(`🎯 [DataManager] Balanço confirmado! Baseline definido como: R$ ${currentValue.toFixed(2)}`);
+        
+        // Salvar no histórico após confirmar
+        await this.saveBaselineHistory('confirm');
+        
+        // Recalcular o lucro (que será 0 após definir o baseline)
+        await this.calculateBusinessProfit();
+      }
+      
+      return success;
+    } catch (error) {
+      console.error('❌ [DataManager] Erro ao confirmar balanço empresarial:', error);
+      return false;
+    }
+  }
+
+  // Função para zerar lucro empresarial (remover baseline)
+  async resetBusinessProfit(): Promise<boolean> {
+    try {
+      console.log('🔄 [DataManager] Zerando lucro empresarial (removendo baseline)...');
+      
+      // Primeiro, verificar se o baseline existe
+      const { data: existingData, error: checkError } = await this.supabase
+        .from('system_settings')
+        .select('*')
+        .eq('key', 'business_value_baseline')
+        .maybeSingle();
+
+      if (checkError) {
+        console.error('❌ [DataManager] Erro ao verificar baseline existente:', checkError);
+        return false;
+      }
+
+      if (!existingData) {
+        console.log('⚠️ [DataManager] Baseline já não existe no banco de dados');
+        return true;
+      }
+
+      console.log('🔍 [DataManager] Baseline encontrado, desativando via soft delete...');
+
+      // Usar soft delete como método principal (mais confiável)
+      const { data: updateData, error: updateError } = await this.supabase
+        .from('system_settings')
+        .update({ 
+          value: '',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', existingData.id)
+        .select();
+
+      if (updateError) {
+        console.error('❌ [DataManager] Erro ao desativar baseline:', updateError);
+        return false;
+      }
+
+      console.log('✅ [DataManager] Baseline desativado com sucesso (soft delete):', updateData);
+      
+      // Verificar se foi realmente desativado
+      const { data: verifyData, error: verifyError } = await this.supabase
+        .from('system_settings')
+        .select('*')
+        .eq('key', 'business_value_baseline')
+        .maybeSingle();
+
+      if (verifyError) {
+        console.error('❌ [DataManager] Erro ao verificar desativação:', verifyError);
+      } else if (verifyData && verifyData.value && verifyData.value.trim() !== '') {
+        console.error('❌ [DataManager] ERRO: Baseline ainda ativo após desativação!', verifyData);
+        return false;
+      } else {
+        console.log('✅ [DataManager] Verificação confirmada: Baseline foi desativado com sucesso!');
+      }
+
+      console.log('✅ [DataManager] Sistema de lucro empresarial desativado.');
+      
+      // Recalcular o lucro (que será 0 sem baseline)
+      await this.calculateBusinessProfit();
+      
+      return true;
+    } catch (error) {
+      console.error('❌ [DataManager] Erro ao desativar baseline:', error);
+      return false;
+    }
+  }
+
+  // Alias para melhor nomenclatura
+  async deactivateBaseline(): Promise<boolean> {
+    console.log('🔄 [DataManager] Desativando baseline do sistema de lucro empresarial...');
+    
+    // Salvar no histórico antes de desativar
+    await this.saveBaselineHistory('deactivate');
+    
+    return this.resetBusinessProfit();
+  }
+
+  // Salvar histórico de baseline
+  async saveBaselineHistory(action: 'confirm' | 'deactivate' | 'redefine'): Promise<void> {
+    try {
+      const currentBaseline = await this.loadBusinessValueBaseline();
+      const currentBusinessValue = await this.loadBusinessValue();
+      const currentProfit = await this.loadBusinessProfit();
+
+      if (currentBaseline !== null) {
+        const historyData = {
+          baseline_value: currentBaseline,
+          business_value: currentBusinessValue,
+          profit_value: currentProfit,
+          action: action,
+          timestamp: new Date().toISOString(),
+          description: this.getActionDescription(action, currentBaseline, currentBusinessValue, currentProfit)
+        };
+
+        // Usar system_settings para armazenar histórico
+        const historyKey = `baseline_history_${Date.now()}`;
+        const { error } = await this.supabase
+          .from('system_settings')
+          .upsert({
+            key: historyKey,
+            value: JSON.stringify(historyData),
+            description: `Histórico: ${action}`,
+            created_at: new Date().toISOString()
+          }, {
+            onConflict: 'key'
+          });
+
+        if (error) {
+          console.error('❌ [DataManager] Erro ao salvar histórico:', error);
+        } else {
+          console.log('✅ [DataManager] Histórico salvo:', historyData);
+        }
+      }
+    } catch (error) {
+      console.error('❌ [DataManager] Erro crítico ao salvar histórico:', error);
+    }
+  }
+
+  // Obter descrição da ação para o histórico
+  private getActionDescription(action: string, baseline: number, businessValue: number, profit: number): string {
+    const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    }).format(value);
+
+    switch (action) {
+      case 'confirm':
+        return `Baseline confirmado em ${formatCurrency(baseline)} | Valor: ${formatCurrency(businessValue)} | Lucro: ${formatCurrency(profit)}`;
+      case 'deactivate':
+        return `Baseline desativado | Valor anterior: ${formatCurrency(baseline)} | Lucro anterior: ${formatCurrency(profit)}`;
+      case 'redefine':
+        return `Baseline redefinido para ${formatCurrency(baseline)} | Valor: ${formatCurrency(businessValue)} | Novo lucro: ${formatCurrency(profit)}`;
+      default:
+        return `Ação: ${action} | Baseline: ${formatCurrency(baseline)} | Valor: ${formatCurrency(businessValue)} | Lucro: ${formatCurrency(profit)}`;
+    }
+  }
+
+  // Carregar histórico de baselines
+  async loadBaselineHistory(): Promise<any[]> {
+    try {
+      const { data, error } = await this.supabase
+        .from('system_settings')
+        .select('*')
+        .like('key', 'baseline_history_%')
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (error) {
+        console.error('❌ [DataManager] Erro ao carregar histórico:', error);
+        return [];
+      }
+
+      // Parsear dados JSON do histórico
+      const historyEntries = (data || []).map(entry => {
+        try {
+          const parsedValue = JSON.parse(entry.value);
+          return {
+            id: entry.id,
+            key: entry.key,
+            ...parsedValue,
+            created_at: entry.created_at
+          };
+        } catch (parseError) {
+          console.error('❌ [DataManager] Erro ao parsear entrada do histórico:', parseError);
+          return null;
+        }
+      }).filter(entry => entry !== null);
+
+      return historyEntries;
+    } catch (error) {
+      console.error('❌ [DataManager] Erro crítico ao carregar histórico:', error);
+      return [];
+    }
+  }
+
+  // Restaurar baseline do histórico
+  async restoreBaseline(historyKey: string): Promise<boolean> {
+    try {
+      // Buscar entrada do histórico
+      const { data: historyData, error: historyError } = await this.supabase
+        .from('system_settings')
+        .select('*')
+        .eq('key', historyKey)
+        .single();
+
+      if (historyError || !historyData) {
+        console.error('❌ [DataManager] Erro ao buscar histórico:', historyError);
+        return false;
+      }
+
+      // Parsear dados do histórico
+      const parsedHistory = JSON.parse(historyData.value);
+
+      // Salvar estado atual no histórico antes de restaurar
+      await this.saveBaselineHistory('redefine');
+
+      // Restaurar baseline
+      const success = await this.saveBusinessValueBaseline(parsedHistory.baseline_value);
+      
+      if (success) {
+        console.log('✅ [DataManager] Baseline restaurado do histórico:', parsedHistory);
+        
+        // Recalcular lucro
+        await this.calculateBusinessProfit();
+        
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      console.error('❌ [DataManager] Erro crítico ao restaurar baseline:', error);
+      return false;
+    }
+  }
+
+  // ==========================================
+  // FUNCIONALIDADES DE BACKUP E RESTAURAÇÃO
+  // ==========================================
+
+  /**
+   * Exporta toda a base de dados do sistema para backup
+   */
+  async exportDatabase(): Promise<string> {
+    try {
+      console.log('🔄 [DataManager] Iniciando exportação da base de dados...');
+      
+      const exportData: any = {
+        metadata: {
+          exportDate: new Date().toISOString(),
+          version: '1.0',
+          system: 'SistemaRec'
+        },
+        data: {}
+      };
+
+      // Mapeamento das tabelas do sistema (backup_name -> actual_table)
+      const tableMapping: { [key: string]: string } = {
+        'clients': 'customers',
+        'products': 'raw_materials', 
+        'services': 'services',
+        'transactions': 'cash_flow_entries',
+        'tire_inventory': 'stock_items',
+        'service_items': 'service_items',
+        'system_settings': 'system_settings',
+        'cash_flow': 'cash_flow_entries',
+        'expenses': 'expenses'
+      };
+
+      // Exporta dados de cada tabela
+      for (const [backupName, actualTable] of Object.entries(tableMapping)) {
+        try {
+          console.log(`📥 Exportando ${actualTable} -> ${backupName}`);
+          
+          const { data, error } = await this.supabase
+            .from(actualTable as any)
+            .select('*');
+
+          if (error) {
+            console.error(`❌ Erro ao exportar tabela ${actualTable}:`, error);
+            exportData.data[backupName] = [];
+          } else {
+            exportData.data[backupName] = data || [];
+            console.log(`✅ Tabela ${actualTable} exportada: ${data?.length || 0} registros`);
+          }
+        } catch (tableError) {
+          console.error(`❌ Erro crítico na exportação da tabela ${actualTable}:`, tableError);
+          exportData.data[backupName] = [];
+        }
+      }
+
+      console.log('✅ [DataManager] Exportação concluída com sucesso');
+      return JSON.stringify(exportData, null, 2);
+
+    } catch (error) {
+      console.error('❌ [DataManager] Erro crítico na exportação:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Importa e restaura toda a base de dados do sistema
+   */
+  async importDatabase(jsonData: string): Promise<boolean> {
+    try {
+      console.log('🔄 [DataManager] Iniciando importação da base de dados...');
+      
+      const importData = JSON.parse(jsonData);
+      
+      // Validação básica da estrutura
+      if (!importData.data || !importData.metadata) {
+        console.error('❌ Estrutura de backup inválida');
+        return false;
+      }
+
+      console.log('📊 Backup válido encontrado:', importData.metadata);
+
+      // Mapeamento correto das tabelas do sistema
+      const tableMapping: { [key: string]: string } = {
+        'clients': 'customers',
+        'products': 'raw_materials', 
+        'services': 'services',
+        'transactions': 'cash_flow_entries',
+        'tire_inventory': 'stock_items',
+        'service_items': 'service_items',
+        'system_settings': 'system_settings',
+        'cash_flow': 'cash_flow_entries',
+        'expenses': 'expenses'
+      };
+
+      let successCount = 0;
+      let errorCount = 0;
+
+      // Processa cada tabela do backup
+      for (const [backupTable, actualTable] of Object.entries(tableMapping)) {
+        try {
+          const tableData = importData.data[backupTable];
+          
+          if (!tableData || !Array.isArray(tableData)) {
+            console.log(`⚠️ Tabela ${backupTable} não encontrada no backup ou vazia`);
+            continue;
+          }
+
+          console.log(`📥 Importando ${backupTable} -> ${actualTable} (${tableData.length} registros)`);
+
+          // Para system_settings, usa upsert para não duplicar
+          if (actualTable === 'system_settings') {
+            const { error: upsertError } = await this.supabase
+              .from(actualTable as any)
+              .upsert(tableData, { onConflict: 'key' });
+
+            if (upsertError) {
+              console.error(`❌ Erro ao fazer upsert na tabela ${actualTable}:`, upsertError);
+              errorCount++;
+            } else {
+              console.log(`✅ Tabela ${actualTable} importada com sucesso`);
+              successCount++;
+            }
+          } else {
+            // Para outras tabelas, usa estratégia de upsert com IDs preservados
+            console.log(`🔄 Fazendo upsert de ${tableData.length} registros na tabela ${actualTable}`);
+            
+            // Processa em lotes menores
+            const batchSize = 20;
+            let batchSuccessCount = 0;
+            
+            for (let i = 0; i < tableData.length; i += batchSize) {
+              const batch = tableData.slice(i, i + batchSize);
+              console.log(`📦 Processando lote ${Math.floor(i/batchSize) + 1} (${batch.length} registros)`);
+
+              try {
+                const { error: upsertError } = await this.supabase
+                  .from(actualTable as any)
+                  .upsert(batch, { 
+                    onConflict: 'id',
+                    ignoreDuplicates: false 
+                  });
+
+                if (upsertError) {
+                  console.error(`❌ Erro no lote ${Math.floor(i/batchSize) + 1} da tabela ${actualTable}:`, upsertError);
+                  
+                  // Tenta inserir registros individualmente se o lote falhar
+                  for (const record of batch) {
+                    try {
+                      const { error: singleError } = await this.supabase
+                        .from(actualTable as any)
+                        .upsert(record, { onConflict: 'id' });
+                      
+                      if (!singleError) {
+                        batchSuccessCount++;
+                      }
+                    } catch (singleRecordError) {
+                      console.error(`❌ Erro no registro individual:`, singleRecordError);
+                    }
+                  }
+                } else {
+                  batchSuccessCount += batch.length;
+                  console.log(`✅ Lote ${Math.floor(i/batchSize) + 1} inserido com sucesso`);
+                }
+              } catch (batchError) {
+                console.error(`❌ Erro crítico no lote ${Math.floor(i/batchSize) + 1}:`, batchError);
+              }
+            }
+            
+            if (batchSuccessCount > 0) {
+              console.log(`✅ Tabela ${actualTable}: ${batchSuccessCount}/${tableData.length} registros importados`);
+              successCount++;
+            } else {
+              console.error(`❌ Falha completa na importação da tabela ${actualTable}`);
+              errorCount++;
+            }
+          }
+
+        } catch (tableError) {
+          console.error(`❌ Erro crítico na importação da tabela ${backupTable}:`, tableError);
+          errorCount++;
+        }
+      }
+
+      console.log(`📊 Importação finalizada: ${successCount} sucessos, ${errorCount} erros`);
+      
+      if (successCount > 0) {
+        console.log('✅ [DataManager] Importação concluída com sucesso');
+        return true;
+      } else {
+        console.log('❌ [DataManager] Falha na importação');
+        return false;
+      }
+
+    } catch (error) {
+      console.error('❌ [DataManager] Erro crítico na importação:', error);
+      return false;
+    }
+  }
+
+  // Debt methods
+  async saveDebt(
+    debt: Omit<Debt, "id" | "created_at" | "updated_at">
+  ): Promise<Debt | null> {
+    console.log("🚀 [DataManager] Iniciando saveDebt...");
+    console.log("📝 [DataManager] Dados da dívida:", debt);
+    console.log("🗄️ [DataManager] Salvando na tabela: debts");
+    
+    try {
+      const result = await this.saveToDatabase<Debt>("debts", debt as any);
+      console.log("📥 [DataManager] Resultado do saveToDatabase:", result);
+      return result;
+    } catch (error) {
+      console.error("❌ [DataManager] Erro em saveDebt:", error);
+      throw error;
+    }
+  }
+
+  async loadDebts(): Promise<Debt[]> {
+    try {
+      const rawData = await this.loadFromDatabase<any>("debts");
+      console.log("🔍 [DataManager] Raw debts data from database:", rawData);
+      
+      // Convert string values to numbers to ensure proper formatting
+      const processedData = rawData.map((debt: any) => {
+        const processed = {
+          ...debt,
+          total_amount: typeof debt.total_amount === 'string' ? parseFloat(debt.total_amount) : debt.total_amount,
+          paid_amount: typeof debt.paid_amount === 'string' ? parseFloat(debt.paid_amount) : debt.paid_amount,
+          remaining_amount: typeof debt.remaining_amount === 'string' ? parseFloat(debt.remaining_amount) : debt.remaining_amount,
+        };
+        
+        console.log("🔍 [DataManager] Processed debt:", {
+          id: processed.id,
+          description: processed.description,
+          total_amount: processed.total_amount,
+          paid_amount: processed.paid_amount,
+          remaining_amount: processed.remaining_amount,
+          types: {
+            total_amount: typeof processed.total_amount,
+            paid_amount: typeof processed.paid_amount,
+            remaining_amount: typeof processed.remaining_amount,
+          }
+        });
+        
+        return processed;
+      });
+      
+      console.log("✅ [DataManager] Processed debts data:", processedData.length);
+      return processedData as Debt[];
+    } catch (error) {
+      console.error("❌ [DataManager] Error loading debts:", error);
+      return [];
+    }
+  }
+
+  async updateDebt(
+    id: string,
+    updates: Partial<Debt>
+  ): Promise<boolean> {
+    console.log("🔄 [DataManager] updateDebt iniciado:", {
+      id,
+      updates,
+      updateTypes: Object.keys(updates).reduce((acc, key) => {
+        acc[key] = typeof updates[key as keyof Debt];
+        return acc;
+      }, {} as Record<string, string>)
+    });
+    
+    // Ensure numeric values are properly formatted
+    const sanitizedUpdates = { ...updates };
+    if (sanitizedUpdates.paid_amount !== undefined) {
+      sanitizedUpdates.paid_amount = Number(sanitizedUpdates.paid_amount) || 0;
+    }
+    if (sanitizedUpdates.remaining_amount !== undefined) {
+      sanitizedUpdates.remaining_amount = Number(sanitizedUpdates.remaining_amount) || 0;
+    }
+    if (sanitizedUpdates.total_amount !== undefined) {
+      sanitizedUpdates.total_amount = Number(sanitizedUpdates.total_amount) || 0;
+    }
+    
+    console.log("🔄 [DataManager] updateDebt valores sanitizados:", {
+      id,
+      sanitizedUpdates,
+      sanitizedTypes: Object.keys(sanitizedUpdates).reduce((acc, key) => {
+        acc[key] = typeof sanitizedUpdates[key as keyof Debt];
+        return acc;
+      }, {} as Record<string, string>)
+    });
+    
+    const result = await this.updateInDatabase("debts", id, sanitizedUpdates);
+    
+    console.log("🔄 [DataManager] updateDebt resultado:", {
+      id,
+      result,
+      originalUpdates: updates,
+      sanitizedUpdates
+    });
+    
+    return result;
+  }
+
+  async deleteDebt(id: string): Promise<boolean> {
+    return this.deleteFromDatabase("debts", id);
+  }
+
+  /**
+   * Gera nome do arquivo de backup
+   */
+  generateBackupFileName(): string {
+    const now = new Date();
+    const dateStr = now.toISOString().split('T')[0]; // YYYY-MM-DD
+    const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-'); // HH-MM-SS
+    return `sistemarec_backup_${dateStr}_${timeStr}.json`;
+  }
+
+  // Tire Cost History methods
+  async saveTireCostHistory(
+    date: string,
+    averageCostPerTire: number
+  ): Promise<boolean> {
+    try {
+      console.log("💾 [DataManager] Salvando histórico de custo por pneu:", {
+        date,
+        averageCostPerTire
+      });
+
+      // Check if record for this date already exists
+      const { data: existingRecord, error: checkError } = await (this.supabase as any)
+        .from("tire_cost_history")
+        .select("*")
+        .eq("date", date)
+        .single();
+
+      if (checkError && checkError.code !== 'PGRST116') {
+        console.error("❌ [DataManager] Erro ao verificar histórico existente:", checkError);
+        throw checkError;
+      }
+
+      if (existingRecord) {
+        // Update existing record
+        const { error: updateError } = await (this.supabase as any)
+          .from("tire_cost_history")
+          .update({
+            average_cost_per_tire: averageCostPerTire,
+            updated_at: new Date().toISOString()
+          })
+          .eq("date", date);
+
+        if (updateError) {
+          console.error("❌ [DataManager] Erro ao atualizar histórico:", updateError);
+          throw updateError;
+        }
+
+        console.log("✅ [DataManager] Histórico de custo atualizado para:", date);
+      } else {
+        // Insert new record
+        const { error: insertError } = await (this.supabase as any)
+          .from("tire_cost_history")
+          .insert([{
+            date,
+            average_cost_per_tire: averageCostPerTire
+          }]);
+
+        if (insertError) {
+          console.error("❌ [DataManager] Erro ao inserir histórico:", insertError);
+          throw insertError;
+        }
+
+        console.log("✅ [DataManager] Novo histórico de custo salvo para:", date);
+      }
+
+      return true;
+    } catch (error) {
+      console.error("❌ [DataManager] Erro em saveTireCostHistory:", error);
+      return false;
+    }
+  }
+
+  async loadTireCostHistory(days: number = 30): Promise<Array<{date: string, cost: number}>> {
+    try {
+      console.log(`📊 [DataManager] Carregando histórico de custos dos últimos ${days} dias`);
+
+      // Calculate date range with WORKAROUND +1 for end date to include today's record
+      const endDate = new Date();
+      const endDateWithWorkaround = new Date(endDate);
+      endDateWithWorkaround.setDate(endDate.getDate() + 1); // +1 day workaround
+      
+      const startDate = new Date();
+      startDate.setDate(endDate.getDate() - days);
+
+      const startDateStr = startDate.toISOString().split('T')[0];
+      const endDateStr = endDateWithWorkaround.toISOString().split('T')[0];
+      
+      console.log("📅 [DataManager] WORKAROUND +1: Range de datas para busca:", {
+        startDate: startDateStr,
+        endDate: endDateStr,
+        endDateOriginal: endDate.toISOString().split('T')[0]
+      });
+
+      const { data, error } = await (this.supabase as any)
+        .from("tire_cost_history")
+        .select("date, average_cost_per_tire")
+        .gte("date", startDateStr)
+        .lte("date", endDateStr)
+        .order("date", { ascending: true });
+
+      if (error) {
+        console.error("❌ [DataManager] Erro ao carregar histórico:", error);
+        throw error;
+      }
+
+      const chartData = (data || []).map((record: any) => ({
+        date: new Date(record.date).toLocaleDateString('pt-BR', {
+          day: '2-digit',
+          month: '2-digit'
+        }),
+        cost: parseFloat(record.average_cost_per_tire.toString())
+      }));
+
+      console.log("✅ [DataManager] Histórico carregado:", chartData.length, "registros");
+      return chartData;
+    } catch (error) {
+      console.error("❌ [DataManager] Erro em loadTireCostHistory:", error);
+      return [];
+    }
+  }
+
+  async getTodayTireCostRecord(): Promise<{date: string, cost: number} | null> {
+    try {
+      // WORKAROUND: Add +1 day to compensate Supabase UTC conversion
+      const today = new Date();
+      const tomorrow = new Date(today);
+      tomorrow.setDate(today.getDate() + 1);
+      const todayLocal = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, "0")}-${String(tomorrow.getDate()).padStart(2, "0")}`;
+      
+      console.log("📅 [DataManager] WORKAROUND +1: Buscando registro para data:", todayLocal);
+      
+      const { data, error } = await (this.supabase as any)
+        .from("tire_cost_history")
+        .select("date, average_cost_per_tire")
+        .eq("date", todayLocal)
+        .single();
+
+      if (error && error.code !== 'PGRST116') {
+        console.error("❌ [DataManager] Erro ao buscar registro de hoje:", error);
+        throw error;
+      }
+
+      if (data) {
+        return {
+          date: data.date,
+          cost: parseFloat(data.average_cost_per_tire.toString())
+        };
+      }
+
+      return null;
+    } catch (error) {
+      console.error("❌ [DataManager] Erro em getTodayTireCostRecord:", error);
+      return null;
+    }
+  }
 }
 
 // Export singleton instance
@@ -3432,5 +4399,6 @@ export const STORAGE_KEYS = {
   CUSTOM_UNITS: "tire-factory-custom-units",
   STOCK_ITEMS: "tire-factory-stock-items",
   RECIPES: "tire-factory-recipes",
-  PRODUCTION_ENTRIES: "tire-factory-production-entries",
+  PRODUCTION_ENTRIES: "tire-factory-production-entries"
+
 } as const;

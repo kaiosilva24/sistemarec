@@ -3,8 +3,6 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import LoginForm from "./components/auth/LoginForm";
 import SignUpForm from "./components/auth/SignUpForm";
 import Dashboard from "./components/pages/dashboard";
-import Success from "./components/pages/success";
-import Home from "./components/pages/home";
 import { AuthProvider, useAuth } from "../supabase/auth";
 import { Toaster } from "./components/ui/toaster";
 import { LoadingScreen, LoadingSpinner } from "./components/ui/loading-spinner";
@@ -28,9 +26,9 @@ function AppRoutes() {
   return (
     <>
       <Routes>
-        <Route path="/" element={<Home />} />
+        <Route path="/" element={<LoginForm />} />
         <Route path="/login" element={<LoginForm />} />
-        <Route path="/signup" element={<SignUpForm />} />
+        {/* Rota de signup removida por segurança - apenas admins podem criar usuários */}
         <Route
           path="/dashboard"
           element={
@@ -39,15 +37,9 @@ function AppRoutes() {
             </PrivateRoute>
           }
         />
-
-        <Route
-          path="/success"
-          element={
-            <Success />
-          }
-        />
+        {/* Redirecionar qualquer rota não encontrada para login */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-
     </>
   );
 }

@@ -335,6 +335,12 @@ const ProductionDashboard = ({
       ).toLocaleDateString("pt-BR"),
     });
 
+    // Workaround já aplicado em DailyProduction.tsx - usar dados como recebidos
+    console.log("🗓️ [ProductionDashboard] Recebendo dados com workaround já aplicado:", {
+      production_date: entryData.production_date,
+      reason: "Workaround aplicado em DailyProduction.tsx"
+    });
+
     try {
       const result = await addProductionEntry(entryData);
 
