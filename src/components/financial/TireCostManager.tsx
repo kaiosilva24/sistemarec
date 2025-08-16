@@ -199,7 +199,7 @@ const TireCostManager = ({
   const [selectedProduct, setSelectedProduct] = useState("");
   const [monthlyProduction, setMonthlyProduction] = useState("1000");
   const [analysisMode, setAnalysisMode] = useState<"individual" | "average">(
-    "individual",
+    "individual"
   );
   const [activeTab, setActiveTab] = useState("cost-analysis");
 
@@ -219,7 +219,7 @@ const TireCostManager = ({
   // Multiple recipes simulation states
   const [selectedRecipes, setSelectedRecipes] = useState<SelectedRecipe[]>([]);
   const [simulationMode, setSimulationMode] = useState<"single" | "multiple">(
-    "single",
+    "single"
   );
 
   // Save simulation states
@@ -252,7 +252,7 @@ const TireCostManager = ({
   const [simulationCostOptions, setSimulationCostOptions] =
     useState<CostCalculationOptions>(() => {
       const saved = localStorage.getItem(
-        "tireCostManager_simulationCostOptions",
+        "tireCostManager_simulationCostOptions"
       );
       if (saved) {
         try {
@@ -286,7 +286,7 @@ const TireCostManager = ({
   useEffect(() => {
     localStorage.setItem(
       "tireCostManager_costOptions",
-      JSON.stringify(costOptions),
+      JSON.stringify(costOptions)
     );
   }, [costOptions]);
 
@@ -294,7 +294,7 @@ const TireCostManager = ({
   useEffect(() => {
     localStorage.setItem(
       "tireCostManager_simulationCostOptions",
-      JSON.stringify(simulationCostOptions),
+      JSON.stringify(simulationCostOptions)
     );
   }, [simulationCostOptions]);
 
@@ -304,54 +304,72 @@ const TireCostManager = ({
 
   // Effect para sincronização em tempo real da leitura das receitas na simulação
   useEffect(() => {
-    console.log("🔄 [TireCostManager] Receitas atualizadas, sincronizando simulação em tempo real...", {
-      recipesCount: recipes.length,
-      materialsCount: materials.length,
-      stockItemsCount: stockItems.length,
-      currentSimulationRecipe: simulationRecipe,
-      selectedRecipesCount: selectedRecipes.length,
-      simulationMode
-    });
+    console.log(
+      "🔄 [TireCostManager] Receitas atualizadas, sincronizando simulação em tempo real...",
+      {
+        recipesCount: recipes.length,
+        materialsCount: materials.length,
+        stockItemsCount: stockItems.length,
+        currentSimulationRecipe: simulationRecipe,
+        selectedRecipesCount: selectedRecipes.length,
+        simulationMode,
+      }
+    );
 
     // Força atualização da simulação quando receitas, materiais ou estoque mudam
-    setSimulationUpdateTrigger(prev => prev + 1);
+    setSimulationUpdateTrigger((prev) => prev + 1);
 
     // Log detalhado das receitas disponíveis
     if (recipes.length > 0) {
-      console.log("📋 [TireCostManager] Receitas disponíveis para simulação:", 
-        recipes.map(recipe => ({
+      console.log(
+        "📋 [TireCostManager] Receitas disponíveis para simulação:",
+        recipes.map((recipe) => ({
           id: recipe.id,
           product_name: recipe.product_name,
           materials_count: recipe.materials?.length || 0,
-          archived: recipe.archived
+          archived: recipe.archived,
         }))
       );
     }
 
     // Validar se a receita selecionada ainda existe
-    if (simulationRecipe && !recipes.find(r => r.id === simulationRecipe)) {
-      console.warn("⚠️ [TireCostManager] Receita selecionada não encontrada, limpando seleção:", simulationRecipe);
+    if (simulationRecipe && !recipes.find((r) => r.id === simulationRecipe)) {
+      console.warn(
+        "⚠️ [TireCostManager] Receita selecionada não encontrada, limpando seleção:",
+        simulationRecipe
+      );
       setSimulationRecipe("");
     }
 
     // Validar receitas múltiplas selecionadas
     if (selectedRecipes.length > 0) {
-      const validRecipes = selectedRecipes.filter(selected => 
-        recipes.find(r => r.id === selected.id)
+      const validRecipes = selectedRecipes.filter((selected) =>
+        recipes.find((r) => r.id === selected.id)
       );
-      
+
       if (validRecipes.length !== selectedRecipes.length) {
-        console.warn("⚠️ [TireCostManager] Algumas receitas múltiplas não foram encontradas, atualizando seleção");
+        console.warn(
+          "⚠️ [TireCostManager] Algumas receitas múltiplas não foram encontradas, atualizando seleção"
+        );
         setSelectedRecipes(validRecipes);
       }
     }
-
-  }, [recipes, materials, stockItems, simulationRecipe, selectedRecipes, simulationMode]);
+  }, [
+    recipes,
+    materials,
+    stockItems,
+    simulationRecipe,
+    selectedRecipes,
+    simulationMode,
+  ]);
 
   // Effect para logs de sincronização quando simulação é atualizada
   useEffect(() => {
     if (simulationUpdateTrigger > 0) {
-      console.log("✅ [TireCostManager] Simulação sincronizada em tempo real - trigger:", simulationUpdateTrigger);
+      console.log(
+        "✅ [TireCostManager] Simulação sincronizada em tempo real - trigger:",
+        simulationUpdateTrigger
+      );
     }
   }, [simulationUpdateTrigger]);
 
@@ -360,7 +378,7 @@ const TireCostManager = ({
     try {
       console.log(
         "🔍 [TireCostManager] Analisando descrição de venda:",
-        description,
+        description
       );
 
       const productIdMatch = description.match(/ID_Produto: ([^\s|]+)/);
@@ -386,18 +404,18 @@ const TireCostManager = ({
         };
         console.log(
           "✅ [TireCostManager] Produto extraído com sucesso:",
-          result,
+          result
         );
         return result;
       } else {
         console.warn(
-          "⚠️ [TireCostManager] Não foi possível extrair ID do produto ou quantidade da descrição",
+          "⚠️ [TireCostManager] Não foi possível extrair ID do produto ou quantidade da descrição"
         );
       }
     } catch (error) {
       console.error(
         "❌ [TireCostManager] Erro ao extrair informações do produto:",
-        error,
+        error
       );
     }
     return null;
@@ -406,7 +424,7 @@ const TireCostManager = ({
   // Calculate recipe-based cost per tire
   const calculateRecipeCost = (productName: string) => {
     console.log(
-      `🔍 [TireCostManager] Buscando receita para produto: "${productName}"`,
+      `🔍 [TireCostManager] Buscando receita para produto: "${productName}"`
     );
     console.log(
       `🔍 [TireCostManager] Receitas disponíveis (${recipes.length}):`,
@@ -415,7 +433,7 @@ const TireCostManager = ({
         product_name: r.product_name,
         archived: r.archived,
         materials_count: r.materials?.length || 0,
-      })),
+      }))
     );
     console.log(
       `🔍 [TireCostManager] StockItems disponíveis (${stockItems.length}):`,
@@ -427,7 +445,7 @@ const TireCostManager = ({
           type: s.item_type,
           unit_cost: s.unit_cost,
           quantity: s.quantity,
-        })),
+        }))
     );
 
     const recipe = recipes.find((r) => {
@@ -436,7 +454,7 @@ const TireCostManager = ({
         productName.toLowerCase().trim();
       const notArchived = !r.archived;
       console.log(
-        `🔍 [TireCostManager] Comparando "${r.product_name}" com "${productName}": nameMatch=${nameMatch}, notArchived=${notArchived}`,
+        `🔍 [TireCostManager] Comparando "${r.product_name}" com "${productName}": nameMatch=${nameMatch}, notArchived=${notArchived}`
       );
       return nameMatch && notArchived;
     });
@@ -449,7 +467,7 @@ const TireCostManager = ({
             product_name: recipe.product_name,
             materials_count: recipe.materials?.length || 0,
           }
-        : "Nenhuma receita encontrada",
+        : "Nenhuma receita encontrada"
     );
 
     if (!recipe) {
@@ -505,7 +523,7 @@ const TireCostManager = ({
       // Log warning if material not found
       if (!stockMaterial) {
         console.warn(
-          `⚠️ [TireCostManager] Material "${material.material_name}" (ID: ${material.material_id}) não encontrado no estoque. Usando custo zero.`,
+          `⚠️ [TireCostManager] Material "${material.material_name}" (ID: ${material.material_id}) não encontrado no estoque. Usando custo zero.`
         );
       }
 
@@ -530,7 +548,7 @@ const TireCostManager = ({
 
     const totalMaterialCost = materialCosts.reduce(
       (sum, mat) => sum + mat.totalCost,
-      0,
+      0
     );
 
     // Check for missing materials
@@ -538,7 +556,7 @@ const TireCostManager = ({
     if (missingMaterials.length > 0) {
       console.warn(
         `⚠️ [TireCostManager] Receita para "${productName}" tem ${missingMaterials.length} materiais com custo zero:`,
-        missingMaterials.map((mat) => mat.materialName),
+        missingMaterials.map((mat) => mat.materialName)
       );
     }
 
@@ -565,18 +583,18 @@ const TireCostManager = ({
   // Calculate production and material losses for a specific product
   const calculateProductionLosses = (productName: string) => {
     console.log(
-      `🔍 [TireCostManager] Calculando perdas de produção e matéria-prima para: "${productName}"`,
+      `🔍 [TireCostManager] Calculando perdas de produção e matéria-prima para: "${productName}"`
     );
 
     const productEntries = productionEntries.filter(
       (entry) =>
         entry.product_name.toLowerCase().trim() ===
-        productName.toLowerCase().trim(),
+        productName.toLowerCase().trim()
     );
 
     console.log(
       `📊 [TireCostManager] Entradas de produção encontradas para ${productName}:`,
-      productEntries.length,
+      productEntries.length
     );
 
     let totalLossQuantity = 0;
@@ -598,13 +616,13 @@ const TireCostManager = ({
       if (entry.material_loss && Array.isArray(entry.material_loss)) {
         console.log(
           `🔍 [TireCostManager] Calculando perdas de matéria-prima para entrada ${entry.production_date}:`,
-          entry.material_loss,
+          entry.material_loss
         );
 
         entryMaterialLossValue = entry.material_loss.reduce(
           (total: number, materialLoss: any) => {
             const stockItem = stockItems.find(
-              (item) => item.item_id === materialLoss.material_id,
+              (item) => item.item_id === materialLoss.material_id
             );
             const lossValue = stockItem
               ? stockItem.unit_cost * materialLoss.quantity_lost
@@ -617,17 +635,17 @@ const TireCostManager = ({
                 quantity_lost: materialLoss.quantity_lost,
                 unit_cost: stockItem?.unit_cost || 0,
                 loss_value: lossValue,
-              },
+              }
             );
 
             return total + lossValue;
           },
-          0,
+          0
         );
 
         totalMaterialLossValue += entryMaterialLossValue;
         console.log(
-          `💸 [TireCostManager] Total de perdas de matéria-prima na entrada ${entry.production_date}: ${entryMaterialLossValue}`,
+          `💸 [TireCostManager] Total de perdas de matéria-prima na entrada ${entry.production_date}: ${entryMaterialLossValue}`
         );
       }
 
@@ -638,14 +656,14 @@ const TireCostManager = ({
         const materialCostForEntry = entry.materials_consumed.reduce(
           (total, material) => {
             const stockItem = stockItems.find(
-              (item) => item.item_id === material.material_id,
+              (item) => item.item_id === material.material_id
             );
             return (
               total +
               (stockItem ? stockItem.unit_cost * material.quantity_consumed : 0)
             );
           },
-          0,
+          0
         );
 
         // Calculate cost per unit produced in this entry
@@ -666,7 +684,7 @@ const TireCostManager = ({
             materialCostForEntry,
             costPerUnit,
             productionLossValue: entryProductionLossValue,
-          },
+          }
         );
       }
 
@@ -690,14 +708,14 @@ const TireCostManager = ({
             productionLoss: entryProductionLossValue,
             materialLoss: entryMaterialLossValue,
             totalLoss: totalEntryLossValue,
-          },
+          }
         );
       }
     });
 
     const totalProduced = productEntries.reduce(
       (sum, entry) => sum + entry.quantity_produced,
-      0,
+      0
     );
 
     const lossPercentage =
@@ -721,7 +739,7 @@ const TireCostManager = ({
         totalCombinedLossValue: totalLossValue,
         lossPercentage,
         entriesWithLosses: lossEntries.length,
-      },
+      }
     );
 
     return result;
@@ -740,19 +758,19 @@ const TireCostManager = ({
           sale_value: sale.sale_value,
           sale_date: sale.sale_date,
         })),
-      },
+      }
     );
 
     const totalValue = defectiveTireSales.reduce(
       (total, sale) => total + sale.sale_value,
-      0,
+      0
     );
 
     console.log(
-      `✅ [TireCostManager] Total de vendas de pneus defeituosos calculado: ${totalValue}`,
+      `✅ [TireCostManager] Total de vendas de pneus defeituosos calculado: ${totalValue}`
     );
     console.log(
-      `🔧 [TireCostManager] DEBUG - Valor esperado: 1800, Valor calculado: ${totalValue}`,
+      `🔧 [TireCostManager] DEBUG - Valor esperado: 1800, Valor calculado: ${totalValue}`
     );
 
     return totalValue;
@@ -761,18 +779,18 @@ const TireCostManager = ({
   // Calculate warranty value for a specific product
   const calculateWarrantyValue = (productName: string) => {
     console.log(
-      `🔍 [TireCostManager] Calculando valor de garantia para produto: "${productName}"`,
+      `🔍 [TireCostManager] Calculando valor de garantia para produto: "${productName}"`
     );
 
     const productWarranties = warrantyEntries.filter(
       (warranty) =>
         warranty.product_name.toLowerCase().trim() ===
-        productName.toLowerCase().trim(),
+        productName.toLowerCase().trim()
     );
 
     console.log(
       `📊 [TireCostManager] Garantias encontradas para ${productName}:`,
-      productWarranties.length,
+      productWarranties.length
     );
 
     let totalWarrantyQuantity = 0;
@@ -790,7 +808,7 @@ const TireCostManager = ({
       const recipe = recipes.find(
         (r) =>
           r.product_name.toLowerCase().trim() ===
-            warranty.product_name.toLowerCase().trim() && !r.archived,
+            warranty.product_name.toLowerCase().trim() && !r.archived
       );
 
       let warrantyValue = 0;
@@ -805,7 +823,7 @@ const TireCostManager = ({
         });
       } else {
         console.warn(
-          `⚠️ [TireCostManager] Receita não encontrada para produto da garantia: ${warranty.product_name}`,
+          `⚠️ [TireCostManager] Receita não encontrada para produto da garantia: ${warranty.product_name}`
         );
       }
 
@@ -834,7 +852,7 @@ const TireCostManager = ({
         totalQuantity: totalWarrantyQuantity,
         totalValue: totalWarrantyValue,
         warrantyCount: productWarranties.length,
-      },
+      }
     );
 
     return result;
@@ -849,7 +867,7 @@ const TireCostManager = ({
     manualProductionLosses: number,
     manualFixedCosts: number,
     manualLaborCosts: number,
-    options: CostCalculationOptions,
+    options: CostCalculationOptions
   ) => {
     console.log(
       `🧮 [TireCostManager] Calculando custo de simulação para ${productName}:`,
@@ -861,12 +879,12 @@ const TireCostManager = ({
         manualFixedCosts,
         manualLaborCosts,
         options,
-      },
+      }
     );
 
     // Base cost: material cost from recipe
     let totalCost = recipeCost;
-    let laborCostComponent = 0;
+    const laborCostComponent = 0;
     let cashFlowCostComponent = 0;
     let productionLossCostComponent = 0;
     let fixedCostComponent = 0;
@@ -875,7 +893,7 @@ const TireCostManager = ({
     const productionQuantity = Math.max(quantity, 1);
 
     console.log(
-      `📊 [TireCostManager] Quantidade de produção para simulação: ${productionQuantity}`,
+      `📊 [TireCostManager] Quantidade de produção para simulação: ${productionQuantity}`
     );
 
     // Calculate total costs for optional components
@@ -896,7 +914,7 @@ const TireCostManager = ({
         manualProductionLosses,
         manualFixedCosts,
         manualLaborCosts,
-      },
+      }
     );
 
     // Add fixed costs (only use manual input, don't auto-include system data)
@@ -905,7 +923,7 @@ const TireCostManager = ({
       fixedCostComponent = manualFixedCosts / productionQuantity;
       totalCost += fixedCostComponent;
       console.log(
-        `🏭 [TireCostManager] Custos fixos manuais adicionados: ${fixedCostComponent}`,
+        `🏭 [TireCostManager] Custos fixos manuais adicionados: ${fixedCostComponent}`
       );
     }
 
@@ -917,7 +935,7 @@ const TireCostManager = ({
       cashFlowCostComponent = manualCashFlowExpenses / productionQuantity;
       totalCost += cashFlowCostComponent;
       console.log(
-        `💸 [TireCostManager] Saídas de caixa manuais adicionadas: ${cashFlowCostComponent}`,
+        `💸 [TireCostManager] Saídas de caixa manuais adicionadas: ${cashFlowCostComponent}`
       );
     }
 
@@ -926,7 +944,7 @@ const TireCostManager = ({
       productionLossCostComponent = manualProductionLosses / productionQuantity;
       totalCost += productionLossCostComponent;
       console.log(
-        `📉 [TireCostManager] Perdas de produção manuais adicionadas: ${productionLossCostComponent}`,
+        `📉 [TireCostManager] Perdas de produção manuais adicionadas: ${productionLossCostComponent}`
       );
     }
 
@@ -948,7 +966,7 @@ const TireCostManager = ({
 
     console.log(
       `✅ [TireCostManager] Custo de simulação calculado para ${productName}:`,
-      result,
+      result
     );
     return result;
   };
@@ -962,7 +980,7 @@ const TireCostManager = ({
     recipeCost: number,
     productionLossData: any,
     warrantyData: any,
-    options: CostCalculationOptions,
+    options: CostCalculationOptions
   ) => {
     console.log(
       `🧮 [TireCostManager] Calculando custo customizado para ${productName}:`,
@@ -971,12 +989,12 @@ const TireCostManager = ({
         totalProduced,
         totalSold,
         options,
-      },
+      }
     );
 
     // Base cost: material cost from recipe
     let totalCost = recipeCost;
-    let laborCostComponent = 0;
+    const laborCostComponent = 0;
     let cashFlowCostComponent = 0;
     let productionLossCostComponent = 0;
     let defectiveTireSalesCostComponent = 0;
@@ -986,7 +1004,7 @@ const TireCostManager = ({
     const productionQuantity = Math.max(totalProduced, totalSold, 1);
 
     console.log(
-      `📊 [TireCostManager] Quantidade de produção para divisão: ${productionQuantity}`,
+      `📊 [TireCostManager] Quantidade de produção para divisão: ${productionQuantity}`
     );
 
     // Calculate total costs for optional components
@@ -1010,11 +1028,11 @@ const TireCostManager = ({
 
     console.log(
       `🔧 [TireCostManager] DEBUG - Switch includeDefectiveTireSales:`,
-      options.includeDefectiveTireSales,
+      options.includeDefectiveTireSales
     );
     console.log(
       `🔧 [TireCostManager] DEBUG - Total defective tire sales:`,
-      totalDefectiveTireSales,
+      totalDefectiveTireSales
     );
     console.log(`🔧 [TireCostManager] DEBUG - Condition check:`, {
       includeDefectiveTireSales: options.includeDefectiveTireSales,
@@ -1035,7 +1053,7 @@ const TireCostManager = ({
       }
       totalCost += cashFlowCostComponent;
       console.log(
-        `💸 [TireCostManager] Saídas de caixa adicionadas: ${cashFlowCostComponent}`,
+        `💸 [TireCostManager] Saídas de caixa adicionadas: ${cashFlowCostComponent}`
       );
     }
 
@@ -1051,7 +1069,7 @@ const TireCostManager = ({
       }
       totalCost += productionLossCostComponent;
       console.log(
-        `📉 [TireCostManager] Perdas de produção adicionadas: ${productionLossCostComponent}`,
+        `📉 [TireCostManager] Perdas de produção adicionadas: ${productionLossCostComponent}`
       );
     }
 
@@ -1065,10 +1083,10 @@ const TireCostManager = ({
       }
       totalCost += defectiveTireSalesCostComponent;
       console.log(
-        `🔧 [TireCostManager] Vendas de pneus defeituosos SUBTRAÍDAS: ${defectiveTireSalesCostComponent}`,
+        `🔧 [TireCostManager] Vendas de pneus defeituosos SUBTRAÍDAS: ${defectiveTireSalesCostComponent}`
       );
       console.log(
-        `🔧 [TireCostManager] DEBUG - Custo total ANTES: ${totalCost - defectiveTireSalesCostComponent}, DEPOIS: ${totalCost}`,
+        `🔧 [TireCostManager] DEBUG - Custo total ANTES: ${totalCost - defectiveTireSalesCostComponent}, DEPOIS: ${totalCost}`
       );
     } else {
       console.log(
@@ -1078,7 +1096,7 @@ const TireCostManager = ({
           totalDefectiveTireSales: totalDefectiveTireSales,
           condition:
             options.includeDefectiveTireSales && totalDefectiveTireSales > 0,
-        },
+        }
       );
     }
 
@@ -1091,7 +1109,7 @@ const TireCostManager = ({
       }
       totalCost += warrantyCostComponent;
       console.log(
-        `🛡️ [TireCostManager] Valor de garantia adicionado: ${warrantyCostComponent}`,
+        `🛡️ [TireCostManager] Valor de garantia adicionado: ${warrantyCostComponent}`
       );
     }
 
@@ -1115,7 +1133,7 @@ const TireCostManager = ({
 
     console.log(
       `✅ [TireCostManager] Custo customizado calculado para ${productName}:`,
-      result,
+      result
     );
     return result;
   };
@@ -1126,17 +1144,17 @@ const TireCostManager = ({
 
     // Initialize analysis for all products
     const availableProducts = stockItems.filter(
-      (item) => item.item_type === "product",
+      (item) => item.item_type === "product"
     );
 
     console.log(
       `📊 [TireCostManager] Inicializando análise para ${availableProducts.length} produtos:`,
-      availableProducts.map((p) => ({ id: p.item_id, name: p.item_name })),
+      availableProducts.map((p) => ({ id: p.item_id, name: p.item_name }))
     );
 
     availableProducts.forEach((product) => {
       console.log(
-        `🔄 [TireCostManager] Calculando receita para produto: ${product.item_name}`,
+        `🔄 [TireCostManager] Calculando receita para produto: ${product.item_name}`
       );
       const recipeData = calculateRecipeCost(product.item_name);
       const lossData = calculateProductionLosses(product.item_name);
@@ -1181,7 +1199,7 @@ const TireCostManager = ({
         {
           hasRecipe: recipeData.hasRecipe,
           recipeCost: recipeData.recipeCost,
-        },
+        }
       );
     });
 
@@ -1226,7 +1244,7 @@ const TireCostManager = ({
               productInfo.productName.toLowerCase().trim() &&
             !r.archived &&
             r.materials &&
-            r.materials.length > 0,
+            r.materials.length > 0
         );
 
         if (!hasRecipe) {
@@ -1236,7 +1254,7 @@ const TireCostManager = ({
               id: entry.id,
               productName: productInfo.productName,
               description: description.substring(0, 100),
-            },
+            }
           );
           return false;
         }
@@ -1252,9 +1270,9 @@ const TireCostManager = ({
         salesEntriesFiltered: salesEntries.length,
         availableProducts: availableProducts.length,
         recipesAvailable: recipes.filter(
-          (r) => !r.archived && r.materials && r.materials.length > 0,
+          (r) => !r.archived && r.materials && r.materials.length > 0
         ).length,
-      },
+      }
     );
 
     salesEntries.forEach((sale, index) => {
@@ -1279,7 +1297,7 @@ const TireCostManager = ({
               novaReceita: sale.amount,
               quantidadeAnterior: analysis.totalSold,
               novaQuantidade: productInfo.quantity,
-            },
+            }
           );
 
           analysis.totalRevenue += sale.amount;
@@ -1297,11 +1315,11 @@ const TireCostManager = ({
         } else {
           console.warn(
             `⚠️ [TireCostManager] Produto não encontrado na análise:`,
-            productInfo.productId,
+            productInfo.productId
           );
           console.warn(
             `⚠️ [TireCostManager] Produtos disponíveis:`,
-            Array.from(productAnalysis.keys()),
+            Array.from(productAnalysis.keys())
           );
         }
       } else {
@@ -1310,7 +1328,7 @@ const TireCostManager = ({
           {
             saleId: sale.id,
             description: sale.description,
-          },
+          }
         );
 
         // Tentar correspondência alternativa por nome do produto no reference_name
@@ -1320,7 +1338,7 @@ const TireCostManager = ({
             referenceName.includes(product.item_name.toLowerCase()) ||
             product.item_name
               .toLowerCase()
-              .includes(referenceName.split(" - ")[1]?.toLowerCase() || ""),
+              .includes(referenceName.split(" - ")[1]?.toLowerCase() || "")
         );
 
         if (matchingProduct) {
@@ -1330,7 +1348,7 @@ const TireCostManager = ({
               productId: matchingProduct.item_id,
               productName: matchingProduct.item_name,
               saleReference: sale.reference_name,
-            },
+            }
           );
 
           const analysis = productAnalysis.get(matchingProduct.item_id);
@@ -1347,7 +1365,7 @@ const TireCostManager = ({
                 productName: analysis.productName,
                 totalRevenue: analysis.totalRevenue,
                 totalSold: analysis.totalSold,
-              },
+              }
             );
           }
         }
@@ -1371,7 +1389,7 @@ const TireCostManager = ({
       const analysis =
         productAnalysis.get(entry.product_name) ||
         Array.from(productAnalysis.values()).find(
-          (a) => a.productName === entry.product_name,
+          (a) => a.productName === entry.product_name
         );
       if (analysis) {
         analysis.totalProduced += entry.quantity_produced;
@@ -1380,14 +1398,14 @@ const TireCostManager = ({
         const materialCost = entry.materials_consumed.reduce(
           (total, material) => {
             const stockItem = stockItems.find(
-              (item) => item.item_id === material.material_id,
+              (item) => item.item_id === material.material_id
             );
             return (
               total +
               (stockItem ? stockItem.unit_cost * material.quantity_consumed : 0)
             );
           },
-          0,
+          0
         );
 
         analysis.productionCost += materialCost;
@@ -1404,7 +1422,7 @@ const TireCostManager = ({
           totalProduced: analysis.totalProduced,
           totalSold: analysis.totalSold,
           costOptions,
-        },
+        }
       );
 
       if (analysis.hasRecipe && analysis.recipeCostPerTire > 0) {
@@ -1417,7 +1435,7 @@ const TireCostManager = ({
           analysis.recipeCostPerTire,
           analysis.lossDetails,
           analysis.warrantyDetails,
-          costOptions,
+          costOptions
         );
 
         analysis.costPerTire = customCost.totalCost;
@@ -1440,7 +1458,7 @@ const TireCostManager = ({
             defectiveTireSalesCost: analysis.defectiveTireSalesCostPerTire,
             totalCost: analysis.costPerTire,
             costOptions: costOptions,
-          },
+          }
         );
 
         console.log(
@@ -1451,7 +1469,7 @@ const TireCostManager = ({
             defectiveTireSalesValue: analysis.defectiveTireSalesCostPerTire,
             totalDefectiveTireSalesInSystem: calculateDefectiveTireSalesTotal(),
             costOptionsState: costOptions,
-          },
+          }
         );
 
         // CRITICAL DEBUG: Check if defective tire sales are being included
@@ -1464,16 +1482,16 @@ const TireCostManager = ({
               valorPorPneu: analysis.defectiveTireSalesCostPerTire,
               custoTotalPneu: analysis.costPerTire,
               breakdownCompleto: analysis.costBreakdown,
-            },
+            }
           );
         } else {
           console.log(
-            `❌ [TireCostManager] SWITCH DESATIVADO para ${analysis.productName}`,
+            `❌ [TireCostManager] SWITCH DESATIVADO para ${analysis.productName}`
           );
         }
       } else {
         console.log(
-          `⚠️ [TireCostManager] Produto ${analysis.productName} sem receita - usando custo zero`,
+          `⚠️ [TireCostManager] Produto ${analysis.productName} sem receita - usando custo zero`
         );
         analysis.costPerTire = 0;
         analysis.laborCostPerTire = 0;
@@ -1507,13 +1525,13 @@ const TireCostManager = ({
           profit: analysis.profit,
           profitMargin: analysis.profitMargin,
           breakdown: analysis.costBreakdown,
-        },
+        }
       );
     });
 
     return Array.from(productAnalysis.values())
       .filter(
-        (analysis) => analysis.totalProduced > 0 || analysis.totalSold > 0,
+        (analysis) => analysis.totalProduced > 0 || analysis.totalSold > 0
       )
       .sort((a, b) => b.totalRevenue - a.totalRevenue);
   }, [
@@ -1564,7 +1582,7 @@ const TireCostManager = ({
         totalLosses: 0,
         totalLossValue: 0,
         totalProfit: 0,
-      },
+      }
     );
 
     return {
@@ -1575,10 +1593,12 @@ const TireCostManager = ({
       totalLossValue: totals.totalLossValue,
       averagePrice:
         totals.totalSold > 0 ? totals.totalRevenue / totals.totalSold : 0,
-      averageCostPerTire: Math.round(
-        (tireAnalysis.reduce((sum, tire) => sum + tire.costPerTire, 0) /
-        tireAnalysis.length) * 100
-      ) / 100,
+      averageCostPerTire:
+        Math.round(
+          (tireAnalysis.reduce((sum, tire) => sum + tire.costPerTire, 0) /
+            tireAnalysis.length) *
+            100
+        ) / 100,
       totalProfit: totals.totalProfit,
       averageProfitMargin:
         totals.totalRevenue > 0
@@ -1607,7 +1627,7 @@ const TireCostManager = ({
     // Salvar no localStorage para sincronização com o dashboard
     localStorage.setItem(
       "tireCostManager_synchronizedCostData",
-      JSON.stringify(synchronizedData),
+      JSON.stringify(synchronizedData)
     );
 
     // NOVA CHAVE ESPECÍFICA PARA SINCRONIZAÇÃO DIRETA COM O DASHBOARD
@@ -1618,7 +1638,7 @@ const TireCostManager = ({
         timestamp: Date.now(),
         source: "TireCostManager",
         lastUpdated: new Date().toISOString(),
-      }),
+      })
     );
 
     // SALVAR ANÁLISES ESPECÍFICAS POR PRODUTO PARA O PRODUCTSTOCK
@@ -1649,7 +1669,7 @@ const TireCostManager = ({
           key: productKey,
           costPerTire: tire.costPerTire,
           hasRecipe: tire.hasRecipe,
-        },
+        }
       );
     });
 
@@ -1657,17 +1677,26 @@ const TireCostManager = ({
     // Salvar custo médio por pneu no Supabase para sincronização em tempo real
     const saveToSupabase = async () => {
       try {
-        const success = await dataManager.saveAverageTireCost(averageAnalysis.averageCostPerTire);
+        const success = await dataManager.saveAverageTireCost(
+          averageAnalysis.averageCostPerTire
+        );
         if (success) {
-          console.log('✅ [TireCostManager] Custo médio por pneu salvo no Supabase com sucesso');
+          console.log(
+            "✅ [TireCostManager] Custo médio por pneu salvo no Supabase com sucesso"
+          );
         } else {
-          console.warn('⚠️ [TireCostManager] Falha ao salvar custo médio por pneu no Supabase');
+          console.warn(
+            "⚠️ [TireCostManager] Falha ao salvar custo médio por pneu no Supabase"
+          );
         }
       } catch (error) {
-        console.error('❌ [TireCostManager] Erro ao salvar no Supabase:', error);
+        console.error(
+          "❌ [TireCostManager] Erro ao salvar no Supabase:",
+          error
+        );
       }
     };
-    
+
     // Salvar no Supabase de forma assíncrona
     saveToSupabase();
 
@@ -1687,7 +1716,7 @@ const TireCostManager = ({
             costPerTire: tire.costPerTire,
           })),
         },
-      }),
+      })
     );
 
     console.log(
@@ -1699,7 +1728,7 @@ const TireCostManager = ({
         timestamp: synchronizedData.timestamp,
         specificAnalysesCount: tireAnalysis.length,
         eventDispatched: true,
-      },
+      }
     );
   }, [
     averageAnalysis.averageCostPerTire,
@@ -1716,7 +1745,7 @@ const TireCostManager = ({
     return tireAnalysis.find(
       (analysis) =>
         analysis.productId === selectedProduct ||
-        analysis.productName === selectedProduct,
+        analysis.productName === selectedProduct
     );
   }, [selectedProduct, tireAnalysis]);
 
@@ -1725,7 +1754,7 @@ const TireCostManager = ({
     if (!simulationRecipe || !simulationQuantity) return null;
 
     const recipe = recipes.find(
-      (r) => r.id === simulationRecipe && !r.archived,
+      (r) => r.id === simulationRecipe && !r.archived
     );
 
     if (!recipe) return null;
@@ -1755,7 +1784,7 @@ const TireCostManager = ({
       manualLosses,
       manualFixed,
       manualLabor,
-      simulationCostOptions,
+      simulationCostOptions
     );
 
     return {
@@ -1805,12 +1834,12 @@ const TireCostManager = ({
     // Calculate total quantity first for proper cost division
     const totalQuantityForCosts = selectedRecipes.reduce(
       (sum, recipe) => sum + recipe.quantity,
-      0,
+      0
     );
 
     const recipeAnalyses = selectedRecipes.map((selectedRecipe) => {
       const recipe = recipes.find(
-        (r) => r.id === selectedRecipe.id && !r.archived,
+        (r) => r.id === selectedRecipe.id && !r.archived
       );
 
       if (!recipe) {
@@ -1848,7 +1877,7 @@ const TireCostManager = ({
         manualLosses,
         manualFixed,
         manualLabor,
-        simulationCostOptions,
+        simulationCostOptions
       );
 
       return {
@@ -1871,11 +1900,11 @@ const TireCostManager = ({
     // Calculate weighted average cost
     const totalQuantity = recipeAnalyses.reduce(
       (sum, analysis) => sum + analysis.quantity,
-      0,
+      0
     );
     const totalCost = recipeAnalyses.reduce(
       (sum, analysis) => sum + analysis.totalCost,
-      0,
+      0
     );
     const averageCostPerTire =
       totalQuantity > 0 ? totalCost / totalQuantity : 0;
@@ -1967,7 +1996,7 @@ const TireCostManager = ({
   // Update recipe quantity in multiple selection
   const updateRecipeQuantity = (recipeId: string, quantity: number) => {
     setSelectedRecipes((prev) =>
-      prev.map((r) => (r.id === recipeId ? { ...r, quantity } : r)),
+      prev.map((r) => (r.id === recipeId ? { ...r, quantity } : r))
     );
   };
 
@@ -2046,7 +2075,7 @@ const TireCostManager = ({
     // Set cost options
     setSimulationCostOptions({
       ...simulation.cost_options,
-      includeWarrantyValues: false // Add missing property with default value
+      includeWarrantyValues: false, // Add missing property with default value
     });
 
     // Set simulation data
@@ -2063,10 +2092,10 @@ const TireCostManager = ({
     setSimulationFixedCosts(data.manual_fixed_costs?.toString() || "");
     setSimulationLaborCosts(data.manual_labor_costs?.toString() || "");
     setSimulationCashFlowExpenses(
-      data.manual_cash_flow_expenses?.toString() || "",
+      data.manual_cash_flow_expenses?.toString() || ""
     );
     setSimulationProductionLosses(
-      data.manual_production_losses?.toString() || "",
+      data.manual_production_losses?.toString() || ""
     );
 
     setShowLoadDialog(false);
@@ -2076,7 +2105,7 @@ const TireCostManager = ({
   // Delete a saved simulation
   const deleteSimulation = async (
     simulationId: string,
-    simulationName: string,
+    simulationName: string
   ) => {
     if (
       confirm(`Tem certeza que deseja excluir a simulação "${simulationName}"?`)
@@ -2092,52 +2121,84 @@ const TireCostManager = ({
   };
 
   // Load real tire cost chart data from Supabase
-  const [chartData, setChartData] = useState<Array<{date: string, cost: number}>>([]);
-  const [allChartData, setAllChartData] = useState<Array<{date: string, cost: number}>>([]);
+  const [chartData, setChartData] = useState<
+    Array<{ date: string; cost: number }>
+  >([]);
+  const [allChartData, setAllChartData] = useState<
+    Array<{ date: string; cost: number }>
+  >([]);
   const [isLoadingChart, setIsLoadingChart] = useState(true);
-  const [selectedMonth, setSelectedMonth] = useState<string>('all');
+  const [selectedMonth, setSelectedMonth] = useState<string>("all");
 
   const loadTireCostChartData = async () => {
     try {
       setIsLoadingChart(true);
-      console.log("📊 [TireCostManager] Carregando dados reais do gráfico de custos...");
-      
+      console.log(
+        "📊 [TireCostManager] Carregando dados reais do gráfico de custos..."
+      );
+
       const historicalData = await dataManager.loadTireCostHistory(30);
-      
-      if (historicalData.length === 0) {
-        console.log("⚠️ [TireCostManager] Nenhum dado histórico encontrado, gerando dados simulados...");
-        // Generate simulated data if no historical data exists
-        const simulatedData = [];
-        const today = new Date();
-        
-        for (let i = 29; i >= 0; i--) {
-          const date = new Date(today);
-          date.setDate(today.getDate() - i);
-          
-          // Simulate cost variation (±10% around current average cost)
-          const baselineCost = averageAnalysis.averageCostPerTire;
-          const variation = (Math.random() - 0.5) * 0.2; // ±10%
-          const cost = baselineCost * (1 + variation);
-          
-          simulatedData.push({
-            date: date.toLocaleDateString('pt-BR', {
-              day: '2-digit',
-              month: '2-digit'
-            }),
-            cost: parseFloat(cost.toFixed(2))
+
+      console.log(
+        "🔍 [TireCostManager] Dados históricos encontrados:",
+        historicalData.length,
+        "registros"
+      );
+      console.log("🔍 [TireCostManager] Dados:", historicalData);
+
+      // Always use real data from database - no simulated data
+      // Generate empty data points for days without records (showing 0)
+      const chartData = [];
+      const today = new Date();
+
+      for (let i = 29; i >= 0; i--) {
+        const date = new Date(today);
+        date.setDate(today.getDate() - i);
+
+        const dateStr = date.toLocaleDateString("pt-BR", {
+          day: "2-digit",
+          month: "2-digit",
+        });
+
+        // Check if we have real data for this date
+        const realDataPoint = historicalData.find(
+          (item) => item.date === dateStr
+        );
+
+        if (realDataPoint) {
+          // Use real data
+          chartData.push({
+            date: dateStr,
+            cost: realDataPoint.cost,
           });
+          console.log(
+            "📊 [TireCostManager] Usando dados reais para",
+            dateStr,
+            ":",
+            realDataPoint.cost
+          );
+        } else {
+          // No data for this date - show 0
+          chartData.push({
+            date: dateStr,
+            cost: 0,
+          });
+          console.log(
+            "📊 [TireCostManager] Sem dados para",
+            dateStr,
+            "- usando 0"
+          );
         }
-        
-        setAllChartData(simulatedData);
-        setChartData(simulatedData);
-      } else {
-        console.log("✅ [TireCostManager] Dados históricos carregados:", historicalData.length, "registros");
-        setAllChartData(historicalData);
-        setChartData(historicalData);
       }
+
+      setAllChartData(chartData);
+      setChartData(chartData);
     } catch (error) {
-      console.error("❌ [TireCostManager] Erro ao carregar dados do gráfico:", error);
-      // Fallback to simulated data on error
+      console.error(
+        "❌ [TireCostManager] Erro ao carregar dados do gráfico:",
+        error
+      );
+      // Show empty chart on error
       setChartData([]);
     } finally {
       setIsLoadingChart(false);
@@ -2147,64 +2208,88 @@ const TireCostManager = ({
   // Filter chart data by selected month and add real-time today data
   const filterDataByMonth = (month: string) => {
     let baseData = [...allChartData];
-    
+
     // Add real-time today data if not already in database
     const today = new Date();
-    const todayStr = today.toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit'
+    const todayStr = today.toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
     });
-    
+
     console.log("🔍 [TireCostManager] Debug - Data de hoje:", todayStr);
-    console.log("🔍 [TireCostManager] Debug - Custo atual:", averageAnalysis.averageCostPerTire);
-    console.log("🔍 [TireCostManager] Debug - Dados base:", baseData.map(item => `${item.date}: R$ ${item.cost}`));
-    
+    console.log(
+      "🔍 [TireCostManager] Debug - Custo atual:",
+      averageAnalysis.averageCostPerTire
+    );
+    console.log(
+      "🔍 [TireCostManager] Debug - Dados base:",
+      baseData.map((item) => `${item.date}: R$ ${item.cost}`)
+    );
+
     // Check if today's data already exists in the database (from allChartData, not including real-time)
-    const todayExistsInDB = allChartData.some(item => item.date === todayStr);
-    
+    const todayExistsInDB = allChartData.some((item) => item.date === todayStr);
+
     // Remove any existing real-time today point first (to avoid duplicates)
-    baseData = baseData.filter(item => !(item.date === todayStr && !todayExistsInDB));
-    
+    baseData = baseData.filter(
+      (item) => !(item.date === todayStr && !todayExistsInDB)
+    );
+
     // Always add real-time today point if we have a valid cost
     if (averageAnalysis.averageCostPerTire > 0) {
-      const realTimeCost = parseFloat(averageAnalysis.averageCostPerTire.toFixed(2));
-      
+      const realTimeCost = parseFloat(
+        averageAnalysis.averageCostPerTire.toFixed(2)
+      );
+
       if (todayExistsInDB) {
         // Update existing today point with real-time value
-        const todayIndex = baseData.findIndex(item => item.date === todayStr);
+        const todayIndex = baseData.findIndex((item) => item.date === todayStr);
         if (todayIndex !== -1) {
           baseData[todayIndex] = {
             date: todayStr,
-            cost: realTimeCost
+            cost: realTimeCost,
           };
-          console.log("🔄 [TireCostManager] Atualizando ponto existente para hoje:", todayStr, "->", realTimeCost);
+          console.log(
+            "🔄 [TireCostManager] Atualizando ponto existente para hoje:",
+            todayStr,
+            "->",
+            realTimeCost
+          );
         }
       } else {
         // Add new real-time today point
         baseData.push({
           date: todayStr,
-          cost: realTimeCost
+          cost: realTimeCost,
         });
-        console.log("📊 [TireCostManager] Adicionando ponto em tempo real para hoje:", todayStr, "->", realTimeCost);
+        console.log(
+          "📊 [TireCostManager] Adicionando ponto em tempo real para hoje:",
+          todayStr,
+          "->",
+          realTimeCost
+        );
       }
     }
 
-    if (month === 'all') {
+    if (month === "all") {
       setChartData(baseData);
       return;
     }
 
-    const [year, monthNum] = month.split('-');
-    const filteredData = baseData.filter(item => {
+    const [year, monthNum] = month.split("-");
+    const filteredData = baseData.filter((item) => {
       // Parse the date string (format: "dd/mm")
-      const [day, monthStr] = item.date.split('/');
-      const itemMonth = monthStr.padStart(2, '0');
+      const [day, monthStr] = item.date.split("/");
+      const itemMonth = monthStr.padStart(2, "0");
       const currentYear = new Date().getFullYear().toString();
-      
+
       return itemMonth === monthNum && year === currentYear;
     });
 
-    console.log(`📅 [TireCostManager] Filtrando dados para ${month}:`, filteredData.length, "registros");
+    console.log(
+      `📅 [TireCostManager] Filtrando dados para ${month}:`,
+      filteredData.length,
+      "registros"
+    );
     setChartData(filteredData);
   };
 
@@ -2212,22 +2297,27 @@ const TireCostManager = ({
   const getAvailableMonths = () => {
     const months = new Set<string>();
     const currentYear = new Date().getFullYear();
-    
-    allChartData.forEach(item => {
+
+    allChartData.forEach((item) => {
       // Parse the date string (format: "dd/mm")
-      const [day, monthStr] = item.date.split('/');
-      const monthNum = monthStr.padStart(2, '0');
+      const [day, monthStr] = item.date.split("/");
+      const monthNum = monthStr.padStart(2, "0");
       months.add(`${currentYear}-${monthNum}`);
     });
 
-    return Array.from(months).sort().map(month => {
-      const [year, monthNum] = month.split('-');
-      const monthName = new Date(parseInt(year), parseInt(monthNum) - 1).toLocaleDateString('pt-BR', { month: 'long' });
-      return {
-        value: month,
-        label: `${monthName.charAt(0).toUpperCase() + monthName.slice(1)} ${year}`
-      };
-    });
+    return Array.from(months)
+      .sort()
+      .map((month) => {
+        const [year, monthNum] = month.split("-");
+        const monthName = new Date(
+          parseInt(year),
+          parseInt(monthNum) - 1
+        ).toLocaleDateString("pt-BR", { month: "long" });
+        return {
+          value: month,
+          label: `${monthName.charAt(0).toUpperCase() + monthName.slice(1)} ${year}`,
+        };
+      });
   };
 
   // Handle month selection change
@@ -2239,21 +2329,30 @@ const TireCostManager = ({
   // Function to record today's tire cost
   const recordTodayTireCost = async () => {
     try {
-      console.log("💾 [TireCostManager] Registrando custo de hoje:", averageAnalysis.averageCostPerTire);
-      
+      console.log(
+        "💾 [TireCostManager] Registrando custo de hoje:",
+        averageAnalysis.averageCostPerTire
+      );
+
       // WORKAROUND: Add +1 day to compensate Supabase UTC conversion
       const today = new Date();
       const tomorrow = new Date(today);
       tomorrow.setDate(today.getDate() + 1);
       const todayLocal = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, "0")}-${String(tomorrow.getDate()).padStart(2, "0")}`;
-      
-      console.log("📅 [TireCostManager] WORKAROUND +1: Data original vs enviada:", {
-        dataOriginal: today.toISOString().split('T')[0],
-        dataEnviada: todayLocal
-      });
-      
-      const success = await dataManager.saveTireCostHistory(todayLocal, averageAnalysis.averageCostPerTire);
-      
+
+      console.log(
+        "📅 [TireCostManager] WORKAROUND +1: Data original vs enviada:",
+        {
+          dataOriginal: today.toISOString().split("T")[0],
+          dataEnviada: todayLocal,
+        }
+      );
+
+      const success = await dataManager.saveTireCostHistory(
+        todayLocal,
+        averageAnalysis.averageCostPerTire
+      );
+
       if (success) {
         console.log("✅ [TireCostManager] Custo registrado com sucesso!");
         // Reload chart data to include today's record
@@ -2269,47 +2368,16 @@ const TireCostManager = ({
     }
   };
 
-  // Save previous day cost when day changes
+  // Save previous day cost when day changes - DISABLED to keep 0 values for previous days
   const savePreviousDayOnDayChange = async () => {
-    try {
-      // Get yesterday's date with workaround +1
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayWithWorkaround = new Date(yesterday);
-      yesterdayWithWorkaround.setDate(yesterday.getDate() + 1);
-      const yesterdayLocal = `${yesterdayWithWorkaround.getFullYear()}-${String(yesterdayWithWorkaround.getMonth() + 1).padStart(2, "0")}-${String(yesterdayWithWorkaround.getDate()).padStart(2, "0")}`;
-      
-      console.log("📅 [TireCostManager] Verificando se precisa salvar custo do dia anterior:", yesterdayLocal);
-      
-      // Check if yesterday's record exists
-      const { data, error } = await (dataManager as any).supabase
-        .from("tire_cost_history")
-        .select("*")
-        .eq("date", yesterdayLocal)
-        .single();
-
-      if (error && error.code === 'PGRST116') {
-        // Yesterday's record doesn't exist, save it with current average cost
-        console.log("💾 [TireCostManager] Salvando custo do dia anterior na virada do dia:", yesterdayLocal);
-        
-        const success = await dataManager.saveTireCostHistory(yesterdayLocal, averageAnalysis.averageCostPerTire);
-        
-        if (success) {
-          console.log("✅ [TireCostManager] Custo do dia anterior salvo com sucesso!");
-          // Reload chart data to include the new record
-          await loadTireCostChartData();
-        } else {
-          console.error("❌ [TireCostManager] Erro ao salvar custo do dia anterior");
-        }
-      } else if (!error) {
-        console.log("📅 [TireCostManager] Custo do dia anterior já existe no banco:", data);
-      }
-    } catch (error) {
-      console.error("❌ [TireCostManager] Erro ao verificar/salvar custo do dia anterior:", error);
-    }
+    console.log(
+      "📅 [TireCostManager] Função savePreviousDayOnDayChange desabilitada - mantendo valores 0 para dias anteriores"
+    );
+    // This function is now disabled to preserve 0 values for days without records
+    // Previous days will show 0 in the chart instead of being filled with current cost
   };
 
-  // Auto-record tire cost daily (check if today's record exists and save if needed)
+  // Auto-record tire cost daily (ONLY for today - previous days keep 0 values)
   const checkAndRecordDailyCost = async () => {
     try {
       // WORKAROUND: Add +1 day to compensate Supabase UTC conversion
@@ -2317,44 +2385,89 @@ const TireCostManager = ({
       const tomorrow = new Date(today);
       tomorrow.setDate(today.getDate() + 1);
       const todayLocal = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, "0")}-${String(tomorrow.getDate()).padStart(2, "0")}`;
-      
-      console.log("📅 [TireCostManager] WORKAROUND +1: Verificando registro para data:", todayLocal);
-      
-      const todayRecord = await dataManager.getTodayTireCostRecord();
-      
-      if (!todayRecord && averageAnalysis.averageCostPerTire > 0) {
-        console.log("📅 [TireCostManager] Nenhum registro de hoje encontrado - salvando automaticamente");
-        console.log("💾 [TireCostManager] Salvando custo atual:", averageAnalysis.averageCostPerTire);
-        
-        // Save today's cost automatically
-        const success = await dataManager.saveTireCostHistory(todayLocal, averageAnalysis.averageCostPerTire);
-        
+
+      console.log(
+        "📅 [TireCostManager] Verificando registro APENAS para hoje:",
+        todayLocal,
+        "- dias anteriores mantêm valor 0"
+      );
+
+      // Check if today's record exists
+      const { data, error } = await (dataManager as any).supabase
+        .from("tire_cost_history")
+        .select("*")
+        .eq("date", todayLocal)
+        .single();
+
+      if (error && error.code === "PGRST116") {
+        // Today's record doesn't exist, save it
+        console.log(
+          "💾 [TireCostManager] Salvando custo APENAS para hoje:",
+          todayLocal,
+          "Valor:",
+          averageAnalysis.averageCostPerTire
+        );
+
+        const success = await dataManager.saveTireCostHistory(
+          todayLocal,
+          averageAnalysis.averageCostPerTire
+        );
+
         if (success) {
-          console.log("✅ [TireCostManager] Custo de hoje salvo automaticamente!");
-          // Reload chart data to include today's record
+          console.log("✅ [TireCostManager] Custo de hoje salvo com sucesso!");
+          // Reload chart data to include the new record
           await loadTireCostChartData();
         } else {
-          console.error("❌ [TireCostManager] Erro ao salvar custo de hoje automaticamente");
+          console.error("❌ [TireCostManager] Erro ao salvar custo de hoje");
         }
-      } else if (todayRecord) {
-        console.log("📅 [TireCostManager] Registro de hoje já existe no banco:", todayRecord);
-        
-        // Update today's record with current cost if it's different
-        if (averageAnalysis.averageCostPerTire > 0 && 
-            Math.abs(todayRecord.cost - averageAnalysis.averageCostPerTire) > 0.01) {
-          console.log("🔄 [TireCostManager] Atualizando registro de hoje com novo valor:", 
-                     todayRecord.cost, "->", averageAnalysis.averageCostPerTire);
-          
-          const success = await dataManager.saveTireCostHistory(todayLocal, averageAnalysis.averageCostPerTire);
-          
+      } else if (!error && data) {
+        // Today's record exists, check if we need to update it
+        const existingCost = parseFloat(data.average_cost_per_tire);
+        const currentCost = averageAnalysis.averageCostPerTire;
+        const costDifference = Math.abs(currentCost - existingCost);
+
+        console.log("📊 [TireCostManager] Registro de hoje encontrado:", {
+          data: todayLocal,
+          custoExistente: existingCost,
+          custoAtual: currentCost,
+          diferenca: costDifference,
+        });
+
+        // Update if difference is significant (more than R$ 0.01)
+        if (costDifference > 0.01) {
+          console.log(
+            "🔄 [TireCostManager] Atualizando custo de hoje - diferença significativa:",
+            costDifference
+          );
+
+          const success = await dataManager.saveTireCostHistory(
+            todayLocal,
+            currentCost
+          );
+
           if (success) {
-            console.log("✅ [TireCostManager] Registro de hoje atualizado!");
+            console.log(
+              "✅ [TireCostManager] Custo de hoje atualizado com sucesso!"
+            );
+            // Reload chart data to reflect the update
             await loadTireCostChartData();
+          } else {
+            console.error(
+              "❌ [TireCostManager] Erro ao atualizar custo de hoje"
+            );
           }
+        } else {
+          console.log(
+            "📅 [TireCostManager] Custo de hoje já está atualizado - diferença insignificante:",
+            costDifference
+          );
         }
       }
     } catch (error) {
-      console.error("❌ [TireCostManager] Erro ao verificar/salvar registro diário:", error);
+      console.error(
+        "❌ [TireCostManager] Erro ao verificar/salvar custo de hoje:",
+        error
+      );
     }
   };
 
@@ -2373,10 +2486,15 @@ const TireCostManager = ({
   // Auto-save tire cost every 30 minutes during the day
   useEffect(() => {
     if (!isLoading && averageAnalysis.averageCostPerTire > 0) {
-      const autoSaveInterval = setInterval(async () => {
-        console.log("⏰ [TireCostManager] Auto-save periódico - verificando se precisa salvar custo");
-        await checkAndRecordDailyCost();
-      }, 30 * 60 * 1000); // 30 minutos
+      const autoSaveInterval = setInterval(
+        async () => {
+          console.log(
+            "⏰ [TireCostManager] Auto-save periódico - verificando se precisa salvar custo"
+          );
+          await checkAndRecordDailyCost();
+        },
+        30 * 60 * 1000
+      ); // 30 minutos
 
       return () => {
         clearInterval(autoSaveInterval);
@@ -2394,28 +2512,43 @@ const TireCostManager = ({
 
   // Update chart in real-time when average cost changes (for today's point)
   useEffect(() => {
-    console.log("🔄 [TireCostManager] useEffect disparado - custo mudou para:", averageAnalysis.averageCostPerTire);
-    console.log("🔄 [TireCostManager] allChartData.length:", allChartData.length);
+    console.log(
+      "🔄 [TireCostManager] useEffect disparado - custo mudou para:",
+      averageAnalysis.averageCostPerTire
+    );
+    console.log(
+      "🔄 [TireCostManager] allChartData.length:",
+      allChartData.length
+    );
     console.log("🔄 [TireCostManager] selectedMonth:", selectedMonth);
-    
+
     if (allChartData.length >= 0 && averageAnalysis.averageCostPerTire > 0) {
-      console.log("🔄 [TireCostManager] ✅ Condições atendidas - atualizando gráfico em tempo real");
-      console.log("🔄 [TireCostManager] Novo custo a ser exibido:", averageAnalysis.averageCostPerTire);
+      console.log(
+        "🔄 [TireCostManager] ✅ Condições atendidas - atualizando gráfico em tempo real"
+      );
+      console.log(
+        "🔄 [TireCostManager] Novo custo a ser exibido:",
+        averageAnalysis.averageCostPerTire
+      );
       filterDataByMonth(selectedMonth);
     } else {
-      console.log("🔄 [TireCostManager] ❌ Condições não atendidas para atualização em tempo real");
+      console.log(
+        "🔄 [TireCostManager] ❌ Condições não atendidas para atualização em tempo real"
+      );
     }
   }, [averageAnalysis.averageCostPerTire, selectedMonth]);
 
   // Day change detection and periodic check
   useEffect(() => {
     let lastCheckedDay = new Date().getDate();
-    
+
     const checkDayChange = async () => {
       const currentDay = new Date().getDate();
-      
+
       if (currentDay !== lastCheckedDay) {
-        console.log("🌅 [TireCostManager] Detectada virada do dia! Salvando custo do dia anterior...");
+        console.log(
+          "🌅 [TireCostManager] Detectada virada do dia! Salvando custo do dia anterior..."
+        );
         await savePreviousDayOnDayChange();
         lastCheckedDay = currentDay;
       }
@@ -2423,7 +2556,7 @@ const TireCostManager = ({
 
     // Check for day change every minute
     const interval = setInterval(checkDayChange, 60000);
-    
+
     // Also check immediately on component mount
     checkDayChange();
 
@@ -2513,8 +2646,6 @@ const TireCostManager = ({
             </div>
           </CardContent>
         </Card>
-
-
       </div>
 
       {/* Tire Cost Chart */}
@@ -2528,10 +2659,9 @@ const TireCostManager = ({
                   Oscilação do Custo por Pneu
                 </CardTitle>
                 <p className="text-tire-300 text-sm">
-                  {selectedMonth === 'all' 
-                    ? 'Evolução do custo médio por pneu ao longo dos últimos 30 dias'
-                    : `Evolução do custo médio por pneu no mês selecionado`
-                  }
+                  {selectedMonth === "all"
+                    ? "Evolução do custo médio por pneu ao longo dos últimos 30 dias"
+                    : `Evolução do custo médio por pneu no mês selecionado`}
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -2543,12 +2673,15 @@ const TireCostManager = ({
                     <SelectValue placeholder="Selecione o mês" />
                   </SelectTrigger>
                   <SelectContent className="bg-factory-800 border-tire-600">
-                    <SelectItem value="all" className="text-tire-200 hover:bg-factory-700">
+                    <SelectItem
+                      value="all"
+                      className="text-tire-200 hover:bg-factory-700"
+                    >
                       Todos os meses
                     </SelectItem>
                     {getAvailableMonths().map((month) => (
-                      <SelectItem 
-                        key={month.value} 
+                      <SelectItem
+                        key={month.value}
                         value={month.value}
                         className="text-tire-200 hover:bg-factory-700"
                       >
@@ -2565,26 +2698,22 @@ const TireCostManager = ({
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                  <XAxis 
-                    dataKey="date" 
-                    stroke="#9CA3AF"
-                    fontSize={12}
-                  />
-                  <YAxis 
+                  <XAxis dataKey="date" stroke="#9CA3AF" fontSize={12} />
+                  <YAxis
                     stroke="#9CA3AF"
                     fontSize={12}
                     tickFormatter={(value) => `R$ ${value.toFixed(0)}`}
                   />
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: '#1F2937',
-                      border: '1px solid #374151',
-                      borderRadius: '8px',
-                      color: '#F3F4F6'
+                      backgroundColor: "#1F2937",
+                      border: "1px solid #374151",
+                      borderRadius: "8px",
+                      color: "#F3F4F6",
                     }}
                     formatter={(value: number) => [
-                      `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
-                      'Custo por Pneu'
+                      `R$ ${value.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`,
+                      "Custo por Pneu",
                     ]}
                     labelFormatter={(label) => `Data: ${label}`}
                   />
@@ -2593,8 +2722,13 @@ const TireCostManager = ({
                     dataKey="cost"
                     stroke="#FB923C"
                     strokeWidth={3}
-                    dot={{ fill: '#FB923C', strokeWidth: 2, r: 4 }}
-                    activeDot={{ r: 6, stroke: '#FB923C', strokeWidth: 2, fill: '#FED7AA' }}
+                    dot={{ fill: "#FB923C", strokeWidth: 2, r: 4 }}
+                    activeDot={{
+                      r: 6,
+                      stroke: "#FB923C",
+                      strokeWidth: 2,
+                      fill: "#FED7AA",
+                    }}
                   />
                 </LineChart>
               </ResponsiveContainer>
@@ -2656,8 +2790,6 @@ const TireCostManager = ({
                             <CheckCircle className="h-5 w-5" />
                           </div>
                         </div>
-
-
 
                         <div className="flex items-center justify-between">
                           <div>
@@ -2779,7 +2911,9 @@ const TireCostManager = ({
                   </CardHeader>
                   <CardContent className="space-y-4 pb-12">
                     <div className="space-y-3 flex flex-col items-end">
-                      <Label className="text-tire-300 self-start">Modo de Análise:</Label>
+                      <Label className="text-tire-300 self-start">
+                        Modo de Análise:
+                      </Label>
                       <div className="flex gap-2">
                         <Button
                           variant={
@@ -2900,7 +3034,7 @@ const TireCostManager = ({
                               </span>
                               <span className="text-neon-orange font-bold">
                                 {formatCurrency(
-                                  selectedProductAnalysis.costPerTire,
+                                  selectedProductAnalysis.costPerTire
                                 )}
                               </span>
                             </div>
@@ -2912,11 +3046,10 @@ const TireCostManager = ({
                                   </span>
                                   <span className="text-white font-medium text-lg">
                                     {formatCurrency(
-                                      selectedProductAnalysis.recipeCostPerTire,
+                                      selectedProductAnalysis.recipeCostPerTire
                                     )}
                                   </span>
                                 </div>
-
 
                                 {costOptions.includeCashFlowExpenses && (
                                   <div className="flex justify-between">
@@ -2925,7 +3058,7 @@ const TireCostManager = ({
                                     </span>
                                     <span className="text-neon-purple font-medium text-lg">
                                       {formatCurrency(
-                                        selectedProductAnalysis.cashFlowCostPerTire,
+                                        selectedProductAnalysis.cashFlowCostPerTire
                                       )}
                                     </span>
                                   </div>
@@ -2937,7 +3070,7 @@ const TireCostManager = ({
                                     </span>
                                     <span className="text-red-400 font-medium text-lg">
                                       {formatCurrency(
-                                        selectedProductAnalysis.productionLossCostPerTire,
+                                        selectedProductAnalysis.productionLossCostPerTire
                                       )}
                                     </span>
                                   </div>
@@ -2949,7 +3082,7 @@ const TireCostManager = ({
                                     </span>
                                     <span className="text-green-400 font-medium text-lg">
                                       {formatCurrency(
-                                        selectedProductAnalysis.defectiveTireSalesCostPerTire,
+                                        selectedProductAnalysis.defectiveTireSalesCostPerTire
                                       )}
                                     </span>
                                   </div>
@@ -2961,7 +3094,7 @@ const TireCostManager = ({
                                     </span>
                                     <span className="text-orange-400 font-medium text-lg">
                                       {formatCurrency(
-                                        selectedProductAnalysis.warrantyCostPerTire,
+                                        selectedProductAnalysis.warrantyCostPerTire
                                       )}
                                     </span>
                                   </div>
@@ -2974,11 +3107,10 @@ const TireCostManager = ({
                               </span>
                               <span className="text-white">
                                 {selectedProductAnalysis.totalProduced.toFixed(
-                                  0,
+                                  0
                                 )}
                               </span>
                             </div>
-
                           </div>
                         </div>
                       </div>
@@ -3005,7 +3137,7 @@ const TireCostManager = ({
                                       {formatCurrency(material.totalCost)}
                                     </span>
                                   </div>
-                                ),
+                                )
                               )}
                               <div className="flex justify-between items-center pt-1 border-t border-green-500/20">
                                 <span className="text-green-400 font-medium">
@@ -3014,7 +3146,7 @@ const TireCostManager = ({
                                 <span className="text-green-400 font-bold">
                                   {formatCurrency(
                                     selectedProductAnalysis.recipeDetails
-                                      .totalMaterialCost,
+                                      .totalMaterialCost
                                   )}
                                 </span>
                               </div>
@@ -3041,7 +3173,7 @@ const TireCostManager = ({
                                   </span>
                                   <span className="text-red-400 font-bold">
                                     {selectedProductAnalysis.lossDetails.totalLossQuantity.toFixed(
-                                      0,
+                                      0
                                     )}{" "}
                                     un
                                   </span>
@@ -3055,7 +3187,7 @@ const TireCostManager = ({
                                       selectedProductAnalysis.lossDetails
                                         .totalLossValue -
                                         selectedProductAnalysis.lossDetails
-                                          .totalMaterialLossValue,
+                                          .totalMaterialLossValue
                                     )}
                                   </span>
                                 </div>
@@ -3068,7 +3200,7 @@ const TireCostManager = ({
                                   <span className="text-orange-400 font-bold">
                                     {formatCurrency(
                                       selectedProductAnalysis.lossDetails
-                                        .totalMaterialLossValue,
+                                        .totalMaterialLossValue
                                     )}
                                   </span>
                                 </div>
@@ -3079,7 +3211,7 @@ const TireCostManager = ({
                                   <span className="text-red-400 font-bold">
                                     {formatCurrency(
                                       selectedProductAnalysis.lossDetails
-                                        .totalLossValue,
+                                        .totalLossValue
                                     )}
                                   </span>
                                 </div>
@@ -3090,7 +3222,7 @@ const TireCostManager = ({
                                 </span>
                                 <span className="text-red-400 font-bold">
                                   {selectedProductAnalysis.lossDetails.lossPercentage.toFixed(
-                                    2,
+                                    2
                                   )}
                                   %
                                 </span>
@@ -3111,12 +3243,12 @@ const TireCostManager = ({
                                           <div className="flex justify-between items-center text-xs mb-1">
                                             <span className="text-tire-300 font-medium">
                                               {new Date(
-                                                entry.date,
+                                                entry.date
                                               ).toLocaleDateString("pt-BR")}
                                             </span>
                                             <span className="text-red-400 font-bold">
                                               {formatCurrency(
-                                                entry.totalEntryLossValue,
+                                                entry.totalEntryLossValue
                                               )}
                                             </span>
                                           </div>
@@ -3128,7 +3260,7 @@ const TireCostManager = ({
                                               <span className="text-red-400">
                                                 {entry.lossQuantity} un -{" "}
                                                 {formatCurrency(
-                                                  entry.lossValue,
+                                                  entry.lossValue
                                                 )}
                                               </span>
                                             </div>
@@ -3138,13 +3270,13 @@ const TireCostManager = ({
                                               </span>
                                               <span className="text-orange-400">
                                                 {formatCurrency(
-                                                  entry.materialLossValue,
+                                                  entry.materialLossValue
                                                 )}
                                               </span>
                                             </div>
                                           </div>
                                         </div>
-                                      ),
+                                      )
                                     )}
                                   </div>
                                 </div>
@@ -3176,18 +3308,26 @@ const TireCostManager = ({
                                 Custo/Pneu (Receita):
                               </span>
                               <span className="text-neon-orange font-bold">
-                                {formatCurrency(averageAnalysis.averageCostPerTire)}
+                                {formatCurrency(
+                                  averageAnalysis.averageCostPerTire
+                                )}
                               </span>
                             </div>
-                            
+
                             <div className="flex justify-between">
                               <span className="text-tire-300 text-lg">
                                 Materiais:
                               </span>
                               <span className="text-white font-medium text-lg">
                                 {formatCurrency(
-                                  tireAnalysis.length > 0 
-                                    ? tireAnalysis.reduce((sum, tire) => sum + (tire.recipeCostPerTire * tire.totalProduced), 0) / averageAnalysis.totalProduced
+                                  tireAnalysis.length > 0
+                                    ? tireAnalysis.reduce(
+                                        (sum, tire) =>
+                                          sum +
+                                          tire.recipeCostPerTire *
+                                            tire.totalProduced,
+                                        0
+                                      ) / averageAnalysis.totalProduced
                                     : 0
                                 )}
                               </span>
@@ -3200,8 +3340,14 @@ const TireCostManager = ({
                                 </span>
                                 <span className="text-neon-purple font-medium text-lg">
                                   {formatCurrency(
-                                    tireAnalysis.length > 0 
-                                      ? tireAnalysis.reduce((sum, tire) => sum + (tire.cashFlowCostPerTire * tire.totalProduced), 0) / averageAnalysis.totalProduced
+                                    tireAnalysis.length > 0
+                                      ? tireAnalysis.reduce(
+                                          (sum, tire) =>
+                                            sum +
+                                            tire.cashFlowCostPerTire *
+                                              tire.totalProduced,
+                                          0
+                                        ) / averageAnalysis.totalProduced
                                       : 0
                                   )}
                                 </span>
@@ -3215,8 +3361,14 @@ const TireCostManager = ({
                                 </span>
                                 <span className="text-red-400 font-medium text-lg">
                                   {formatCurrency(
-                                    tireAnalysis.length > 0 
-                                      ? tireAnalysis.reduce((sum, tire) => sum + (tire.productionLossCostPerTire * tire.totalProduced), 0) / averageAnalysis.totalProduced
+                                    tireAnalysis.length > 0
+                                      ? tireAnalysis.reduce(
+                                          (sum, tire) =>
+                                            sum +
+                                            tire.productionLossCostPerTire *
+                                              tire.totalProduced,
+                                          0
+                                        ) / averageAnalysis.totalProduced
                                       : 0
                                   )}
                                 </span>
@@ -3229,10 +3381,19 @@ const TireCostManager = ({
                                   Pneus Defeituosos (Desconto):
                                 </span>
                                 <span className="text-neon-green font-medium text-lg">
-                                  -{formatCurrency(
-                                    Math.abs(tireAnalysis.length > 0 
-                                      ? tireAnalysis.reduce((sum, tire) => sum + (tire.defectiveTireSalesCostPerTire * tire.totalProduced), 0) / averageAnalysis.totalProduced
-                                      : 0)
+                                  -
+                                  {formatCurrency(
+                                    Math.abs(
+                                      tireAnalysis.length > 0
+                                        ? tireAnalysis.reduce(
+                                            (sum, tire) =>
+                                              sum +
+                                              tire.defectiveTireSalesCostPerTire *
+                                                tire.totalProduced,
+                                            0
+                                          ) / averageAnalysis.totalProduced
+                                        : 0
+                                    )
                                   )}
                                 </span>
                               </div>
@@ -3245,8 +3406,14 @@ const TireCostManager = ({
                                 </span>
                                 <span className="text-yellow-400 font-medium text-lg">
                                   {formatCurrency(
-                                    tireAnalysis.length > 0 
-                                      ? tireAnalysis.reduce((sum, tire) => sum + (tire.warrantyCostPerTire * tire.totalProduced), 0) / averageAnalysis.totalProduced
+                                    tireAnalysis.length > 0
+                                      ? tireAnalysis.reduce(
+                                          (sum, tire) =>
+                                            sum +
+                                            tire.warrantyCostPerTire *
+                                              tire.totalProduced,
+                                          0
+                                        ) / averageAnalysis.totalProduced
                                       : 0
                                   )}
                                 </span>
@@ -3315,15 +3482,21 @@ const TireCostManager = ({
                             {selectedProduct === tire.productId && (
                               <CheckCircle className="h-4 w-4 text-neon-blue" />
                             )}
-                            <h4 className="text-white font-medium">{tire.productName}</h4>
+                            <h4 className="text-white font-medium">
+                              {tire.productName}
+                            </h4>
                           </div>
                           <div className="text-center">
                             <span className="text-tire-400 text-sm mr-2">
-                              {tire.hasRecipe ? "Custo/Pneu (Receita)" : "Custo/Pneu"}
+                              {tire.hasRecipe
+                                ? "Custo/Pneu (Receita)"
+                                : "Custo/Pneu"}
                             </span>
                             <span className="text-neon-orange font-bold text-lg flex items-center gap-1">
                               {tire.hasRecipe && (
-                                <span className="text-neon-yellow text-xs">📋</span>
+                                <span className="text-neon-yellow text-xs">
+                                  📋
+                                </span>
                               )}
                               {formatCurrency(tire.costPerTire)}
                             </span>
@@ -3384,8 +3557,6 @@ const TireCostManager = ({
                             <CheckCircle className="h-5 w-5" />
                           </div>
                         </div>
-
-
 
                         <div className="flex items-center justify-between">
                           <div>
@@ -3540,7 +3711,7 @@ const TireCostManager = ({
                                       </span>
                                       <span className="text-white">
                                         {recipes.find(
-                                          (r) => r.id === simulationRecipe,
+                                          (r) => r.id === simulationRecipe
                                         )?.product_name || "N/A"}
                                       </span>
                                     </div>
@@ -3562,7 +3733,7 @@ const TireCostManager = ({
                                   <span className="text-white">
                                     {
                                       Object.values(
-                                        simulationCostOptions,
+                                        simulationCostOptions
                                       ).filter(Boolean).length
                                     }{" "}
                                     ativas
@@ -3661,7 +3832,7 @@ const TireCostManager = ({
                                           onClick={() =>
                                             deleteSimulation(
                                               simulation.id,
-                                              simulation.name,
+                                              simulation.name
                                             )
                                           }
                                           className="bg-red-900/20 border-red-500/50 text-red-400 hover:bg-red-900/30 h-8 px-3"
@@ -3689,7 +3860,7 @@ const TireCostManager = ({
                                           </span>
                                           <span className="text-white">
                                             {new Date(
-                                              simulation.created_at,
+                                              simulation.created_at
                                             ).toLocaleDateString("pt-BR")}
                                           </span>
                                         </div>
@@ -3704,7 +3875,7 @@ const TireCostManager = ({
                                               <span className="text-neon-orange font-medium">
                                                 {formatCurrency(
                                                   simulation.results
-                                                    .cost_per_tire || 0,
+                                                    .cost_per_tire || 0
                                                 )}
                                               </span>
                                             </div>
@@ -3875,8 +4046,8 @@ const TireCostManager = ({
                                           (recipe) =>
                                             !recipe.archived &&
                                             !selectedRecipes.some(
-                                              (sr) => sr.id === recipe.id,
-                                            ),
+                                              (sr) => sr.id === recipe.id
+                                            )
                                         )
                                         .map((recipe) => (
                                           <SelectItem
@@ -3945,7 +4116,7 @@ const TireCostManager = ({
                                           onChange={(e) =>
                                             updateRecipeQuantity(
                                               selectedRecipe.id,
-                                              parseInt(e.target.value) || 1,
+                                              parseInt(e.target.value) || 1
                                             )
                                           }
                                           className="bg-factory-700/50 border-tire-600/30 text-white w-20 h-7 text-xs"
@@ -3960,7 +4131,7 @@ const TireCostManager = ({
                                       size="sm"
                                       onClick={() =>
                                         removeRecipeFromSelection(
-                                          selectedRecipe.id,
+                                          selectedRecipe.id
                                         )
                                       }
                                       className="text-red-400 hover:text-red-300 hover:bg-red-900/20 p-1 h-8 w-8"
@@ -3991,8 +4162,6 @@ const TireCostManager = ({
                           placeholder="Ex: 3000.00 (deixe vazio para usar dados do sistema)"
                         />
                       </div>
-
-
 
                       {simulationCostOptions.includeCashFlowExpenses && (
                         <div className="space-y-2">
@@ -4072,7 +4241,7 @@ const TireCostManager = ({
                                   </span>
                                   <span className="text-neon-green font-bold text-xl">
                                     {formatCurrency(
-                                      simulationRecipeAnalysis.totalCost,
+                                      simulationRecipeAnalysis.totalCost
                                     )}
                                   </span>
                                 </div>
@@ -4082,7 +4251,7 @@ const TireCostManager = ({
                                   </span>
                                   <span className="text-neon-orange font-bold text-xl">
                                     {formatCurrency(
-                                      simulationRecipeAnalysis.costPerTire,
+                                      simulationRecipeAnalysis.costPerTire
                                     )}
                                   </span>
                                 </div>
@@ -4094,7 +4263,7 @@ const TireCostManager = ({
                                   </span>
                                   <span className="text-white font-medium text-lg">
                                     {formatCurrency(
-                                      simulationRecipeAnalysis.recipeCostPerTire,
+                                      simulationRecipeAnalysis.recipeCostPerTire
                                     )}
                                   </span>
                                 </div>
@@ -4104,7 +4273,7 @@ const TireCostManager = ({
                                   </span>
                                   <span className="text-neon-blue font-medium text-lg">
                                     {formatCurrency(
-                                      simulationRecipeAnalysis.fixedCostPerTire,
+                                      simulationRecipeAnalysis.fixedCostPerTire
                                     )}
                                   </span>
                                 </div>
@@ -4116,7 +4285,7 @@ const TireCostManager = ({
                                     </span>
                                     <span className="text-neon-purple font-medium text-lg">
                                       {formatCurrency(
-                                        simulationRecipeAnalysis.cashFlowCostPerTire,
+                                        simulationRecipeAnalysis.cashFlowCostPerTire
                                       )}
                                     </span>
                                   </div>
@@ -4128,7 +4297,7 @@ const TireCostManager = ({
                                     </span>
                                     <span className="text-red-400 font-medium text-lg">
                                       {formatCurrency(
-                                        simulationRecipeAnalysis.productionLossCostPerTire,
+                                        simulationRecipeAnalysis.productionLossCostPerTire
                                       )}
                                     </span>
                                   </div>
@@ -4158,7 +4327,7 @@ const TireCostManager = ({
                                         {formatCurrency(material.totalCost)}
                                       </span>
                                     </div>
-                                  ),
+                                  )
                                 )}
                                 <div className="flex justify-between items-center pt-1 border-t border-neon-green/20">
                                   <span className="text-neon-green font-medium">
@@ -4167,7 +4336,7 @@ const TireCostManager = ({
                                   <span className="text-neon-green font-bold">
                                     {formatCurrency(
                                       simulationRecipeAnalysis.recipeDetails
-                                        .totalMaterialCost,
+                                        .totalMaterialCost
                                     )}
                                   </span>
                                 </div>
@@ -4198,7 +4367,7 @@ const TireCostManager = ({
                                     <span className="text-neon-blue font-bold">
                                       {formatCurrency(
                                         simulationRecipeAnalysis.manualInputs
-                                          .fixedCosts,
+                                          .fixedCosts
                                       )}
                                     </span>
                                   </div>
@@ -4213,7 +4382,7 @@ const TireCostManager = ({
                                     <span className="text-neon-purple font-bold">
                                       {formatCurrency(
                                         simulationRecipeAnalysis.manualInputs
-                                          .cashFlowExpenses,
+                                          .cashFlowExpenses
                                       )}
                                     </span>
                                   </div>
@@ -4227,7 +4396,7 @@ const TireCostManager = ({
                                     <span className="text-red-400 font-bold">
                                       {formatCurrency(
                                         simulationRecipeAnalysis.manualInputs
-                                          .productionLosses,
+                                          .productionLosses
                                       )}
                                     </span>
                                   </div>
@@ -4274,7 +4443,7 @@ const TireCostManager = ({
                               </span>
                               <span className="text-neon-green font-bold">
                                 {formatCurrency(
-                                  multipleRecipesAnalysis.totalCost,
+                                  multipleRecipesAnalysis.totalCost
                                 )}
                               </span>
                             </div>
@@ -4284,7 +4453,7 @@ const TireCostManager = ({
                               </span>
                               <span className="text-neon-orange font-bold">
                                 {formatCurrency(
-                                  multipleRecipesAnalysis.averageCostPerTire,
+                                  multipleRecipesAnalysis.averageCostPerTire
                                 )}
                               </span>
                             </div>
@@ -4297,7 +4466,7 @@ const TireCostManager = ({
                               <span className="text-neon-yellow font-medium text-xs">
                                 {formatCurrency(
                                   multipleRecipesAnalysis.averageBreakdown
-                                    .materialCost,
+                                    .materialCost
                                 )}
                               </span>
                             </div>
@@ -4308,7 +4477,7 @@ const TireCostManager = ({
                               <span className="text-neon-blue font-medium text-xs">
                                 {formatCurrency(
                                   multipleRecipesAnalysis.averageBreakdown
-                                    .fixedCost,
+                                    .fixedCost
                                 )}
                               </span>
                             </div>
@@ -4320,7 +4489,7 @@ const TireCostManager = ({
                                 <span className="text-neon-green font-medium text-xs">
                                   {formatCurrency(
                                     multipleRecipesAnalysis.averageBreakdown
-                                      .laborCost,
+                                      .laborCost
                                   )}
                                 </span>
                               </div>
@@ -4333,7 +4502,7 @@ const TireCostManager = ({
                                 <span className="text-neon-purple font-medium text-xs">
                                   {formatCurrency(
                                     multipleRecipesAnalysis.averageBreakdown
-                                      .cashFlowCost,
+                                      .cashFlowCost
                                   )}
                                 </span>
                               </div>
@@ -4346,7 +4515,7 @@ const TireCostManager = ({
                                 <span className="text-red-400 font-medium text-xs">
                                   {formatCurrency(
                                     multipleRecipesAnalysis.averageBreakdown
-                                      .productionLossCost,
+                                      .productionLossCost
                                   )}
                                 </span>
                               </div>
@@ -4435,7 +4604,7 @@ const TireCostManager = ({
                                 <span className="text-neon-blue font-bold">
                                   {formatCurrency(
                                     multipleRecipesAnalysis.manualInputs
-                                      .fixedCosts,
+                                      .fixedCosts
                                   )}
                                 </span>
                               </div>
@@ -4450,7 +4619,7 @@ const TireCostManager = ({
                                 <span className="text-neon-purple font-bold">
                                   {formatCurrency(
                                     multipleRecipesAnalysis.manualInputs
-                                      .cashFlowExpenses,
+                                      .cashFlowExpenses
                                   )}
                                 </span>
                               </div>
@@ -4464,7 +4633,7 @@ const TireCostManager = ({
                                 <span className="text-red-400 font-bold">
                                   {formatCurrency(
                                     multipleRecipesAnalysis.manualInputs
-                                      .productionLosses,
+                                      .productionLosses
                                   )}
                                 </span>
                               </div>
