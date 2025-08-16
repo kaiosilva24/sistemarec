@@ -2309,7 +2309,7 @@ const TireCostManager = ({
     }
   };
 
-  // Auto-record tire cost daily (check if today's record exists)
+  // Auto-record tire cost daily (check if today's record exists and save if needed)
   const checkAndRecordDailyCost = async () => {
     try {
       // WORKAROUND: Add +1 day to compensate Supabase UTC conversion
@@ -2322,21 +2322,39 @@ const TireCostManager = ({
       
       const todayRecord = await dataManager.getTodayTireCostRecord();
       
-      if (!todayRecord) {
-        console.log("📅 [TireCostManager] Nenhum registro de hoje encontrado no banco de dados");
-        console.log("🔄 [TireCostManager] Exibindo valor em tempo real no gráfico (não salvo ainda)");
+      if (!todayRecord && averageAnalysis.averageCostPerTire > 0) {
+        console.log("📅 [TireCostManager] Nenhum registro de hoje encontrado - salvando automaticamente");
+        console.log("💾 [TireCostManager] Salvando custo atual:", averageAnalysis.averageCostPerTire);
         
-        // Note: We don't save to database here anymore
-        // The real-time value is shown in the chart via filterDataByMonth()
-        // Database save will happen only when the day changes (via a scheduled process or manual trigger)
+        // Save today's cost automatically
+        const success = await dataManager.saveTireCostHistory(todayLocal, averageAnalysis.averageCostPerTire);
         
-        // Just reload chart data to ensure we have the latest from database
-        await loadTireCostChartData();
-      } else {
+        if (success) {
+          console.log("✅ [TireCostManager] Custo de hoje salvo automaticamente!");
+          // Reload chart data to include today's record
+          await loadTireCostChartData();
+        } else {
+          console.error("❌ [TireCostManager] Erro ao salvar custo de hoje automaticamente");
+        }
+      } else if (todayRecord) {
         console.log("📅 [TireCostManager] Registro de hoje já existe no banco:", todayRecord);
+        
+        // Update today's record with current cost if it's different
+        if (averageAnalysis.averageCostPerTire > 0 && 
+            Math.abs(todayRecord.cost - averageAnalysis.averageCostPerTire) > 0.01) {
+          console.log("🔄 [TireCostManager] Atualizando registro de hoje com novo valor:", 
+                     todayRecord.cost, "->", averageAnalysis.averageCostPerTire);
+          
+          const success = await dataManager.saveTireCostHistory(todayLocal, averageAnalysis.averageCostPerTire);
+          
+          if (success) {
+            console.log("✅ [TireCostManager] Registro de hoje atualizado!");
+            await loadTireCostChartData();
+          }
+        }
       }
     } catch (error) {
-      console.error("❌ [TireCostManager] Erro ao verificar registro diário:", error);
+      console.error("❌ [TireCostManager] Erro ao verificar/salvar registro diário:", error);
     }
   };
 
@@ -2349,6 +2367,21 @@ const TireCostManager = ({
   useEffect(() => {
     if (!isLoading && averageAnalysis.averageCostPerTire > 0) {
       checkAndRecordDailyCost();
+    }
+  }, [isLoading, averageAnalysis.averageCostPerTire]);
+
+  // Auto-save tire cost every 30 minutes during the day
+  useEffect(() => {
+    if (!isLoading && averageAnalysis.averageCostPerTire > 0) {
+      const autoSaveInterval = setInterval(async () => {
+        console.log("⏰ [TireCostManager] Auto-save periódico - verificando se precisa salvar custo");
+        await checkAndRecordDailyCost();
+      }, 30 * 60 * 1000); // 30 minutos
+
+      return () => {
+        clearInterval(autoSaveInterval);
+        console.log("🔄 [TireCostManager] Auto-save interval limpo");
+      };
     }
   }, [isLoading, averageAnalysis.averageCostPerTire]);
 
