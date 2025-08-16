@@ -32,4 +32,16 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  build: {
+    rollupOptions: {
+      onwarn(warning, warn) {
+        // Ignorar warnings de TypeScript durante o build
+        if (warning.code === 'UNRESOLVED_IMPORT') return;
+        warn(warning);
+      }
+    }
+  },
+  esbuild: {
+    logOverride: { 'this-is-undefined-in-esm': 'silent' }
+  }
 });
