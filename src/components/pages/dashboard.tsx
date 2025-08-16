@@ -11,6 +11,7 @@ import SalesDashboard from "../sales/SalesDashboard";
 import DataDiagnostic from "../debug/DataDiagnostic";
 import StockCharts from "../stock/StockCharts";
 import ProductionChart from "../stock/ProductionChart";
+import potentCarLogo from "../../assets/potente-car.png";
 
 import { useDataPersistence, useDebts } from '../../hooks/useDataPersistence';
 import { supabase } from '../../../supabase/supabase';
@@ -3163,7 +3164,7 @@ const Home = () => {
             <div className="flex justify-between items-center mb-6">
               <div className="space-y-2 flex flex-col items-center">
                 <img 
-                  src="/src/assets/potente-car.png" 
+                  src={potentCarLogo} 
                   alt="Potente Car" 
                   className="h-24 w-auto object-contain"
                 />

@@ -17,6 +17,7 @@ import {
   DollarSign,
   LogOut,
 } from "lucide-react";
+import potentCarLogo from "../../../assets/potente-car.png";
 import { useLowStockNotifications } from "../../../hooks/useLowStockNotifications";
 import { LowStockTooltip } from "../../ui/LowStockTooltip";
 import { useOverdueDebtsNotifications } from "../../../hooks/useOverdueDebtsNotifications";
@@ -235,7 +236,7 @@ const Sidebar = ({
         {!isCollapsed && (
           <>
             <img 
-              src="/src/assets/potente-car.png" 
+              src={potentCarLogo} 
               alt="Potente Car" 
               className="h-16 w-auto object-contain mb-2"
             />
